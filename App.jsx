@@ -13,7 +13,7 @@ import HistoryTab from './src/abas/historico.jsx';
 import ShopTab from './src/abas/loja.jsx';
 import ConfigTab from './src/abas/configuracoes.jsx';
 
-export default function App() {
+export default function App({ user, onSignOut }) {
   const [tab, setTab] = useState("dashboard");
   const [subTab, setSubTab] = useState("projects");
   const [view, setView] = useState("list");
@@ -682,6 +682,14 @@ export default function App() {
               </div>
             ))}
           </div>
+          {onSignOut && (
+            <div style={{ padding: "12px 20px", borderTop: "0.5px solid " + C.brd }}>
+              <div onClick={onSignOut} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", color: C.tx3, fontSize: 13, padding: "8px 0" }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                <span>Sair</span>
+              </div>
+            </div>
+          )}
         </div>
       )}
       <div style={{ minHeight: isDesktop ? "100vh" : "calc(100vh - 56px)", overflow: "auto", marginLeft: isDesktop ? SIDEBAR_W : 0 }}>
