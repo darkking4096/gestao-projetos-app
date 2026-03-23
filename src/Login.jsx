@@ -51,10 +51,10 @@ export default function LoginScreen({ onLogin }) {
     <div style={{ minHeight: "100dvh", background: C_LOGIN.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div style={{ width: "100%", maxWidth: 380 }}>
         {/* Logo */}
-        <div style={{ textAlign: "center", marginBottom: 36 }}>
-          <div style={{ fontSize: 44, marginBottom: 12 }}>🏆</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: C_LOGIN.tx, letterSpacing: 0.5 }}>Atividades</div>
-          <div style={{ fontSize: 13, color: C_LOGIN.tx3, marginTop: 4 }}>Gamifique seus objetivos</div>
+        <div style={{ textAlign: "center", marginBottom: 28 }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>🏆</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: C_LOGIN.tx, letterSpacing: 0.5 }}>Atividades</div>
+          <div style={{ fontSize: 12, color: C_LOGIN.tx3, marginTop: 3 }}>Gamifique seus objetivos</div>
         </div>
 
         {/* Card */}
