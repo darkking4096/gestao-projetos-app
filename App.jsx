@@ -1,0 +1,831 @@
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { THEMES, setCurrentTheme, generateThemeTones, C } from './src/temas.js';
+import { uid, td, getLevelInfo, getMastery, getMasteryBonus, getXp, getCoins, getMultiplier, openChest, pickDailyMission, getMissionProgress, calcObjectiveXp, ACHIEVEMENTS, checkProjectCompletion, removeObjectiveLinksFromActivities, similarName, migrateFreq } from './src/utilidades.js';
+import { CATEGORIES, FREQUENCIES, WEEK_DAYS, UNITS, DEFAULT_PRESETS, STREAK_RECOVER, CHEST_TYPES, COLORS } from './src/constantes.js';
+import { S } from './src/armazenamento.js';
+import { SHOP_THEMES_LIST, getUpgradeCost, UPGRADE_LABELS } from './src/icones.jsx';
+import { Btn, Modal, ConfirmModal } from './src/componentes-base.jsx';
+import { ProjectForm, RoutineForm, TaskForm, ObjectiveForm } from './src/formularios.jsx';
+import DashboardTab from './src/abas/dashboard.jsx';
+import ActivitiesTab from './src/abas/atividades.jsx';
+import { ProjectDetail, RoutineDetail, TaskDetail, ObjectiveDetail } from './src/abas/detalhes.jsx';
+import HistoryTab from './src/abas/historico.jsx';
+import ShopTab from './src/abas/loja.jsx';
+import ConfigTab from './src/abas/configuracoes.jsx';
+
+export default function App() {
+  const [tab, setTab] = useState("dashboard");
+  const [subTab, setSubTab] = useState("projects");
+  const [view, setView] = useState("list");
+  const [selId, setSelId] = useState(null);
+  const [selType, setSelType] = useState(null);
+  const [navHistory, setNavHistory] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [routines, setRoutines] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [objectives, setObjectives] = useState([]);
+  const [trash, setTrash] = useState([]);
+  const [profile, setProfile] = useState({ totalXp: 0, coins: 100000, streak: 0, bestStreak: 0, tasksCompleted: 0, xpToday: 0, coinsToday: 0, lastActiveDate: td(), dailyLog: [], difficultyPresets: DEFAULT_PRESETS, nextActionWeights: { priority: 3, deadline: 2, difficulty: 1 }, dailyMission: null, tasksToday: 0, projTasksToday: 0, hardTaskToday: false, maxTaskToday: false, goalUpdatedToday: false, totalCoinsEarned: 0, bestXpDay: 0, bestXpWeek: 0, maxTaskEver: false, projectsCompleted: 0, masteryGoldCount: 0, achievementsUnlocked: [], pendingChest: null, streakLostDays: 0, purchasedItems: ["t_iniciante", "i_estrela", "obsidiana", "b_simples"], equippedTitle: "t_iniciante", equippedIcon: "i_estrela", equippedTheme: "obsidiana", equippedBorder: "b_simples", upgradeLevels: {} });
+  const [loaded, setLoaded] = useState(false);
+  const [rewardPopup, setRewardPopup] = useState(null);
+  const [levelUpNotif, setLevelUpNotif] = useState(null);
+  const [completionConfirm, setCompletionConfirm] = useState(null);
+  const [routineSuggestion, setRoutineSuggestion] = useState(null);
+  const [storageError, setStorageError] = useState(false);
+  const [achieveNotif, setAchieveNotif] = useState(null);
+  const shownAchieveIds = useRef(new Set());
+  const [winW, setWinW] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const handler = () => setStorageError(true);
+    window.addEventListener("app:storageError", handler);
+    return () => window.removeEventListener("app:storageError", handler);
+  }, []);
+  useEffect(() => {
+    if (!storageError) return;
+    const t = setTimeout(() => setStorageError(false), 3000);
+    return () => clearTimeout(t);
+  }, [storageError]);
+  // Reward popup auto-dismiss — duration scales with reward value
+  useEffect(() => {
+    if (!rewardPopup) return;
+    const val = (rewardPopup.xp || 0) + (rewardPopup.coins || 0);
+    const dur = val === 0 ? 1800 : val < 30 ? 2200 : val < 100 ? 2600 : val < 300 ? 3000 : 3500;
+    const t = setTimeout(() => setRewardPopup(null), dur);
+    return () => clearTimeout(t);
+  }, [rewardPopup]);
+  // Level-up notification auto-dismiss
+  useEffect(() => {
+    if (!levelUpNotif) return;
+    const t = setTimeout(() => setLevelUpNotif(null), 3800);
+    return () => clearTimeout(t);
+  }, [levelUpNotif]);
+  useEffect(() => {
+    const unlocked = profile.achievementsUnlocked || [];
+    const claimable = ACHIEVEMENTS.find(a => !unlocked.includes(a.id) && !shownAchieveIds.current.has(a.id) && a.check(profile));
+    if (claimable) { shownAchieveIds.current.add(claimable.id); setAchieveNotif(claimable); }
+  }, [profile.tasksCompleted, profile.bestStreak, profile.totalXp, profile.projectsCompleted]);
+
+  useEffect(() => {
+    const resizeHandler = () => setWinW(window.innerWidth);
+    window.addEventListener("resize", resizeHandler);
+    return () => window.removeEventListener("resize", resizeHandler);
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const p = await S.get("projects"); if (p) setProjects(p);
+        const r = await S.get("routines"); if (r) setRoutines(r);
+        const t = await S.get("tasks"); if (t) setTasks(t);
+        const ob = await S.get("objectives"); if (ob) setObjectives(ob);
+        const tr = await S.get("trash"); if (tr) setTrash(tr);
+        const pr = await S.get("profile"); if (pr) {
+          if (!pr.purchasedItems) { pr.purchasedItems = ["t_iniciante", "i_estrela", "obsidiana", "b_simples"]; pr.equippedTitle = "t_iniciante"; pr.equippedIcon = "i_estrela"; pr.equippedTheme = "obsidiana"; pr.equippedBorder = "b_simples"; pr.upgradeLevels = pr.upgradeLevels || {}; }
+          pr.coins = 100000; setProfile(pr);
+        }
+      } catch (e) { console.log("storage load err", e); }
+      setLoaded(true);
+    })();
+  }, []);
+
+  useEffect(() => { if (loaded) S.set("projects", projects); }, [projects, loaded]);
+  useEffect(() => { if (loaded) S.set("routines", routines); }, [routines, loaded]);
+  useEffect(() => { if (loaded) S.set("tasks", tasks); }, [tasks, loaded]);
+  useEffect(() => { if (loaded) S.set("objectives", objectives); }, [objectives, loaded]);
+  useEffect(() => { if (loaded) S.set("trash", trash); }, [trash, loaded]);
+  useEffect(() => { if (loaded) S.set("profile", profile); }, [profile, loaded]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    const d = td();
+    if (profile.lastActiveDate !== d) {
+      const log = [...(profile.dailyLog || []), { date: profile.lastActiveDate, xp: profile.xpToday, coins: profile.coinsToday }].slice(-90);
+      const _mCtx = { hasRoutines: routines.some(r => r.status === "Ativa"), hasProjects: projects.some(p => p.status === "Ativo"), hasNumericProjects: projects.some(p => p.status === "Ativo" && p.target !== undefined), hasTasks: tasks.some(t => t.status === "Pendente") };
+      const mission = pickDailyMission(d, _mCtx);
+      const wasActive = (profile.xpToday || 0) > 0;
+      let newStreak = profile.streak;
+      let streakLostDays = 0;
+      let shieldUsed = false;
+      if (wasActive) {
+        newStreak = (profile.streak || 0) + 1;
+      } else if (profile.shieldActive) {
+        shieldUsed = true;
+      } else {
+        const lost = Math.min(5, profile.streak || 0);
+        newStreak = Math.max(0, (profile.streak || 0) - 5);
+        streakLostDays = lost;
+      }
+      const newBest = Math.max(profile.bestStreak || 0, newStreak);
+      const last7 = log.slice(-7);
+      const weekXp = last7.reduce((s, d2) => s + (d2.xp || 0), 0) + (profile.xpToday || 0);
+      // Auto-deactivate routines with 5+ consecutive fails (skip Libre)
+      setRoutines(prev => prev.map(r => {
+        if (r.status !== "Ativa") return r;
+        if (migrateFreq(r).freq === "Livre") return r;
+        const wasDue = isRoutineDueOn(r, profile.lastActiveDate);
+        if (!wasDue) return r;
+        const doneYesterday = (r.completionLog || []).some(l => l.date === profile.lastActiveDate);
+        if (doneYesterday) return { ...r, consecutiveFails: 0 };
+        const newFails = (r.consecutiveFails || 0) + 1;
+        if (newFails >= 5) return { ...r, consecutiveFails: newFails, status: "Desativada" };
+        return { ...r, consecutiveFails: newFails };
+      }));
+      // V2: Auto-archive tasks overdue by 3+ days
+      const currentTasks = tasks; // use current state reference
+      const toArchive = currentTasks.filter(t => {
+        if (t.status !== "Pendente" || !t.deadline) return false;
+        const daysOverdue = Math.floor((new Date(d) - new Date(t.deadline)) / 86400000);
+        return daysOverdue >= 3;
+      });
+      if (toArchive.length > 0) {
+        const archiveIds = new Set(toArchive.map(t => t.id));
+        setTasks(prev => prev.filter(t => !archiveIds.has(t.id)));
+        setTrash(tr => [...tr, ...toArchive.map(t => ({ ...t, status: "Arquivada", _type: "task", deletedAt: Date.now(), autoArchived: true }))]);
+        // Clean objective links for archived tasks
+        setObjectives(prev => prev.map(o => ({
+          ...o,
+          linkedActivities: (o.linkedActivities || []).filter(l => !(l.type === "task" && archiveIds.has(l.id)))
+        })));
+      }
+      // Chest check
+      let chest = null;
+      const lv = getLevelInfo(profile.totalXp).level;
+      if (newStreak >= 30 && lv >= 200) chest = "legendary";
+      else if (newStreak >= 7 && lv >= 100) chest = "epic";
+      else if (wasActive && (profile.tasksToday || 0) >= 5 && lv >= 50) chest = "rare";
+      else if ((profile.tasksToday || 0) >= 3 && lv >= 25) chest = "common";
+      setProfile(p => ({ ...p, xpToday: 0, coinsToday: 0, lastActiveDate: d, dailyLog: log, tasksToday: 0, projTasksToday: 0, hardTaskToday: false, maxTaskToday: false, goalUpdatedToday: false, streak: newStreak, bestStreak: newBest, streakLostDays: streakLostDays, bestXpWeek: Math.max(p.bestXpWeek || 0, weekXp), pendingChest: chest || p.pendingChest, shieldActive: shieldUsed ? false : p.shieldActive, dailyMission: { id: mission.id, text: mission.text, coins: mission.coins, completed: false, claimedAt: null } }));
+    } else if (!profile.dailyMission) {
+      const _mCtx = { hasRoutines: routines.some(r => r.status === "Ativa"), hasProjects: projects.some(p => p.status === "Ativo"), hasNumericProjects: projects.some(p => p.status === "Ativo" && p.target !== undefined), hasTasks: tasks.some(t => t.status === "Pendente") };
+      const mission = pickDailyMission(d, _mCtx);
+      setProfile(p => ({ ...p, dailyMission: { id: mission.id, text: mission.text, coins: mission.coins, completed: false, claimedAt: null } }));
+    }
+  }, [loaded]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    const now = Date.now();
+    const cleaned = trash.filter(t => now - t.deletedAt < 30 * 86400000);
+    if (cleaned.length !== trash.length) setTrash(cleaned);
+  }, [loaded]);
+
+  const earn = useCallback((xp, coins, msg) => {
+    let popupXp = xp, popupCoins = coins, popupMsg = msg;
+    let levelUpData = null;
+    setProfile(p => {
+      const mult = getMultiplier(p.streak);
+      const bonusXp = Math.round(xp * mult);
+      const bonusCoins = Math.round(coins * mult);
+      let finalXp = xp + bonusXp;
+      let finalCoins = coins + bonusCoins;
+      const boostActive = p.boostExpiry && p.boostExpiry > Date.now();
+      if (boostActive) { const boostBonus = Math.round(finalCoins * 0.25); finalCoins += boostBonus; }
+      popupXp = finalXp; popupCoins = finalCoins;
+      let suffixes = [];
+      if (mult > 0) suffixes.push("+" + Math.round(mult * 100) + "% streak");
+      if (boostActive) suffixes.push("+25% boost");
+      if (suffixes.length > 0) popupMsg = msg + " (" + suffixes.join(", ") + ")";
+      const oldLv = getLevelInfo(p.totalXp).level;
+      const newLv = getLevelInfo(p.totalXp + finalXp).level;
+      if (newLv > oldLv) { const info = getLevelInfo(p.totalXp + finalXp); levelUpData = { level: newLv, name: info.name }; }
+      return { ...p, totalXp: p.totalXp + finalXp, coins: p.coins + finalCoins, xpToday: p.xpToday + finalXp, coinsToday: p.coinsToday + finalCoins, totalCoinsEarned: (p.totalCoinsEarned || 0) + finalCoins, bestXpDay: Math.max(p.bestXpDay || 0, p.xpToday + finalXp) };
+    });
+    setTimeout(() => { setRewardPopup({ xp: popupXp, coins: popupCoins, msg: popupMsg }); }, 10);
+    setTimeout(() => { if (levelUpData) setLevelUpNotif(levelUpData); }, 600);
+  }, []);
+
+  const nav = useCallback((t, st, v, id, tp) => {
+    // Push to history when navigating FROM a detail view TO another detail view
+    if (view === "detail" && v === "detail") {
+      setNavHistory(prev => [...prev, { tab, subTab, view, selId, selType }]);
+    }
+    // Clear history when going to a list (fresh start)
+    if (v === "list") {
+      setNavHistory([]);
+    }
+    if (t) setTab(t);
+    if (st) setSubTab(st);
+    setView(v || "list");
+    setSelId(id || null);
+    setSelType(tp || null);
+  }, [view, tab, subTab, selId, selType]);
+
+  const navBack = useCallback(() => {
+    if (navHistory.length > 0) {
+      const prev = navHistory[navHistory.length - 1];
+      setNavHistory(h => h.slice(0, -1));
+      setTab(prev.tab);
+      setSubTab(prev.subTab);
+      setView(prev.view);
+      setSelId(prev.selId);
+      setSelType(prev.selType);
+    } else {
+      // Fallback: go to the list of the current subTab
+      setView("list");
+      setSelId(null);
+      setSelType(null);
+    }
+  }, [navHistory]);
+
+  // V2: Bidirectional sync — keeps objective.linkedActivities in sync with activity.linkedObjectives
+  const syncObjLinks = useCallback((actId, actType, newLinkedObjs, oldLinkedObjs) => {
+    const newIds = (newLinkedObjs || []).map(l => l.id);
+    const oldIds = (oldLinkedObjs || []).map(l => l.id);
+    const added = newIds.filter(id => !oldIds.includes(id));
+    const removed = oldIds.filter(id => !newIds.includes(id));
+    if (added.length > 0 || removed.length > 0) {
+      setObjectives(prev => prev.map(o => {
+        let la = [...(o.linkedActivities || [])];
+        if (added.includes(o.id) && !la.find(l => l.id === actId && l.type === actType)) {
+          la = [...la, { id: actId, type: actType }];
+        }
+        if (removed.includes(o.id)) {
+          la = la.filter(l => !(l.id === actId && l.type === actType));
+        }
+        return { ...o, linkedActivities: la };
+      }));
+    }
+  }, []);
+
+  // V2: Sync phaseRef on routines when project phases change
+  const syncPhaseRefs = useCallback((projectId, phases) => {
+    const linkedRoutineIds = new Set();
+    (phases || []).forEach(ph => {
+      (ph.linkedRoutines || []).forEach(lr => {
+        linkedRoutineIds.add(lr.routineId);
+        setRoutines(prev => prev.map(r => r.id === lr.routineId ? { ...r, phaseRef: { projectId, phaseId: ph.id } } : r));
+      });
+    });
+    // Clean phaseRef for routines that were unlinked from this project
+    setRoutines(prev => prev.map(r => {
+      if (r.phaseRef && r.phaseRef.projectId === projectId && !linkedRoutineIds.has(r.id)) {
+        return { ...r, phaseRef: null };
+      }
+      return r;
+    }));
+  }, []);
+
+  const addProject = (p) => {
+    const id = uid();
+    const newP = { ...p, id, createdAt: td(), status: p.status || "Ativo", xpAccum: 0, progress: 0 };
+    setProjects(pr => [...pr, newP]);
+    syncObjLinks(id, "project", p.linkedObjectives, []);
+    syncPhaseRefs(id, p.phases);
+    nav("activities", "projects", "list");
+  };
+  const updProject = (p) => {
+    const old = projects.find(x => x.id === p.id);
+    setProjects(pr => pr.map(x => x.id === p.id ? p : x));
+    syncObjLinks(p.id, "project", p.linkedObjectives, old ? old.linkedObjectives : []);
+    syncPhaseRefs(p.id, p.phases);
+  };
+  const addRoutine = (r) => {
+    const id = uid();
+    const newR = { ...r, id, createdAt: td(), status: "Ativa", xpAccum: 0, streak: 0, bestStreak: 0, totalCompletions: 0, consecutiveFails: 0, completionLog: [] };
+    setRoutines(pr => [...pr, newR]);
+    syncObjLinks(id, "routine", r.linkedObjectives, []);
+    nav("activities", "routines", "list");
+  };
+  const updRoutine = (r) => {
+    const old = routines.find(x => x.id === r.id);
+    setRoutines(pr => pr.map(x => x.id === r.id ? r : x));
+    syncObjLinks(r.id, "routine", r.linkedObjectives, old ? old.linkedObjectives : []);
+  };
+  const addTask = (t) => {
+    const id = uid();
+    const newTask = { ...t, id, createdAt: td(), status: "Pendente" };
+    setTasks(pr => {
+      const all = [...pr, newTask];
+      const similar = all.filter(x => x.name && similarName(x.name, newTask.name) && x.id !== newTask.id);
+      if (similar.length >= 2) {
+        setTimeout(() => setRoutineSuggestion(newTask.name), 100);
+        setTimeout(() => setRoutineSuggestion(null), 6000);
+      }
+      return all;
+    });
+    syncObjLinks(id, "task", t.linkedObjectives, []);
+    nav("activities", "tasks", "list");
+  };
+  const updTask = (t) => {
+    const old = tasks.find(x => x.id === t.id);
+    setTasks(pr => pr.map(x => x.id === t.id ? t : x));
+    syncObjLinks(t.id, "task", t.linkedObjectives, old ? old.linkedObjectives : []);
+  };
+
+  // V2: Objective CRUD
+  const syncObjToObjLinks = useCallback((objId, newLinkedObjs, oldLinkedObjs) => {
+    const newIds = (newLinkedObjs || []).map(l => l.id);
+    const oldIds = (oldLinkedObjs || []).map(l => l.id);
+    const reverseRel = (rel) => rel === "maior" ? "menor" : "maior";
+    // Add reverse links for new connections
+    (newLinkedObjs || []).forEach(l => {
+      if (!oldIds.includes(l.id)) {
+        setObjectives(prev => prev.map(o => {
+          if (o.id !== l.id) return o;
+          const existing = (o.linkedObjectives || []).find(x => x.id === objId);
+          if (existing) return o;
+          return { ...o, linkedObjectives: [...(o.linkedObjectives || []), { id: objId, relation: reverseRel(l.relation) }] };
+        }));
+      }
+    });
+    // Remove reverse links for removed connections
+    oldIds.filter(id => !newIds.includes(id)).forEach(id => {
+      setObjectives(prev => prev.map(o => {
+        if (o.id !== id) return o;
+        return { ...o, linkedObjectives: (o.linkedObjectives || []).filter(x => x.id !== objId) };
+      }));
+    });
+  }, []);
+
+  const addObjective = (obj) => {
+    const id = uid();
+    const newObj = { ...obj, id, createdAt: td(), status: "Ativo", xpMirror: 0, linkedActivities: obj.linkedActivities || [], linkedObjectives: obj.linkedObjectives || [] };
+    setObjectives(prev => [...prev, newObj]);
+    // Sync reverse links to other objectives
+    setTimeout(() => syncObjToObjLinks(id, obj.linkedObjectives, []), 0);
+    nav("activities", "objectives", "list");
+  };
+  const updObjective = (obj) => {
+    const old = objectives.find(x => x.id === obj.id);
+    setObjectives(prev => prev.map(x => x.id === obj.id ? obj : x));
+    syncObjToObjLinks(obj.id, obj.linkedObjectives, old ? old.linkedObjectives : []);
+  };
+  const deleteObjective = (objId, deleteAll) => {
+    if (deleteAll) {
+      const obj = objectives.find(o => o.id === objId);
+      if (obj) {
+        (obj.linkedActivities || []).forEach(link => {
+          if (link.type === "project") setProjects(prev => prev.filter(p => p.id !== link.id));
+          if (link.type === "routine") setRoutines(prev => prev.filter(r => r.id !== link.id));
+          if (link.type === "task") setTasks(prev => prev.filter(t => t.id !== link.id));
+        });
+      }
+    } else {
+      removeObjectiveLinksFromActivities(objId, setProjects, setRoutines, setTasks);
+    }
+    setObjectives(prev => prev.filter(o => o.id !== objId));
+    nav("activities", "objectives", "list");
+  };
+
+  const deleteItem = (item, type, permanent) => {
+    const m = { project: setProjects, routine: setRoutines, task: setTasks };
+    m[type](pr => pr.filter(x => x.id !== item.id));
+    if (!permanent) setTrash(pr => [...pr, { ...item, _type: type, deletedAt: Date.now() }]);
+    // V2: Clean up objective links when deleting activity
+    setObjectives(prev => prev.map(o => ({
+      ...o,
+      linkedActivities: (o.linkedActivities || []).filter(l => !(l.id === item.id && l.type === type))
+    })));
+    // V2: Clean up phase routineRef when deleting routine + log removal
+    if (type === "routine") {
+      setProjects(prev => prev.map(p => ({
+        ...p,
+        phases: (p.phases || []).map(ph => {
+          const hadRoutine = (ph.linkedRoutines || []).some(lr => lr.routineId === item.id);
+          return {
+            ...ph,
+            linkedRoutines: (ph.linkedRoutines || []).filter(lr => lr.routineId !== item.id),
+            logs: hadRoutine ? [...(ph.logs || []), { type: "routineRemoved", routineName: item.name, date: td() }] : (ph.logs || [])
+          };
+        })
+      })));
+    }
+    // V2: Clean phaseRef from routines when deleting a project
+    if (type === "project") {
+      setRoutines(prev => prev.map(r => {
+        if (r.phaseRef && r.phaseRef.projectId === item.id) return { ...r, phaseRef: null };
+        return r;
+      }));
+    }
+  };
+  const restoreItem = (item) => {
+    const m = { project: setProjects, routine: setRoutines, task: setTasks, objective: setObjectives };
+    const { _type, deletedAt, autoArchived, ...clean } = item;
+    if (m[_type]) m[_type](pr => [...pr, clean]);
+    setTrash(pr => pr.filter(x => !(x.id === item.id && x._type === item._type)));
+  };
+
+  // V2: Promote task to project
+  const promoteTaskToProject = (task) => {
+    const projId = uid();
+    const newProj = {
+      id: projId, createdAt: td(), status: "Ativo", xpAccum: 0, progress: 0,
+      name: task.name, objective: task.description || "", notes: task.notes || [],
+      color: task.color || COLORS[0], linkedObjectives: task.linkedObjectives || [],
+      phases: [], modulars: { description: false, category: false, priority: true, deadline: false, color: true, notes: false },
+    };
+    // Archive the task
+    setTasks(prev => prev.filter(t => t.id !== task.id));
+    setTrash(pr => [...pr, { ...task, _type: "task", deletedAt: Date.now(), promotedToProject: true }]);
+    // Clean objective links from task, add to project
+    setObjectives(prev => prev.map(o => ({
+      ...o,
+      linkedActivities: (o.linkedActivities || []).map(l => 
+        l.id === task.id && l.type === "task" ? { id: projId, type: "project" } : l
+      )
+    })));
+    // Add project and navigate to edit form
+    setProjects(pr => [...pr, newProj]);
+    syncObjLinks(projId, "project", task.linkedObjectives, []);
+    nav("activities", "projects", "edit", projId, "project");
+  };
+
+  const completeTask = useCallback((taskId, parentType, parentId, phaseId) => {
+    if (parentType === "project" && parentId) {
+      setProjects(prev => prev.map(p => {
+        if (p.id !== parentId) return p;
+        let taskDiff = 1;
+        const phases = (p.phases || []).map(ph => {
+          if (phaseId && ph.id !== phaseId) return ph;
+          const updTasks = (ph.tasks || []).map(t => {
+            if (t.id !== taskId || t.status === "Concluída") return t;
+            taskDiff = t.difficulty || 1;
+            earn(getXp(taskDiff), getCoins(taskDiff), t.name);
+            return { ...t, status: "Concluída", completedAt: td() };
+          });
+          // V2: Auto-complete phase when all tasks done
+          const allPhaseDone = updTasks.length > 0 && updTasks.every(t => t.status === "Concluída");
+          return { ...ph, tasks: updTasks, status: allPhaseDone ? "Concluída" : (ph.status || "Ativa") };
+        });
+        setProfile(pr => ({ ...pr, tasksCompleted: (pr.tasksCompleted || 0) + 1, tasksToday: (pr.tasksToday || 0) + 1, projTasksToday: (pr.projTasksToday || 0) + 1, hardTaskToday: pr.hardTaskToday || taskDiff >= 7, maxTaskToday: pr.maxTaskToday || taskDiff >= 10, maxTaskEver: pr.maxTaskEver || taskDiff >= 10 }));
+        const all = phases.flatMap(ph => ph.tasks || []);
+        const done = all.filter(t => t.status === "Concluída").length;
+        const progress = all.length ? Math.round(done / all.length * 100) : 0;
+        const oldXpAcc = p.xpAccum || 0;
+        const xpAcc = oldXpAcc + getXp(taskDiff);
+        const mBonus = getMasteryBonus(oldXpAcc, xpAcc);
+        if (mBonus > 0) {
+          setTimeout(() => {
+            setProfile(pr2 => ({ ...pr2, coins: pr2.coins + mBonus, totalCoinsEarned: (pr2.totalCoinsEarned || 0) + mBonus }));
+            setRewardPopup({ xp: 0, coins: mBonus, msg: "Maestria! " + getMastery(xpAcc).name });
+          }, 800);
+        }
+        const np = { ...p, phases, progress, xpAccum: xpAcc };
+        // V2: New completion logic — no XP reward for project completion
+        if (checkProjectCompletion(np) && p.status === "Ativo" && (p.progress || 0) < 100) {
+          setTimeout(() => setCompletionConfirm({ type: "project", id: p.id, name: p.name }), 500);
+        }
+        return np;
+      }));
+    } else {
+      setTasks(prev => prev.map(t => {
+        if (t.id !== taskId || t.status === "Concluída") return t;
+        const d = t.difficulty || 1;
+        earn(getXp(d), getCoins(d), t.name);
+        setProfile(pr => ({ ...pr, tasksCompleted: (pr.tasksCompleted || 0) + 1, tasksToday: (pr.tasksToday || 0) + 1, hardTaskToday: pr.hardTaskToday || d >= 7, maxTaskToday: pr.maxTaskToday || d >= 10, maxTaskEver: pr.maxTaskEver || d >= 10 }));
+        return { ...t, status: "Concluída", completedAt: td() };
+      }));
+    }
+  }, [earn]);
+
+  const completeRoutine = useCallback((rid) => {
+    setRoutines(prev => prev.map(r => {
+      if (r.id !== rid) return r;
+      const isLibre = migrateFreq(r).freq === "Livre";
+      const xp = getXp(r.difficulty || 1);
+      const co = getCoins(r.difficulty || 1);
+      earn(xp, co, r.name);
+      const oldXpAcc = r.xpAccum || 0;
+      const newXpAcc = oldXpAcc + xp;
+      const mBonus = getMasteryBonus(oldXpAcc, newXpAcc);
+      if (mBonus > 0) {
+        setTimeout(() => {
+          setProfile(p => ({ ...p, coins: p.coins + mBonus, totalCoinsEarned: (p.totalCoinsEarned || 0) + mBonus }));
+          setRewardPopup({ xp: 0, coins: mBonus, msg: "Maestria! " + getMastery(newXpAcc).name });
+        }, 800);
+      }
+      // V2: Routine XP also accumulates to parent project if linked to a phase
+      if (r.phaseRef && r.phaseRef.projectId) {
+        setProjects(prev => prev.map(p => {
+          if (p.id !== r.phaseRef.projectId) return p;
+          return { ...p, xpAccum: (p.xpAccum || 0) + xp };
+        }));
+      }
+      // V2: Rotina Livre não acumula streak
+      const ns = isLibre ? 0 : r.streak + 1;
+      return { ...r, streak: ns, bestStreak: isLibre ? r.bestStreak : Math.max(r.bestStreak, ns), totalCompletions: r.totalCompletions + 1, consecutiveFails: 0, xpAccum: newXpAcc, completionLog: [...(r.completionLog || []), { date: td(), xp, coins: co }] };
+    }));
+  }, [earn]);
+
+  // V2: New acceptCompletion — no XP/coins reward
+  const acceptCompletion = () => {
+    if (!completionConfirm) return;
+    if (completionConfirm.type === "project") {
+      setProjects(pr => pr.map(p => p.id === completionConfirm.id ? { ...p, status: "Concluído" } : p));
+      setProfile(p => ({ ...p, projectsCompleted: (p.projectsCompleted || 0) + 1 }));
+    }
+    setCompletionConfirm(null);
+  };
+
+  const upgradeItem = useCallback((itemId, level) => {
+    const cost = getUpgradeCost(level);
+    if (!cost) return;
+    setProfile(p => {
+      if (p.coins < cost) return p;
+      if (!p.purchasedItems?.includes(itemId)) return p;
+      const cur = (p.upgradeLevels || {})[itemId] || 0;
+      if (cur !== level) return p;
+      return { ...p, coins: p.coins - cost, upgradeLevels: { ...(p.upgradeLevels || {}), [itemId]: level + 1 } };
+    });
+    setRewardPopup({ xp: 0, coins: 0, msg: UPGRADE_LABELS[level + 1] || ("Nível " + (level + 1)) });
+  }, []);
+
+  const buyConsumable = useCallback((itemId, price) => {
+    setProfile(p => {
+      if (p.coins < price) return p;
+      const np = { ...p, coins: p.coins - price };
+      if (itemId === "c_escudo") { np.shieldActive = true; }
+      else if (itemId === "c_boost") { np.boostExpiry = Date.now() + 24 * 60 * 60 * 1000; }
+      else if (itemId === "c_bau_comum") {
+        const coins = 15 + Math.floor(Math.random() * 36);
+        const shield = Math.random() < 0.05;
+        const boost = !shield && Math.random() < 0.08;
+        const extra = boost ? Math.floor(coins * 0.5) : 0;
+        const total = coins + extra;
+        np.coins += total; np.totalCoinsEarned = (np.totalCoinsEarned || 0) + total;
+        if (shield) np.shieldActive = true;
+        const bonus = shield ? " + 🛡️ Escudo!" : boost ? " + ⚡ Boost!" : "";
+        setTimeout(() => { setRewardPopup({ xp: 0, coins: total, msg: "Baú Comum aberto!" + bonus }); }, 50);
+      } else if (itemId === "c_bau_raro") {
+        const coins = 50 + Math.floor(Math.random() * 91);
+        const shield = Math.random() < 0.12;
+        const boost = !shield && Math.random() < 0.15;
+        const extra = boost ? Math.floor(coins * 0.5) : 0;
+        const total = coins + extra;
+        np.coins += total; np.totalCoinsEarned = (np.totalCoinsEarned || 0) + total;
+        if (shield) np.shieldActive = true;
+        const bonus = shield ? " + 🛡️ Escudo!" : boost ? " + ⚡ Boost!" : "";
+        setTimeout(() => { setRewardPopup({ xp: 0, coins: total, msg: "Baú Raro aberto!" + bonus }); }, 50);
+      }
+      return np;
+    });
+    if (itemId === "c_escudo") { setRewardPopup({ xp: 0, coins: 0, msg: "Escudo ativado!" }); }
+    if (itemId === "c_boost") { setRewardPopup({ xp: 0, coins: 0, msg: "Boost +25% moedas por 24h!" }); }
+  }, []);
+
+  const buyItem = useCallback((itemId, price, type) => {
+    setProfile(p => {
+      if (p.coins < price) return p;
+      if ((p.purchasedItems || []).includes(itemId)) return p;
+      const np = { ...p, coins: p.coins - price, purchasedItems: [...(p.purchasedItems || []), itemId] };
+      if (type === "titles") np.equippedTitle = itemId;
+      if (type === "icons") np.equippedIcon = itemId;
+      if (type === "themes") np.equippedTheme = itemId;
+      if (type === "borders") np.equippedBorder = itemId;
+      return np;
+    });
+  }, []);
+
+  const equipItem = useCallback((itemId, type) => {
+    setProfile(p => {
+      if (type === "titles") return { ...p, equippedTitle: itemId };
+      if (type === "icons") return { ...p, equippedIcon: itemId };
+      if (type === "themes") return { ...p, equippedTheme: itemId };
+      if (type === "borders") return { ...p, equippedBorder: itemId };
+      return p;
+    });
+  }, []);
+
+  const claimMission = useCallback(() => {
+    if (!profile.dailyMission || profile.dailyMission.completed) return;
+    const coins = profile.dailyMission.coins || 20;
+    setProfile(p => ({ ...p, coins: p.coins + coins, coinsToday: p.coinsToday + coins, totalCoinsEarned: (p.totalCoinsEarned || 0) + coins, dailyMission: { ...p.dailyMission, completed: true, claimedAt: td() } }));
+    setRewardPopup({ xp: 0, coins, msg: "Missão do dia!" });
+  }, [profile.dailyMission]);
+
+  const recoverStreak = useCallback((opt) => {
+    if (profile.coins < opt.cost) return;
+    setProfile(p => {
+      const entry = { date: td(), days: opt.days, cost: opt.cost };
+      return { ...p, coins: p.coins - opt.cost, streak: p.streak + opt.days, bestStreak: Math.max(p.bestStreak, p.streak + opt.days), streakRecoveries: [...(p.streakRecoveries || []), entry] };
+    });
+    setRewardPopup({ xp: 0, coins: 0, msg: opt.days + " dias de streak restaurados" });
+  }, [profile.coins]);
+
+  const openChestAction = useCallback(() => {
+    const type = profile.pendingChest;
+    if (!type) return;
+    const result = openChest(type);
+    const ct = CHEST_TYPES.find(c => c.id === type);
+    const bonusMsg = result.shield ? " + 🛡️ Escudo!" : result.boost ? " + ⚡ Boost de moedas!" : "";
+    const extraCoins = result.boost ? Math.floor(result.coins * 0.5) : 0;
+    const totalCoins = result.coins + extraCoins;
+    setProfile(p => ({ ...p, coins: p.coins + totalCoins, totalCoinsEarned: (p.totalCoinsEarned || 0) + totalCoins, pendingChest: null, shieldActive: result.shield ? true : p.shieldActive }));
+    setRewardPopup({ xp: 0, coins: totalCoins, msg: "Baú " + (ct ? ct.name : "") + " aberto!" + bonusMsg });
+  }, [profile.pendingChest]);
+
+  const claimAchievement = useCallback((ach) => {
+    setProfile(p => {
+      if ((p.achievementsUnlocked || []).includes(ach.id)) return p;
+      return { ...p, coins: p.coins + ach.coins, totalCoinsEarned: (p.totalCoinsEarned || 0) + ach.coins, achievementsUnlocked: [...(p.achievementsUnlocked || []), ach.id] };
+    });
+    setRewardPopup({ xp: 0, coins: ach.coins, msg: "Conquista: " + ach.text });
+  }, []);
+
+  const _themeKey = profile.equippedTheme;
+  const _themeUpLv = (profile.upgradeLevels || {})[_themeKey] || 0;
+  const _computedTheme = useMemo(() => {
+    const base = THEMES[_themeKey] || THEMES.obsidiana;
+    const info = SHOP_THEMES_LIST.find(t => t.id === _themeKey) || SHOP_THEMES_LIST[0];
+    return { ...base, ...generateThemeTones(info.accent, info.rarity, _themeUpLv) };
+  }, [_themeKey, _themeUpLv]);
+  setCurrentTheme(_computedTheme);
+
+  const levelInfo = useMemo(() => getLevelInfo(profile.totalXp), [profile.totalXp]);
+  const sel = useMemo(() => {
+    if (!selId) return null;
+    if (selType === "project") return projects.find(x => x.id === selId) || null;
+    if (selType === "routine") return routines.find(x => x.id === selId) || null;
+    if (selType === "task") return tasks.find(x => x.id === selId) || null;
+    if (selType === "objective") return objectives.find(x => x.id === selId) || null;
+    return null;
+  }, [selId, selType, projects, routines, tasks, objectives]);
+
+  if (!loaded) return (
+    <div style={{ background: C.bg, height: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14 }}>
+      <style>{`@keyframes dotPulse{0%,80%,100%{transform:scale(0.6);opacity:0.3}40%{transform:scale(1);opacity:1}}`}</style>
+      <div style={{ fontSize: 18, fontWeight: 700, color: C.gold, letterSpacing: 2 }}>ATIVIDADES</div>
+      <div style={{ display: "flex", gap: 6 }}>
+        {[0, 1, 2].map(i => (
+          <div key={i} style={{ width: 7, height: 7, borderRadius: 4, background: C.gold, animation: `dotPulse 1.2s ease-in-out ${i * 0.2}s infinite` }} />
+        ))}
+      </div>
+    </div>
+  );
+
+  const isDesktop = winW >= 768;
+  const SIDEBAR_W = 220;
+  const navTabs = [
+    ["dashboard", "Início", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>],
+    ["activities", "Atividades", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>],
+    ["history", "Histórico", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>],
+    ["shop", "Loja", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>],
+    ["config", "Perfil", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>],
+  ];
+  // Centro dos popups fixos: metade da área de conteúdo (direita da sidebar em desktop)
+  const popupLeft = isDesktop ? `calc(50% + ${SIDEBAR_W / 2}px)` : "50%";
+
+  return (
+    <div style={{ background: C.bg, minHeight: "100vh", fontFamily: "'Segoe UI','Helvetica Neue',system-ui,sans-serif", color: C.tx, position: "relative", ...(isDesktop ? {} : { maxWidth: 430, margin: "0 auto", paddingBottom: 56 }) }}>
+      <style>{`@keyframes popupSlideIn{from{opacity:0;transform:translateX(-50%) translateY(-12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}@keyframes bannerSlideUp{from{opacity:0;transform:translateX(-50%) translateY(12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}@keyframes errFadeOut{0%{opacity:1}70%{opacity:1}100%{opacity:0}}.rl-item{transition:filter .12s,opacity .12s}.rl-item:hover{filter:brightness(1.1)}.rl-item:active{opacity:.7!important}`}</style>
+      {/* Sidebar — desktop */}
+      {isDesktop && (
+        <div style={{ position: "fixed", left: 0, top: 0, bottom: 0, width: SIDEBAR_W, background: C.bg, borderRight: "0.5px solid " + C.brd, zIndex: 100, display: "flex", flexDirection: "column", overflowY: "auto" }}>
+          <div style={{ padding: "20px 20px 16px", borderBottom: "0.5px solid " + C.brd }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.gold, letterSpacing: 1.5, textTransform: "uppercase" }}>Atividades</div>
+          </div>
+          <div style={{ flex: 1, paddingTop: 8 }}>
+            {navTabs.map(([k, l, icon]) => (
+              <div key={k} onClick={() => { setTab(k); setView("list"); }} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 20px", cursor: "pointer", color: tab === k ? C.gold : C.tx3, background: tab === k ? C.gold + "10" : "transparent", borderLeft: "2.5px solid " + (tab === k ? C.gold : "transparent"), fontSize: 13, fontWeight: tab === k ? 600 : 400, transition: "color .12s, background .12s, border-color .12s" }}>
+                <span style={{ lineHeight: 1, opacity: tab === k ? 1 : 0.65 }}>{icon}</span>
+                <span>{l}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <div style={{ minHeight: isDesktop ? "100vh" : "calc(100vh - 56px)", overflow: "auto", marginLeft: isDesktop ? SIDEBAR_W : 0 }}>
+        <div style={isDesktop ? { maxWidth: 780, margin: "0 auto" } : {}}>
+        {tab === "dashboard" && <DashboardTab profile={profile} levelInfo={levelInfo} projects={projects} routines={routines} tasks={tasks} objectives={objectives} nav={nav} completeTask={completeTask} completeRoutine={completeRoutine} earn={earn} claimMission={claimMission} />}
+        {tab === "activities" && view === "list" && <ActivitiesTab subTab={subTab} setSubTab={setSubTab} projects={projects} routines={routines} tasks={tasks} objectives={objectives} nav={nav} completeTask={completeTask} completeRoutine={completeRoutine} updProject={updProject} setProfile={setProfile} setCompletionConfirm={setCompletionConfirm} />}
+        {tab === "activities" && view === "detail" && sel && selType === "project" && <ProjectDetail item={sel} onUpdate={updProject} onDelete={(i, p) => { deleteItem(i, "project", p); nav("activities", "projects", "list"); }} onComplete={completeTask} nav={nav} navBack={navBack} objectives={objectives} routines={routines} setCompletionConfirm={setCompletionConfirm} onValueUpdate={() => setProfile(p => ({ ...p, goalUpdatedToday: true }))} />}
+        {tab === "activities" && view === "detail" && sel && selType === "routine" && <RoutineDetail item={sel} onUpdate={updRoutine} onDelete={(i, p) => { deleteItem(i, "routine", p); nav("activities", "routines", "list"); }} onComplete={completeRoutine} nav={nav} navBack={navBack} objectives={objectives} projects={projects} />}
+        {tab === "activities" && view === "detail" && sel && selType === "task" && <TaskDetail item={sel} onUpdate={updTask} onDelete={(i, p) => { deleteItem(i, "task", p); nav("activities", "tasks", "list"); }} onComplete={completeTask} nav={nav} navBack={navBack} objectives={objectives} onPromote={promoteTaskToProject} />}
+        {tab === "activities" && view === "detail" && sel && selType === "objective" && <ObjectiveDetail item={sel} onUpdate={updObjective} onDelete={deleteObjective} objectives={objectives} projects={projects} routines={routines} tasks={tasks} nav={nav} navBack={navBack} onLinkActivity={(actId, actType, objId) => {
+          const addLink = (prev) => prev.map(x => x.id === actId ? { ...x, linkedObjectives: [...(x.linkedObjectives || []), { id: objId, relation: "menor" }] } : x);
+          if (actType === "project") setProjects(addLink);
+          if (actType === "routine") setRoutines(addLink);
+          if (actType === "task") setTasks(addLink);
+        }} onUnlinkActivity={(actId, actType, objId) => {
+          const rmLink = (prev) => prev.map(x => x.id === actId ? { ...x, linkedObjectives: (x.linkedObjectives || []).filter(l => l.id !== objId) } : x);
+          if (actType === "project") setProjects(rmLink);
+          if (actType === "routine") setRoutines(rmLink);
+          if (actType === "task") setTasks(rmLink);
+        }} />}
+        {tab === "activities" && view === "create" && selType === "project" && <ProjectForm onSave={addProject} onCancel={() => nav("activities", "projects", "list")} objectives={objectives} routines={routines} />}
+        {tab === "activities" && view === "create" && selType === "routine" && <RoutineForm presets={profile.difficultyPresets} onSave={addRoutine} onCancel={() => nav("activities", "routines", "list")} objectives={objectives} />}
+        {tab === "activities" && view === "create" && selType === "task" && <TaskForm presets={profile.difficultyPresets} onSave={addTask} onCancel={() => nav("activities", "tasks", "list")} objectives={objectives} />}
+        {tab === "activities" && view === "create" && selType === "objective" && <ObjectiveForm onSave={addObjective} onCancel={() => nav("activities", "objectives", "list")} objectives={objectives} />}
+        {tab === "activities" && view === "edit" && sel && selType === "project" && <ProjectForm item={sel} onSave={(p) => { updProject(p); nav("activities", "projects", "detail", p.id, "project"); }} onCancel={() => nav("activities", "projects", "detail", sel.id, "project")} objectives={objectives} routines={routines} />}
+        {tab === "activities" && view === "edit" && sel && selType === "routine" && <RoutineForm presets={profile.difficultyPresets} item={sel} onSave={(r) => { updRoutine(r); nav("activities", "routines", "detail", r.id, "routine"); }} onCancel={() => nav("activities", "routines", "detail", sel.id, "routine")} objectives={objectives} />}
+        {tab === "activities" && view === "edit" && sel && selType === "task" && <TaskForm presets={profile.difficultyPresets} item={sel} onSave={(t) => { updTask(t); nav("activities", "tasks", "detail", t.id, "task"); }} onCancel={() => nav("activities", "tasks", "detail", sel.id, "task")} objectives={objectives} />}
+        {tab === "activities" && view === "edit" && sel && selType === "objective" && <ObjectiveForm item={sel} onSave={(o) => { updObjective(o); nav("activities", "objectives", "detail", o.id, "objective"); }} onCancel={() => nav("activities", "objectives", "detail", sel.id, "objective")} objectives={objectives} />}
+        {tab === "history" && <HistoryTab profile={profile} projects={projects} routines={routines} recoverStreak={recoverStreak} openChestAction={openChestAction} claimAchievement={claimAchievement} />}
+        {tab === "shop" && <ShopTab profile={profile} buyItem={buyItem} equipItem={equipItem} buyConsumable={buyConsumable} upgradeItem={upgradeItem} />}
+        {tab === "config" && <ConfigTab profile={profile} setProfile={setProfile} trash={trash} setTrash={setTrash} restoreItem={restoreItem} projects={projects} routines={routines} tasks={tasks} objectives={objectives} setProjects={setProjects} setRoutines={setRoutines} setTasks={setTasks} setObjectives={setObjectives} levelInfo={levelInfo} />}
+        </div>
+      </div>
+      {/* Bottom tabs — mobile only */}
+      {!isDesktop && <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, display: "flex", background: C.bg, borderTop: "0.5px solid " + C.brd, zIndex: 100 }}>
+        {navTabs.map(([k, l, icon]) => (
+          <div key={k} onClick={() => { setTab(k); setView("list"); }} style={{ flex: 1, padding: "8px 2px 6px", textAlign: "center", fontSize: 11, color: tab === k ? C.gold : C.tx3, borderTop: tab === k ? "2px solid " + C.gold : "2px solid transparent", cursor: "pointer", letterSpacing: 0.2, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, transition: "color .12s, border-color .12s" }}>
+            <span style={{ lineHeight: 1 }}>{icon}</span>
+            <span>{l}</span>
+          </div>
+        ))}
+      </div>}
+      {/* Storage error banner */}
+      {storageError && <div style={{ position: "fixed", top: 0, left: isDesktop ? SIDEBAR_W : "50%", transform: isDesktop ? "none" : "translateX(-50%)", right: isDesktop ? 0 : "auto", width: isDesktop ? "auto" : "100%", maxWidth: isDesktop ? "none" : 430, background: "#b91c1c99", zIndex: 400, padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, backdropFilter: "blur(4px)", animation: "errFadeOut 3s ease forwards" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span style={{ fontSize: 11, color: "#fff" }}>Erro ao salvar dados. Verifique o armazenamento do dispositivo.</span>
+        </div>
+        <span onClick={() => setStorageError(false)} style={{ cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0 }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </span>
+      </div>}
+      {/* Reward popup */}
+      {rewardPopup && (() => {
+        const totalVal = (rewardPopup.xp || 0) + (rewardPopup.coins || 0);
+        const big = totalVal >= 100;
+        const huge = totalVal >= 300;
+        const numSz = huge ? 20 : big ? 17 : 15;
+        const iconSz = huge ? 18 : big ? 16 : 14;
+        const glow = huge ? "0 0 28px " + C.gold + "44, 0 4px 24px #0009" : big ? "0 0 14px " + C.gold + "28, 0 4px 24px #0009" : "0 4px 24px #0009";
+        const brd = big ? "1.5px solid " + C.gold + "80" : "1px solid " + C.goldBrd;
+        return (
+          <div style={{ position: "fixed", top: 60, left: popupLeft, transform: "translateX(-50%)", background: "linear-gradient(135deg,#1a1d2ef0,#2a1f3df0)", border: brd, borderRadius: 14, padding: big ? "16px 28px" : "14px 24px", zIndex: 300, textAlign: "center", boxShadow: glow, minWidth: 200, animation: "popupSlideIn 0.28s ease" }}>
+            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 16, marginBottom: rewardPopup.msg ? 6 : 0 }}>
+              {rewardPopup.xp > 0 && <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <svg width={iconSz} height={iconSz} viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                <span style={{ fontSize: numSz, fontWeight: 700, color: C.gold }}>+{rewardPopup.xp} XP</span>
+              </div>}
+              {rewardPopup.coins > 0 && <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <svg width={iconSz} height={iconSz} viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                <span style={{ fontSize: numSz, fontWeight: 700, color: "#f59e0b" }}>+{rewardPopup.coins}</span>
+              </div>}
+            </div>
+            {rewardPopup.msg && <div style={{ fontSize: 11, color: C.tx2, marginTop: 2 }}>{rewardPopup.msg}</div>}
+          </div>
+        );
+      })()}
+      {/* Level-up notification */}
+      {levelUpNotif && <div style={{ position: "fixed", top: "50%", left: popupLeft, transform: "translate(-50%,-50%)", background: "linear-gradient(160deg," + C.bg + "fc," + C.card + "fc)", border: "1.5px solid " + C.gold + "55", borderRadius: 20, padding: "28px 44px", zIndex: 350, textAlign: "center", boxShadow: "0 0 56px " + C.gold + "1a, 0 8px 32px #000a", minWidth: 230, animation: "popupSlideIn 0.34s cubic-bezier(0.175,0.885,0.32,1.275)" }}>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+          <div style={{ width: 52, height: 52, borderRadius: 26, background: C.gold + "15", border: "1.5px solid " + C.gold + "44", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+          </div>
+        </div>
+        <div style={{ fontSize: 11, letterSpacing: 2.5, textTransform: "uppercase", color: C.gold, fontWeight: 700, marginBottom: 8 }}>Subiu de nível</div>
+        <div style={{ fontSize: 42, fontWeight: 800, color: C.tx, letterSpacing: -2, lineHeight: 1, marginBottom: 5 }}>{levelUpNotif.level}</div>
+        <div style={{ fontSize: 13, color: C.gold, fontWeight: 600, letterSpacing: 0.2 }}>{levelUpNotif.name}</div>
+      </div>}
+      {/* V2: Completion confirmation — sem recompensa */}
+      {completionConfirm && <Modal>
+        <div style={{ textAlign: "center", marginBottom: 12 }}>
+          <div style={{ fontSize: 28, marginBottom: 6 }}>{"\ud83c\udfc6"}</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: C.gold }}>Projeto concluído!</div>
+          <div style={{ fontSize: 12, color: C.tx, margin: "6px 0" }}>{completionConfirm.name}</div>
+          <div style={{ fontSize: 11, color: C.tx2 }}>Confirmar que este projeto foi realmente concluído?</div>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Btn onClick={() => setCompletionConfirm(null)} style={{ flex: 1 }}>Não, manter aberto</Btn>
+          <Btn primary onClick={acceptCompletion} style={{ flex: 1 }}>Sim, concluir!</Btn>
+        </div>
+      </Modal>}
+      {/* V2: Routine suggestion banner */}
+      {routineSuggestion && <div style={{ position: "fixed", top: 60, left: popupLeft, transform: "translateX(-50%)", background: "#1a1d2eee", border: "1px solid " + C.purple + "60", borderRadius: 10, padding: "10px 16px", zIndex: 300, textAlign: "center", maxWidth: 340, animation: "popupSlideIn 0.28s ease" }}>
+        <div style={{ fontSize: 11, color: C.purple, fontWeight: 500, marginBottom: 4 }}>Transformar <span style={{ color: C.tx, fontStyle: "italic" }}>"{routineSuggestion}"</span> em rotina?</div>
+        <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
+          <Btn small primary onClick={() => { nav("activities", "routines", "create", null, "routine"); setRoutineSuggestion(null); }}>Criar rotina</Btn>
+          <Btn small onClick={() => setRoutineSuggestion(null)}>Ignorar</Btn>
+        </div>
+      </div>}
+      {/* Achievement notification banner */}
+      {achieveNotif && <div style={{ position: "fixed", bottom: isDesktop ? 16 : 68, left: popupLeft, transform: "translateX(-50%)", width: "92%", maxWidth: 400, background: "linear-gradient(135deg,#1a1d2e,#2a1f3d)", border: "1px solid " + C.goldBrd, borderRadius: 12, padding: "12px 16px", zIndex: 310, display: "flex", alignItems: "center", gap: 12, boxShadow: "0 4px 20px #0008", animation: "bannerSlideUp 0.3s ease" }}>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="18" width="12" height="4"/></svg>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.gold }}>Conquista desbloqueada!</div>
+          <div style={{ fontSize: 11, color: C.tx2, marginTop: 2 }}>{achieveNotif.text} — <span style={{ color: C.gold }}>+{achieveNotif.coins} moedas</span></div>
+        </div>
+        <span onClick={() => setAchieveNotif(null)} style={{ cursor: "pointer", color: C.tx3, display: "flex", alignItems: "center", padding: "0 4px" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>
+      </div>}
+      {/* Onboarding overlay — primeira abertura */}
+      {loaded && !profile.onboardingDone && projects.length === 0 && routines.length === 0 && tasks.length === 0 && objectives.length === 0 && (
+        <div style={{ position: "fixed", inset: 0, background: C.bg, zIndex: 500, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "28px 24px", ...(isDesktop ? {} : { maxWidth: 430, width: "100%", left: "50%", transform: "translateX(-50%)" }) }}>
+          <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: 20 }}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="18" width="12" height="4"/></svg>
+          <div style={{ fontSize: 22, fontWeight: 700, color: C.tx, marginBottom: 10, textAlign: "center", letterSpacing: -0.3 }}>Bem-vindo ao Atividades</div>
+          <div style={{ fontSize: 13, color: C.tx3, textAlign: "center", lineHeight: 1.7, marginBottom: 28, maxWidth: 300 }}>Transforme seus objetivos em XP. Cada conclusão te aproxima de um novo nível.</div>
+          <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 8, marginBottom: 28 }}>
+            {[
+              ["1", C.purple, "Crie um Objetivo", "Sua meta de longo prazo"],
+              ["2", C.gold, "Adicione Projetos e Rotinas", "Atividades que te levam lá"],
+              ["3", C.green, "Complete e suba de nível", "XP, moedas e conquistas"],
+            ].map(([n, col, title, sub]) => (
+              <div key={n} style={{ display: "flex", gap: 12, alignItems: "center", padding: "10px 14px", background: C.card, borderRadius: 10, border: "1px solid " + C.brd }}>
+                <div style={{ width: 24, height: 24, borderRadius: 12, background: col + "22", border: "1.5px solid " + col + "66", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: col, flexShrink: 0 }}>{n}</div>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: C.tx, marginBottom: 1 }}>{title}</div>
+                  <div style={{ fontSize: 11, color: C.tx4 }}>{sub}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <Btn primary onClick={() => { setProfile(p => ({ ...p, onboardingDone: true })); nav("activities", "objectives", "create", null, "objective"); }} style={{ width: "100%", padding: "13px 0", fontSize: 13 }}>Criar meu primeiro objetivo →</Btn>
+          <div onClick={() => setProfile(p => ({ ...p, onboardingDone: true }))} style={{ marginTop: 14, fontSize: 11, color: C.tx4, cursor: "pointer", textAlign: "center" }}>Pular por agora</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
