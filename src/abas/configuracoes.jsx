@@ -6,7 +6,7 @@ import { DEFAULT_PRESETS, CATEGORIES, COLORS } from '../constantes.js';
 import { Btn, Card, Badge, TopBar, Modal, ConfirmModal, DeleteModal, XpBar, SLabel, getDiffColor } from '../componentes-base.jsx';
 import { IconSVG, SHOP_THEMES_LIST, BorderSVG, TitleBanner, SHOP_BORDERS, SHOP_TITLES, getTitleTargetColor, getTitleStyle, getUpgradeCost, getBorderStyle, UPGRADE_LABELS, RARITY_LABELS, RARITY_COLORS } from '../icones.jsx';
 
-function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects, routines, tasks, objectives, setProjects, setRoutines, setTasks, setObjectives, levelInfo }) {
+function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects, routines, tasks, objectives, setProjects, setRoutines, setTasks, setObjectives, levelInfo, onSignOut }) {
   const [showReset, setShowReset] = useState(false);
   const [resetInput, setResetInput] = useState("");
   const [confirmDel, setConfirmDel] = useState(null);
@@ -204,6 +204,12 @@ function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects
           { label: "Cancelar", onClick: () => setConfirmDel(null), mt: true },
         ]}
       />}
+      {onSignOut && (
+        <div onClick={onSignOut} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, margin: "8px 0 20px", padding: "13px 0", background: C.card, border: "1px solid " + C.brd, borderRadius: 12, cursor: "pointer", color: C.tx3, fontSize: 14, fontWeight: 500 }}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Sair da conta
+        </div>
+      )}
     </div>
   );
 }
