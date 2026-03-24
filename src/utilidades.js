@@ -66,7 +66,7 @@ function openChest(type) {
 
 let _uidSeq = 0;
 export const uid = () => Date.now().toString(36) + (++_uidSeq).toString(36).padStart(3, "0") + Math.random().toString(36).slice(2, 5);
-export const td = () => new Date().toISOString().split("T")[0];
+export const td = () => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`; };
 export const fmtD = (d) => {
   if (!d) return "";
   const p = d.split("-");

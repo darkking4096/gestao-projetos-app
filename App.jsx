@@ -71,6 +71,32 @@ export default function App({ user, onSignOut }) {
     return () => window.removeEventListener("resize", resizeHandler);
   }, []);
 
+  // Detecta volta do background (virada de dia sem fechar o app)
+  useEffect(() => {
+    if (!loaded) return;
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && profile.lastActiveDate !== td()) {
+        // Força re-trigger do useEffect de reset diário
+        setLoaded(false);
+        setTimeout(() => setLoaded(true), 50);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [loaded, profile.lastActiveDate]);
+
+  // Botão voltar do sistema (Android/browser) — navega dentro do app
+  useEffect(() => {
+    const onPop = (e) => {
+      e.preventDefault();
+      navBack();
+      history.pushState(null, "", window.location.href);
+    };
+    history.pushState(null, "", window.location.href);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [navBack]);
+
   useEffect(() => {
     (async () => {
       try {
@@ -692,7 +718,23 @@ export default function App({ user, onSignOut }) {
           )}
         </div>
       )}
-      <div style={{ minHeight: isDesktop ? "100vh" : "calc(100vh - 56px)", overflow: "auto", marginLeft: isDesktop ? SIDEBAR_W : 0 }}>
+      <div style={{ minHeight: isDesktop ? "100vh" : "calc(100vh - 56px)", overflow: "auto", marginLeft: isDesktop ? SIDEBAR_W : 0 }}
+        onTouchStart={!isDesktop ? (e) => { window._swipeX = e.touches[0].clientX; window._swipeY = e.touches[0].clientY; } : undefined}
+        onTouchEnd={!isDesktop ? (e) => {
+          if (window._swipeX == null) return;
+          const dx = e.changedTouches[0].clientX - window._swipeX;
+          const dy = e.changedTouches[0].clientY - window._swipeY;
+          window._swipeX = null;
+          // Só swipe horizontal com pelo menos 60px e mais horizontal que vertical
+          if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+          // Só troca de aba se estiver na tela de lista (não em detalhe/formulário)
+          if (view !== "list") return;
+          const tabKeys = ["dashboard","activities","history","shop","config"];
+          const cur = tabKeys.indexOf(tab);
+          if (dx < 0 && cur < tabKeys.length - 1) { setTab(tabKeys[cur + 1]); setView("list"); }
+          if (dx > 0 && cur > 0) { setTab(tabKeys[cur - 1]); setView("list"); }
+        } : undefined}
+      >
         <div style={isDesktop ? { maxWidth: 780, margin: "0 auto" } : {}}>
         {tab === "dashboard" && <DashboardTab profile={profile} levelInfo={levelInfo} projects={projects} routines={routines} tasks={tasks} objectives={objectives} nav={nav} completeTask={completeTask} completeRoutine={completeRoutine} earn={earn} claimMission={claimMission} />}
         {tab === "activities" && view === "list" && <ActivitiesTab subTab={subTab} setSubTab={setSubTab} projects={projects} routines={routines} tasks={tasks} objectives={objectives} nav={nav} completeTask={completeTask} completeRoutine={completeRoutine} updProject={updProject} setProfile={setProfile} setCompletionConfirm={setCompletionConfirm} />}

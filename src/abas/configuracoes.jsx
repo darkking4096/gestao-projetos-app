@@ -98,11 +98,11 @@ function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 10 }}>
           {[
             [profile.coins, "Moedas", C.gold],
-            [profile.streak, "Streak", C.orange],
-            [profile.tasksCompleted, "Tarefas", C.green],
-            [(profile.projectsCompleted || 0), "Projetos", C.purple],
-            [(objectives || []).filter(o => o.status === "Ativo").length, "Objetivos", C.tx2],
-            [(profile.totalCoinsEarned || 0).toLocaleString(), "Ganhas", C.gold],
+            [profile.streak, "Streak", C.gold],
+            [profile.tasksCompleted, "Tarefas", C.gold],
+            [(profile.projectsCompleted || 0), "Proj. Concluídos", C.gold],
+            [(objectives || []).filter(o => o.status === "Ativo").length, "Objetivos", C.gold],
+            [(profile.totalCoinsEarned || 0).toLocaleString(), "Total Ganhas", C.gold],
           ].map(([v, l, color], i) => (
             <div key={i} style={{ background: C.bg, borderRadius: 6, padding: "6px 4px", textAlign: "center" }}>
               <div style={{ fontSize: 12, fontWeight: 600, color }}>{v}</div>

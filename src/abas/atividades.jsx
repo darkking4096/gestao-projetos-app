@@ -255,11 +255,11 @@ function RoutinesList({ routines, projects, nav, completeRoutine }) {
             <div style={{ flex: 1, cursor: "pointer" }} onClick={() => nav("activities", "routines", "detail", r.id, "routine")}>
               <div style={{ fontSize: 11, color: C.tx }}>{r.name}</div>
               <div style={{ display: "flex", gap: 6, fontSize: 11, color: C.tx3, flexWrap: "wrap" }}>
-                <Badge color={r.frequency === "Diário" ? C.gold : C.purple}>{fmtFreq(r)}</Badge>
-                {!isLibre && <span style={{ color: C.orange }}>{r.streak}</span>}
+                <Badge color={C.gold}>{fmtFreq(r)}</Badge>
+                {!isLibre && <span style={{ color: C.gold }}>{r.streak}</span>}
                 {isLibre && <span>{r.totalCompletions || 0} execuções</span>}
                 <span style={{ color: C.gold }}>+{getXp(r.difficulty || 1)} XP</span>
-                {projRef && <span style={{ color: C.purple }}>→ {projRef.name}</span>}
+                {projRef && <span style={{ color: C.tx3 }}>→ {projRef.name}</span>}
               </div>
             </div>
           </div>
