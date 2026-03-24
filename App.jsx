@@ -33,6 +33,7 @@ export default function App({ user, onSignOut }) {
   const [routineSuggestion, setRoutineSuggestion] = useState(null);
   const [storageError, setStorageError] = useState(false);
   const [achieveNotif, setAchieveNotif] = useState(null);
+  const [lastUndo, setLastUndo] = useState(null);
   const shownAchieveIds = useRef(new Set());
   const [winW, setWinW] = useState(() => window.innerWidth);
   useEffect(() => {
@@ -50,7 +51,7 @@ export default function App({ user, onSignOut }) {
     if (!rewardPopup) return;
     const val = (rewardPopup.xp || 0) + (rewardPopup.coins || 0);
     const dur = val === 0 ? 1800 : val < 30 ? 2200 : val < 100 ? 2600 : val < 300 ? 3000 : 3500;
-    const t = setTimeout(() => setRewardPopup(null), dur);
+    const t = setTimeout(() => { setRewardPopup(null); setLastUndo(null); }, dur);
     return () => clearTimeout(t);
   }, [rewardPopup]);
   // Level-up notification auto-dismiss
@@ -183,7 +184,7 @@ export default function App({ user, onSignOut }) {
     if (cleaned.length !== trash.length) setTrash(cleaned);
   }, [loaded]);
 
-  const earn = useCallback((xp, coins, msg) => {
+  const earn = useCallback((xp, coins, msg, onEarned) => {
     let popupXp = xp, popupCoins = coins, popupMsg = msg;
     let levelUpData = null;
     setProfile(p => {
@@ -204,7 +205,7 @@ export default function App({ user, onSignOut }) {
       if (newLv > oldLv) { const info = getLevelInfo(p.totalXp + finalXp); levelUpData = { level: newLv, name: info.name }; }
       return { ...p, totalXp: p.totalXp + finalXp, coins: p.coins + finalCoins, xpToday: p.xpToday + finalXp, coinsToday: p.coinsToday + finalCoins, totalCoinsEarned: (p.totalCoinsEarned || 0) + finalCoins, bestXpDay: Math.max(p.bestXpDay || 0, p.xpToday + finalXp) };
     });
-    setTimeout(() => { setRewardPopup({ xp: popupXp, coins: popupCoins, msg: popupMsg }); }, 10);
+    setTimeout(() => { setRewardPopup({ xp: popupXp, coins: popupCoins, msg: popupMsg }); if (onEarned) onEarned(popupXp, popupCoins); }, 10);
     setTimeout(() => { if (levelUpData) setLevelUpNotif(levelUpData); }, 600);
   }, []);
 
@@ -461,15 +462,19 @@ export default function App({ user, onSignOut }) {
 
   const completeTask = useCallback((taskId, parentType, parentId, phaseId) => {
     if (parentType === "project" && parentId) {
+      let _prevProject = null;
       setProjects(prev => prev.map(p => {
         if (p.id !== parentId) return p;
+        _prevProject = JSON.parse(JSON.stringify(p));
         let taskDiff = 1;
         const phases = (p.phases || []).map(ph => {
           if (phaseId && ph.id !== phaseId) return ph;
           const updTasks = (ph.tasks || []).map(t => {
             if (t.id !== taskId || t.status === "Concluída") return t;
             taskDiff = t.difficulty || 1;
-            earn(getXp(taskDiff), getCoins(taskDiff), t.name);
+            earn(getXp(taskDiff), getCoins(taskDiff), t.name, (xpAdded, coinsAdded) => {
+              setLastUndo({ type: 'projectTask', id: taskId, parentId, xpAdded, coinsAdded, prevProject: _prevProject });
+            });
             return { ...t, status: "Concluída", completedAt: td() };
           });
           // V2: Auto-complete phase when all tasks done
@@ -497,10 +502,14 @@ export default function App({ user, onSignOut }) {
         return np;
       }));
     } else {
+      let _prevTask = null;
       setTasks(prev => prev.map(t => {
         if (t.id !== taskId || t.status === "Concluída") return t;
+        _prevTask = { ...t };
         const d = t.difficulty || 1;
-        earn(getXp(d), getCoins(d), t.name);
+        earn(getXp(d), getCoins(d), t.name, (xpAdded, coinsAdded) => {
+          setLastUndo({ type: 'task', id: taskId, xpAdded, coinsAdded, prevItem: _prevTask });
+        });
         setProfile(pr => ({ ...pr, tasksCompleted: (pr.tasksCompleted || 0) + 1, tasksToday: (pr.tasksToday || 0) + 1, hardTaskToday: pr.hardTaskToday || d >= 7, maxTaskToday: pr.maxTaskToday || d >= 10, maxTaskEver: pr.maxTaskEver || d >= 10 }));
         return { ...t, status: "Concluída", completedAt: td() };
       }));
@@ -508,12 +517,16 @@ export default function App({ user, onSignOut }) {
   }, [earn]);
 
   const completeRoutine = useCallback((rid) => {
+    let _prevRoutine = null;
     setRoutines(prev => prev.map(r => {
       if (r.id !== rid) return r;
+      _prevRoutine = { ...r };
       const isLibre = migrateFreq(r).freq === "Livre";
       const xp = getXp(r.difficulty || 1);
       const co = getCoins(r.difficulty || 1);
-      earn(xp, co, r.name);
+      earn(xp, co, r.name, (xpAdded, coinsAdded) => {
+        setLastUndo({ type: 'routine', id: rid, xpAdded, coinsAdded, prevItem: _prevRoutine });
+      });
       const oldXpAcc = r.xpAccum || 0;
       const newXpAcc = oldXpAcc + xp;
       const mBonus = getMasteryBonus(oldXpAcc, newXpAcc);
@@ -535,6 +548,25 @@ export default function App({ user, onSignOut }) {
       return { ...r, streak: ns, bestStreak: isLibre ? r.bestStreak : Math.max(r.bestStreak, ns), totalCompletions: r.totalCompletions + 1, consecutiveFails: 0, xpAccum: newXpAcc, completionLog: [...(r.completionLog || []), { date: td(), xp, coins: co }] };
     }));
   }, [earn]);
+
+  const undoCompletion = useCallback(() => {
+    if (!lastUndo) return;
+    const { type, id, parentId, xpAdded, coinsAdded, prevItem, prevProject } = lastUndo;
+    setProfile(p => ({
+      ...p,
+      totalXp: Math.max(0, p.totalXp - xpAdded),
+      coins: Math.max(0, p.coins - coinsAdded),
+      xpToday: Math.max(0, p.xpToday - xpAdded),
+      coinsToday: Math.max(0, p.coinsToday - coinsAdded),
+      totalCoinsEarned: Math.max(0, (p.totalCoinsEarned || 0) - coinsAdded),
+      ...(type === 'task' || type === 'projectTask' ? { tasksCompleted: Math.max(0, (p.tasksCompleted || 0) - 1), tasksToday: Math.max(0, (p.tasksToday || 0) - 1) } : {}),
+    }));
+    if (type === 'task' && prevItem) setTasks(prev => prev.map(t => t.id === id ? prevItem : t));
+    if (type === 'routine' && prevItem) setRoutines(prev => prev.map(r => r.id === id ? prevItem : r));
+    if (type === 'projectTask' && prevProject) setProjects(prev => prev.map(p => p.id === parentId ? prevProject : p));
+    setLastUndo(null);
+    setRewardPopup(null);
+  }, [lastUndo]);
 
   // V2: New acceptCompletion — no XP/coins reward
   const acceptCompletion = () => {
@@ -696,7 +728,7 @@ export default function App({ user, onSignOut }) {
 
   return (
     <div style={{ background: C.bg, minHeight: "100vh", fontFamily: "'Segoe UI','Helvetica Neue',system-ui,sans-serif", color: C.tx, position: "relative", ...(isDesktop ? {} : { maxWidth: 430, margin: "0 auto", paddingBottom: 56 }) }}>
-      <style>{`@keyframes popupSlideIn{from{opacity:0;transform:translateX(-50%) translateY(-12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}@keyframes bannerSlideUp{from{opacity:0;transform:translateX(-50%) translateY(12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}@keyframes errFadeOut{0%{opacity:1}70%{opacity:1}100%{opacity:0}}.rl-item{transition:filter .12s,opacity .12s}.rl-item:hover{filter:brightness(1.1)}.rl-item:active{opacity:.7!important}`}</style>
+      <style>{`@keyframes popupSlideIn{from{opacity:0;transform:translateX(-50%) translateY(-12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}@keyframes bannerSlideUp{from{opacity:0;transform:translateX(-50%) translateY(12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}@keyframes errFadeOut{0%{opacity:1}70%{opacity:1}100%{opacity:0}}@keyframes tabFadeIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}.rl-item{transition:filter .12s,opacity .12s}.rl-item:hover{filter:brightness(1.1)}.rl-item:active{opacity:.7!important}`}</style>
       {/* Sidebar — desktop */}
       {isDesktop && (
         <div style={{ position: "fixed", left: 0, top: 0, bottom: 0, width: SIDEBAR_W, background: C.bg, borderRight: "0.5px solid " + C.brd, zIndex: 100, display: "flex", flexDirection: "column", overflowY: "auto" }}>
@@ -738,7 +770,7 @@ export default function App({ user, onSignOut }) {
           if (dx > 0 && cur > 0) { setTab(tabKeys[cur - 1]); setView("list"); }
         } : undefined}
       >
-        <div style={isDesktop ? { maxWidth: 780, margin: "0 auto" } : {}}>
+        <div key={tab} style={isDesktop ? { maxWidth: 780, margin: "0 auto", animation: "tabFadeIn 0.22s ease" } : { animation: "tabFadeIn 0.22s ease" }}>
         {tab === "dashboard" && <DashboardTab profile={profile} levelInfo={levelInfo} projects={projects} routines={routines} tasks={tasks} objectives={objectives} nav={nav} completeTask={completeTask} completeRoutine={completeRoutine} earn={earn} claimMission={claimMission} />}
         {tab === "activities" && view === "list" && <ActivitiesTab subTab={subTab} setSubTab={setSubTab} projects={projects} routines={routines} tasks={tasks} objectives={objectives} nav={nav} completeTask={completeTask} completeRoutine={completeRoutine} updProject={updProject} setProfile={setProfile} setCompletionConfirm={setCompletionConfirm} />}
         {tab === "activities" && view === "detail" && sel && selType === "project" && <ProjectDetail item={sel} onUpdate={updProject} onDelete={(i, p) => { deleteItem(i, "project", p); nav("activities", "projects", "list"); }} onComplete={completeTask} nav={nav} navBack={navBack} objectives={objectives} routines={routines} setCompletionConfirm={setCompletionConfirm} onValueUpdate={() => setProfile(p => ({ ...p, goalUpdatedToday: true }))} />}
@@ -809,6 +841,9 @@ export default function App({ user, onSignOut }) {
               </div>}
             </div>
             {rewardPopup.msg && <div style={{ fontSize: 11, color: C.tx2, marginTop: 2 }}>{rewardPopup.msg}</div>}
+            {lastUndo && <div style={{ marginTop: 8, textAlign: "center" }}>
+              <span onClick={undoCompletion} style={{ fontSize: 11, color: C.tx3, cursor: "pointer", borderBottom: "1px dashed " + C.tx3, paddingBottom: 1, letterSpacing: 0.3 }}>↩ Desfazer</span>
+            </div>}
           </div>
         );
       })()}
