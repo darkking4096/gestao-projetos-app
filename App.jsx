@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { THEMES, setCurrentTheme, generateThemeTones, C } from './src/temas.js';
 import { uid, td, getLevelInfo, getMastery, getMasteryBonus, getXp, getCoins, getMultiplier, openChest, pickDailyMission, getMissionProgress, calcObjectiveXp, ACHIEVEMENTS, checkProjectCompletion, removeObjectiveLinksFromActivities, similarName, migrateFreq } from './src/utilidades.js';
 import { CATEGORIES, FREQUENCIES, WEEK_DAYS, UNITS, DEFAULT_PRESETS, STREAK_RECOVER, CHEST_TYPES, COLORS } from './src/constantes.js';
-import { S } from './src/armazenamento.js';
+import { S, Social } from './src/armazenamento.js';
 import { SHOP_THEMES_LIST, getUpgradeCost, UPGRADE_LABELS } from './src/icones.jsx';
 import { Btn, Modal, ConfirmModal } from './src/componentes-base.jsx';
 import { ProjectForm, RoutineForm, TaskForm, ObjectiveForm } from './src/formularios.jsx';
@@ -35,6 +35,7 @@ export default function App({ user, onSignOut }) {
   const [achieveNotif, setAchieveNotif] = useState(null);
   const [lastUndo, setLastUndo] = useState(null);
   const shownAchieveIds = useRef(new Set());
+  const syncProfileRef = useRef(null);
   const [winW, setWinW] = useState(() => window.innerWidth);
   useEffect(() => {
     const handler = () => setStorageError(true);
@@ -71,6 +72,28 @@ export default function App({ user, onSignOut }) {
     window.addEventListener("resize", resizeHandler);
     return () => window.removeEventListener("resize", resizeHandler);
   }, []);
+
+  // Sync public profile to Supabase user_profiles with 5s debounce
+  useEffect(() => {
+    if (!loaded || !profile.username) return;
+    if (syncProfileRef.current) clearTimeout(syncProfileRef.current);
+    syncProfileRef.current = setTimeout(() => {
+      Social.syncProfile({
+        username: profile.username,
+        totalXp: profile.totalXp || 0,
+        streak: profile.streak || 0,
+        tasksCompleted: profile.tasksCompleted || 0,
+        projectsCompleted: profile.projectsCompleted || 0,
+        objectivesCount: objectives.length,
+        equippedIcon: profile.equippedIcon || 'i_estrela',
+        equippedBorder: profile.equippedBorder || 'b_simples',
+        equippedTitle: profile.equippedTitle || 't_iniciante',
+        equippedTheme: profile.equippedTheme || 'obsidiana',
+        upgradeLevels: profile.upgradeLevels || {},
+      }).catch(e => console.log('profile sync err', e));
+    }, 5000);
+    return () => { if (syncProfileRef.current) clearTimeout(syncProfileRef.current); };
+  }, [loaded, profile.username, profile.totalXp, profile.streak, profile.tasksCompleted, profile.projectsCompleted, profile.equippedIcon, profile.equippedBorder, profile.equippedTitle, profile.equippedTheme, objectives.length]);
 
   // Detecta volta do background (virada de dia sem fechar o app)
   useEffect(() => {
@@ -797,7 +820,7 @@ export default function App({ user, onSignOut }) {
         {tab === "activities" && view === "edit" && sel && selType === "objective" && <ObjectiveForm item={sel} onSave={(o) => { updObjective(o); nav("activities", "objectives", "detail", o.id, "objective"); }} onCancel={() => nav("activities", "objectives", "detail", sel.id, "objective")} objectives={objectives} />}
         {tab === "history" && <HistoryTab profile={profile} projects={projects} routines={routines} recoverStreak={recoverStreak} openChestAction={openChestAction} claimAchievement={claimAchievement} />}
         {tab === "shop" && <ShopTab profile={profile} buyItem={buyItem} equipItem={equipItem} buyConsumable={buyConsumable} upgradeItem={upgradeItem} />}
-        {tab === "config" && <ConfigTab profile={profile} setProfile={setProfile} trash={trash} setTrash={setTrash} restoreItem={restoreItem} projects={projects} routines={routines} tasks={tasks} objectives={objectives} setProjects={setProjects} setRoutines={setRoutines} setTasks={setTasks} setObjectives={setObjectives} levelInfo={levelInfo} onSignOut={!isDesktop ? onSignOut : null} />}
+        {tab === "config" && <ConfigTab profile={profile} setProfile={setProfile} trash={trash} setTrash={setTrash} restoreItem={restoreItem} projects={projects} routines={routines} tasks={tasks} objectives={objectives} setProjects={setProjects} setRoutines={setRoutines} setTasks={setTasks} setObjectives={setObjectives} levelInfo={levelInfo} onSignOut={!isDesktop ? onSignOut : null} user={user} />}
         </div>
       </div>
       {/* Bottom tabs — mobile only */}
