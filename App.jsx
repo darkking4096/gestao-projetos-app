@@ -85,18 +85,6 @@ export default function App({ user, onSignOut }) {
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [loaded, profile.lastActiveDate]);
 
-  // Botão voltar do sistema (Android/browser) — navega dentro do app
-  useEffect(() => {
-    const onPop = (e) => {
-      e.preventDefault();
-      navBack();
-      history.pushState(null, "", window.location.href);
-    };
-    history.pushState(null, "", window.location.href);
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, [navBack]);
-
   useEffect(() => {
     (async () => {
       try {
@@ -252,6 +240,21 @@ export default function App({ user, onSignOut }) {
       setSelType(null);
     }
   }, [navHistory]);
+
+  // Botão voltar do sistema (Android/browser) — navega dentro do app
+  // Colocado APÓS navBack ser declarado para evitar TDZ
+  useEffect(() => {
+    const navBackRef = { current: navBack };
+    navBackRef.current = navBack;
+    const onPop = (e) => {
+      e.preventDefault();
+      navBackRef.current();
+      history.pushState(null, "", window.location.href);
+    };
+    history.pushState(null, "", window.location.href);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [navBack]);
 
   // V2: Bidirectional sync — keeps objective.linkedActivities in sync with activity.linkedObjectives
   const syncObjLinks = useCallback((actId, actType, newLinkedObjs, oldLinkedObjs) => {
