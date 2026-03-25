@@ -363,6 +363,35 @@ function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects
         )}
       </div>
 
+      {/* ── Integração IA (Groq) ── */}
+      <SLabel>Integração com IA</SLabel>
+      <div style={{ background: C.card, borderRadius: 10, marginBottom: 10, border: "1px solid " + C.brd, padding: "12px 14px" }}>
+        <div style={{ fontSize: 12, fontWeight: 500, color: C.tx, marginBottom: 4 }}>Chave da API Groq</div>
+        <div style={{ fontSize: 11, color: C.tx3, marginBottom: 8, lineHeight: 1.5 }}>
+          Usada para gerar questionários personalizados de atributos. Gratuita em{" "}
+          <span style={{ color: C.gold }}>console.groq.com</span>.
+        </div>
+        <div style={{ position: "relative" }}>
+          <input
+            type="password"
+            value={profile.groqApiKey || ""}
+            onChange={e => setProfile(p => ({ ...p, groqApiKey: e.target.value }))}
+            placeholder="gsk_..."
+            style={{
+              width: "100%", padding: "8px 10px", background: C.bg,
+              border: "1px solid " + C.brd2, borderRadius: 6, color: C.tx,
+              fontSize: 12, fontFamily: "inherit", outline: "none", boxSizing: "border-box",
+            }}
+          />
+        </div>
+        {profile.groqApiKey && (
+          <div style={{ fontSize: 11, color: C.green, marginTop: 6, display: "flex", alignItems: "center", gap: 4 }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Chave configurada
+          </div>
+        )}
+      </div>
+
       {/* ── Backup ── */}
       <SLabel>Backup</SLabel>
       <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>

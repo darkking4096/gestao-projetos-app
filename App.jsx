@@ -28,6 +28,7 @@ export default function App({ user, onSignOut }) {
   const [trash, setTrash] = useState([]);
   const [reportNotes, setReportNotes] = useState([]);
   const [reportFolders, setReportFolders] = useState([]);
+  const [atributos, setAtributos] = useState([]);
   const [profile, setProfile] = useState({ totalXp: 0, coins: 0, streak: 0, bestStreak: 0, tasksCompleted: 0, xpToday: 0, coinsToday: 0, lastActiveDate: td(), dailyLog: [], difficultyPresets: DEFAULT_PRESETS, nextActionWeights: { priority: 3, deadline: 2, difficulty: 1 }, dailyMission: null, tasksToday: 0, projTasksToday: 0, hardTaskToday: false, maxTaskToday: false, goalUpdatedToday: false, totalCoinsEarned: 0, bestXpDay: 0, bestXpWeek: 0, maxTaskEver: false, projectsCompleted: 0, masteryGoldCount: 0, achievementsUnlocked: [], pendingChest: null, streakLostDays: 0, purchasedItems: ["t_iniciante", "i_estrela", "obsidiana", "b_simples"], equippedTitle: "t_iniciante", equippedIcon: "i_estrela", equippedTheme: "obsidiana", equippedBorder: "b_simples", upgradeLevels: {} });
   const [loaded, setLoaded] = useState(false);
   const [rewardPopup, setRewardPopup] = useState(null);
@@ -122,6 +123,7 @@ export default function App({ user, onSignOut }) {
         const tr = await S.get("trash"); if (tr) setTrash(tr);
         const rn = await S.get("reportNotes"); if (rn) setReportNotes(rn);
         const rf = await S.get("reportFolders"); if (rf) setReportFolders(rf);
+        const at = await S.get("atributos"); if (at) setAtributos(at);
         const pr = await S.get("profile"); if (pr) {
           if (!pr.purchasedItems) { pr.purchasedItems = ["t_iniciante", "i_estrela", "obsidiana", "b_simples"]; pr.equippedTitle = "t_iniciante"; pr.equippedIcon = "i_estrela"; pr.equippedTheme = "obsidiana"; pr.equippedBorder = "b_simples"; pr.upgradeLevels = pr.upgradeLevels || {}; }
           setProfile(pr);
@@ -139,6 +141,7 @@ export default function App({ user, onSignOut }) {
   useEffect(() => { if (loaded) S.set("profile", profile); }, [profile, loaded]);
   useEffect(() => { if (loaded) S.set("reportNotes", reportNotes); }, [reportNotes, loaded]);
   useEffect(() => { if (loaded) S.set("reportFolders", reportFolders); }, [reportFolders, loaded]);
+  useEffect(() => { if (loaded) S.set("atributos", atributos); }, [atributos, loaded]);
 
   useEffect(() => {
     if (!loaded) return;
@@ -802,7 +805,7 @@ export default function App({ user, onSignOut }) {
         } : undefined}
       >
         <div key={tab} style={isDesktop ? { ...(tab !== "reports" ? { maxWidth: 780, margin: "0 auto" } : {}), animation: "tabFadeIn 0.22s ease" } : { animation: "tabFadeIn 0.22s ease" }}>
-        {tab === "dashboard" && <DashboardTab profile={profile} levelInfo={levelInfo} projects={projects} routines={routines} tasks={tasks} objectives={objectives} nav={nav} completeTask={completeTask} completeRoutine={completeRoutine} earn={earn} claimMission={claimMission} />}
+        {tab === "dashboard" && <DashboardTab profile={profile} levelInfo={levelInfo} projects={projects} routines={routines} tasks={tasks} objectives={objectives} nav={nav} completeTask={completeTask} completeRoutine={completeRoutine} earn={earn} claimMission={claimMission} atributos={atributos} setAtributos={setAtributos} groqApiKey={profile.groqApiKey || ""} />}
         {tab === "activities" && view === "list" && <ActivitiesTab subTab={subTab} setSubTab={setSubTab} projects={projects} routines={routines} tasks={tasks} objectives={objectives} nav={nav} completeTask={completeTask} completeRoutine={completeRoutine} updProject={updProject} setProfile={setProfile} setCompletionConfirm={setCompletionConfirm} />}
         {tab === "activities" && view === "detail" && sel && selType === "project" && <ProjectDetail item={sel} onUpdate={updProject} onDelete={(i, p) => { deleteItem(i, "project", p); nav("activities", "projects", "list"); }} onComplete={completeTask} nav={nav} navBack={navBack} objectives={objectives} routines={routines} setCompletionConfirm={setCompletionConfirm} onValueUpdate={() => setProfile(p => ({ ...p, goalUpdatedToday: true }))} />}
         {tab === "activities" && view === "detail" && sel && selType === "routine" && <RoutineDetail item={sel} onUpdate={updRoutine} onDelete={(i, p) => { deleteItem(i, "routine", p); nav("activities", "routines", "list"); }} onComplete={completeRoutine} nav={nav} navBack={navBack} objectives={objectives} projects={projects} />}

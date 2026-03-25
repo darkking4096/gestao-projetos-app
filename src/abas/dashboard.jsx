@@ -5,8 +5,10 @@ import { MISSION_POOL, MASTERY_LEVELS, PRI_ORDER, COLORS } from '../constantes.j
 import { ACHIEVEMENTS } from '../utilidades.js';
 import { Btn, Card, Badge, PBar, XpBar, Chk, TopBar, FilterBtn, FilterModal } from '../componentes-base.jsx';
 import { IconSVG, ConsumableSVG, BorderSVG, TitleBanner, MaestriaSVG, SHOP_BORDERS, SHOP_TITLES, getTitleTargetColor, getTitleBannerColor, getTitleStyle, getUpgradeCost, getBorderStyle, UPGRADE_LABELS, RARITY_LABELS, RARITY_COLORS } from '../icones.jsx';
+import { AtributosSection } from './atributos.jsx';
 
-function DashboardTab({ profile, levelInfo, projects, routines, tasks, objectives, nav, completeTask, completeRoutine, earn, claimMission }) {
+function DashboardTab({ profile, levelInfo, projects, routines, tasks, objectives, nav, completeTask, completeRoutine, earn, claimMission, atributos, setAtributos, groqApiKey }) {
+  const [dashSubTab, setDashSubTab] = useState("overview");
   const [showFilter, setShowFilter] = useState(false);
   const [filter, setFilter] = useState({ key: null, mode: null });
   const [chartRange, setChartRange] = useState("7d");
@@ -133,7 +135,49 @@ function DashboardTab({ profile, levelInfo, projects, routines, tasks, objective
         <span>{levelInfo.xpInLevel} / {levelInfo.xpForLevel} XP</span>
         <span>Nv. {Math.min(levelInfo.level + 1, 500)} em {levelInfo.xpForLevel - levelInfo.xpInLevel} XP</span>
       </div>
-      <div style={{ marginBottom: 12 }}><XpBar cur={levelInfo.xpInLevel} max={levelInfo.xpForLevel} /></div>
+      <div style={{ marginBottom: 10 }}><XpBar cur={levelInfo.xpInLevel} max={levelInfo.xpForLevel} /></div>
+
+      {/* Sub-abas do Dashboard */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 12, background: C.card, borderRadius: 8, padding: 4 }}>
+        {[
+          ["overview", <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>, "Visão Geral"],
+          ["progresso", <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12,2 19,7 19,17 12,22 5,17 5,7"/><polygon points="12,7 16,9.5 16,14.5 12,17 8,14.5 8,9.5"/></svg>, "Progresso"],
+          ["questionarios", <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>, "Questionários"],
+        ].map(([key, icon, label]) => {
+          const active = dashSubTab === key;
+          return (
+            <div
+              key={key}
+              onClick={() => setDashSubTab(key)}
+              style={{
+                flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+                padding: "6px 4px", borderRadius: 6, cursor: "pointer",
+                background: active ? C.bg : "transparent",
+                color: active ? C.gold : C.tx4,
+                border: active ? "0.5px solid " + C.goldBrd : "0.5px solid transparent",
+                transition: "background .12s, color .12s, border-color .12s",
+              }}
+            >
+              <span style={{ lineHeight: 1, opacity: active ? 1 : 0.6 }}>{icon}</span>
+              <span style={{ fontSize: 9, fontWeight: active ? 600 : 400, letterSpacing: 0.2 }}>{label}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Conteúdo das sub-abas Progresso e Questionários */}
+      {(dashSubTab === "progresso" || dashSubTab === "questionarios") && (
+        <AtributosSection
+          atributos={atributos || []}
+          setAtributos={setAtributos}
+          groqApiKey={groqApiKey}
+          subTab={dashSubTab}
+        />
+      )}
+
+      {dashSubTab !== "overview" && null}
+      {dashSubTab === "overview" && <>
+
       {/* Stats */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 5, marginBottom: 12 }}>
         {[[totalActive, "Ativas", null], ["+" + profile.xpToday, "XP hoje", null], ["+" + profile.coinsToday, "Moedas", null], [profile.streak, "Streak", getMultiplier(profile.streak) > 0 ? "+" + Math.round(getMultiplier(profile.streak)*100) + "%" : null]].map(([v, l, sub], i) => (
@@ -331,6 +375,7 @@ function DashboardTab({ profile, levelInfo, projects, routines, tasks, objective
         );
       })}
       {showFilter && <FilterModal options={filterOpts} active={filter} onApply={setFilter} onClose={() => setShowFilter(false)} />}
+      </>}
     </div>
   );
 }
