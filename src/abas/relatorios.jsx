@@ -1,236 +1,176 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useRef, useMemo, useCallback } from "react";
 import { C } from '../temas.js';
 import { uid, td, fmtD } from '../utilidades.js';
-import { Btn, Modal, TopBar } from '../componentes-base.jsx';
+import { Modal, Btn } from '../componentes-base.jsx';
 
-/* ═══ RELATÓRIOS — Sistema de Notas Pessoal ═══ */
+/*
+  RELATÓRIOS — Sistema de Notas
+  ─────────────────────────────
+  IMPORTANTE: renderSidebar() e renderEditor() são FUNÇÕES (não componentes).
+  Isso evita que o React desmonte/remonte o <textarea> a cada tecla digitada,
+  o que causava perda de foco.
+*/
 
-function ReportsTab({ notes, folders, onUpdateNotes, onUpdateFolders }) {
-  const [selNoteId, setSelNoteId] = useState(null);
-  const [selFolderId, setSelFolderId] = useState(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [search, setSearch] = useState("");
-  const [showSearch, setShowSearch] = useState(false);
-  const [editingName, setEditingName] = useState(null);
-  const [nameVal, setNameVal] = useState("");
-  const [showMenu, setShowMenu] = useState(false);
+export default function ReportsTab({ notes, folders, onUpdateNotes, onUpdateFolders }) {
+  /* ── Estado ── */
+  const [selNoteId, setSelNoteId]         = useState(null);
+  const [selFolderId, setSelFolderId]     = useState(null);
+  const [mobileView, setMobileView]       = useState("sidebar"); // "sidebar" | "editor"
+  const [search, setSearch]               = useState("");
+  const [showSearch, setShowSearch]       = useState(false);
+  const [showMenu, setShowMenu]           = useState(false);
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
-  const [dragId, setDragId] = useState(null);
-  const [dragType, setDragType] = useState(null);
-  const [dragOver, setDragOver] = useState(null);
   const [expandedFolders, setExpandedFolders] = useState({});
-  const [showMoveModal, setShowMoveModal] = useState(null);
-  const [confirmDelete, setConfirmDelete] = useState(null);
-  const editorRef = useRef(null);
-  const isDesktop = window.innerWidth >= 768;
+  const [renamingFolder, setRenamingFolder]   = useState(null); // { id, name }
+  const [showMoveModal, setShowMoveModal]     = useState(null); // noteId
+  const [confirmDelete, setConfirmDelete]     = useState(null); // { type, id, name }
 
-  const allNotes = notes || [];
+  /* ── Touch drag ── */
+  const touchRef     = useRef(null);                // { id, type, label, startX, startY, active }
+  const [dragPos, setDragPos]         = useState(null);  // { x, y }
+  const [dragOverId, setDragOverId]   = useState(null);  // folderId | "root" | null
+
+  const isDesktop = window.innerWidth >= 768;
+  const allNotes   = notes   || [];
   const allFolders = folders || [];
 
-  const selNote = useMemo(() => allNotes.find(n => n.id === selNoteId), [allNotes, selNoteId]);
+  const selNote      = useMemo(() => allNotes.find(n => n.id === selNoteId) || null, [allNotes, selNoteId]);
+  const rootFolders  = useMemo(() => allFolders.filter(f => !f.parentId),            [allFolders]);
+  const looseNotes   = useMemo(() => allNotes.filter(n => !n.folderId),              [allNotes]);
 
-  // Notes in current folder or loose
-  const visibleNotes = useMemo(() => {
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      return allNotes.filter(n =>
-        (n.title || "").toLowerCase().includes(q) ||
-        (n.content || "").toLowerCase().includes(q)
-      );
-    }
-    if (selFolderId) return allNotes.filter(n => n.folderId === selFolderId);
-    return allNotes;
-  }, [allNotes, selFolderId, search]);
-
-  // Loose notes (no folder)
-  const looseNotes = useMemo(() => allNotes.filter(n => !n.folderId), [allNotes]);
-
-  // Folder notes count
-  const folderCount = useCallback((fId) => allNotes.filter(n => n.folderId === fId).length, [allNotes]);
-
-  // Sub-folders
-  const subFolders = useCallback((parentId) => allFolders.filter(f => f.parentId === parentId), [allFolders]);
-  const rootFolders = useMemo(() => allFolders.filter(f => !f.parentId), [allFolders]);
-
-  /* ── CRUD ── */
-  const createNote = (folderId = null) => {
-    const note = { id: uid(), title: "", content: "", folderId, createdAt: td(), updatedAt: td() };
-    onUpdateNotes([...allNotes, note]);
+  /* ══════════════════════════════════════════
+     CRUD
+  ══════════════════════════════════════════ */
+  const createNote = useCallback((folderId = null) => {
+    const note = { id: uid(), title: "", content: "", folderId: folderId || null, createdAt: td(), updatedAt: td() };
+    onUpdateNotes(prev => [...(prev || []), note]);
     setSelNoteId(note.id);
-    setSelFolderId(folderId);
-    if (!isDesktop) setSidebarOpen(false);
-  };
+    if (!isDesktop) setMobileView("editor");
+  }, [onUpdateNotes, isDesktop]);
 
-  const createQuickNote = () => {
-    createNote(null);
-    setShowMenu(false);
-  };
+  // Atualiza um campo específico — evita recriar a referência toda hora
+  const updateNoteField = useCallback((id, field, value) => {
+    onUpdateNotes(prev => (prev || []).map(n =>
+      n.id === id ? { ...n, [field]: value, updatedAt: td() } : n
+    ));
+  }, [onUpdateNotes]);
 
-  const updateNote = (id, changes) => {
-    onUpdateNotes(allNotes.map(n => n.id === id ? { ...n, ...changes, updatedAt: td() } : n));
-  };
-
-  const deleteNote = (id) => {
-    onUpdateNotes(allNotes.filter(n => n.id !== id));
-    if (selNoteId === id) setSelNoteId(null);
+  const deleteNote = useCallback((id) => {
+    onUpdateNotes(prev => (prev || []).filter(n => n.id !== id));
+    if (selNoteId === id) { setSelNoteId(null); if (!isDesktop) setMobileView("sidebar"); }
     setConfirmDelete(null);
-  };
+  }, [onUpdateNotes, selNoteId, isDesktop]);
 
-  const createFolder = (parentId = null) => {
+  const moveNote = useCallback((noteId, targetFolderId) => {
+    onUpdateNotes(prev => (prev || []).map(n =>
+      n.id === noteId ? { ...n, folderId: targetFolderId || null, updatedAt: td() } : n
+    ));
+    setShowMoveModal(null);
+  }, [onUpdateNotes]);
+
+  // Sempre cria na raiz (sem parentId)
+  const createFolder = useCallback(() => {
     if (!newFolderName.trim()) return;
-    const folder = { id: uid(), name: newFolderName.trim(), parentId, createdAt: td() };
-    onUpdateFolders([...allFolders, folder]);
+    const f = { id: uid(), name: newFolderName.trim(), parentId: null, createdAt: td() };
+    onUpdateFolders(prev => [...(prev || []), f]);
     setShowNewFolder(false);
     setNewFolderName("");
-  };
+  }, [newFolderName, onUpdateFolders]);
 
-  const renameFolder = (id, name) => {
-    onUpdateFolders(allFolders.map(f => f.id === id ? { ...f, name } : f));
-    setEditingName(null);
-  };
+  const renameFolder = useCallback((id, name) => {
+    if (!name.trim()) return;
+    onUpdateFolders(prev => (prev || []).map(f => f.id === id ? { ...f, name: name.trim() } : f));
+    setRenamingFolder(null);
+  }, [onUpdateFolders]);
 
-  const deleteFolder = (id) => {
-    // Move notes to loose, delete sub-folders recursively
-    const idsToDelete = new Set();
-    const collectIds = (fId) => {
-      idsToDelete.add(fId);
-      allFolders.filter(f => f.parentId === fId).forEach(f => collectIds(f.id));
-    };
-    collectIds(id);
-    onUpdateFolders(allFolders.filter(f => !idsToDelete.has(f.id)));
-    onUpdateNotes(allNotes.map(n => idsToDelete.has(n.folderId) ? { ...n, folderId: null } : n));
+  const deleteFolder = useCallback((id) => {
+    // coleta todos sub-ids recursivamente
+    const toDelete = new Set([id]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      allFolders.forEach(f => {
+        if (f.parentId && toDelete.has(f.parentId) && !toDelete.has(f.id)) {
+          toDelete.add(f.id); changed = true;
+        }
+      });
+    }
+    onUpdateFolders(prev => (prev || []).filter(f => !toDelete.has(f.id)));
+    onUpdateNotes(prev => (prev || []).map(n => toDelete.has(n.folderId) ? { ...n, folderId: null } : n));
+    if (toDelete.has(selFolderId)) setSelFolderId(null);
     setConfirmDelete(null);
-    if (selFolderId === id) setSelFolderId(null);
-  };
+  }, [allFolders, onUpdateFolders, onUpdateNotes, selFolderId]);
 
-  const moveNote = (noteId, targetFolderId) => {
-    onUpdateNotes(allNotes.map(n => n.id === noteId ? { ...n, folderId: targetFolderId || null, updatedAt: td() } : n));
-    setShowMoveModal(null);
-  };
-
-  /* ── Drag & Drop (mobile touch + desktop mouse) ── */
-  const handleDragStart = (e, id, type) => {
-    setDragId(id);
-    setDragType(type);
-    if (e.dataTransfer) {
-      e.dataTransfer.effectAllowed = "move";
-      e.dataTransfer.setData("text/plain", id);
-    }
-  };
-
-  const handleDragOver = (e, targetId) => {
-    e.preventDefault();
-    setDragOver(targetId);
-  };
-
-  const handleDrop = (e, targetFolderId) => {
-    e.preventDefault();
-    if (dragId && dragType === "note") {
-      moveNote(dragId, targetFolderId);
-    }
-    setDragId(null);
-    setDragType(null);
-    setDragOver(null);
-  };
-
-  const handleDragEnd = () => {
-    setDragId(null);
-    setDragType(null);
-    setDragOver(null);
-  };
-
-  /* ── Download ── */
-  const downloadNote = (note) => {
-    const filename = (note.title || "nota-sem-titulo").replace(/[^a-zA-Z0-9\u00C0-\u024F\- ]/g, "_") + ".md";
+  const downloadNote = useCallback((note) => {
+    const name = (note.title || "nota").replace(/[^a-zA-Z0-9\u00C0-\u024F _-]/g, "_") + ".md";
     const blob = new Blob([note.content || ""], { type: "text/markdown;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url; a.download = name; a.click();
     URL.revokeObjectURL(url);
-  };
+  }, []);
 
-  /* ── Toggle folder ── */
-  const toggleFolder = (fId) => {
-    setExpandedFolders(e => ({ ...e, [fId]: !e[fId] }));
-  };
+  /* ══════════════════════════════════════════
+     TOUCH DRAG & DROP
+  ══════════════════════════════════════════ */
+  const handleTouchStart = useCallback((e, id, type, label) => {
+    const t = e.touches[0];
+    touchRef.current = { id, type, label, startX: t.clientX, startY: t.clientY, active: false };
+  }, []);
 
-  /* ── Render folder tree recursively ── */
-  const renderFolder = (folder, depth = 0) => {
-    const isOpen = expandedFolders[folder.id] !== false;
-    const isSelected = selFolderId === folder.id;
-    const isDragTarget = dragOver === folder.id;
-    const children = subFolders(folder.id);
-    const noteCount = folderCount(folder.id);
-    const isEditing = editingName === folder.id;
+  const handleTouchMove = useCallback((e) => {
+    if (!touchRef.current) return;
+    const t  = e.touches[0];
+    const dx = Math.abs(t.clientX - touchRef.current.startX);
+    const dy = Math.abs(t.clientY - touchRef.current.startY);
+    if (dx > 10 || dy > 10) {
+      touchRef.current.active = true;
+      e.preventDefault(); // impede scroll enquanto arrasta
+      setDragPos({ x: t.clientX, y: t.clientY });
+      // detecta qual pasta está sob o dedo
+      const el  = document.elementFromPoint(t.clientX, t.clientY);
+      const fEl = el?.closest('[data-folder-id]');
+      setDragOverId(fEl ? fEl.getAttribute('data-folder-id') : null);
+    }
+  }, []);
 
-    return (
-      <div key={folder.id}>
-        <div
-          draggable
-          onDragStart={(e) => handleDragStart(e, folder.id, "folder")}
-          onDragOver={(e) => handleDragOver(e, folder.id)}
-          onDrop={(e) => handleDrop(e, folder.id)}
-          onDragEnd={handleDragEnd}
-          onClick={() => { setSelFolderId(isSelected ? null : folder.id); setSelNoteId(null); }}
-          onContextMenu={(e) => { e.preventDefault(); setEditingName(folder.id); setNameVal(folder.name); }}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "7px 10px", paddingLeft: 10 + depth * 16,
-            cursor: "pointer", fontSize: 12,
-            background: isDragTarget ? C.gold + "15" : isSelected ? C.gold + "10" : "transparent",
-            color: isSelected ? C.gold : C.tx2,
-            borderLeft: "2px solid " + (isSelected ? C.gold : "transparent"),
-            transition: "background .12s, color .12s, border-color .12s",
-          }}
-        >
-          <svg onClick={(e) => { e.stopPropagation(); toggleFolder(folder.id); }} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform .15s", flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-          {isEditing ? (
-            <input
-              autoFocus
-              value={nameVal}
-              onChange={(e) => setNameVal(e.target.value)}
-              onBlur={() => { if (nameVal.trim()) renameFolder(folder.id, nameVal.trim()); else setEditingName(null); }}
-              onKeyDown={(e) => { if (e.key === "Enter") { if (nameVal.trim()) renameFolder(folder.id, nameVal.trim()); } if (e.key === "Escape") setEditingName(null); }}
-              onClick={(e) => e.stopPropagation()}
-              style={{ flex: 1, background: C.bg, border: "1px solid " + C.goldBrd, borderRadius: 3, color: C.tx, fontSize: 11, padding: "2px 4px", outline: "none" }}
-            />
-          ) : (
-            <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{folder.name}</span>
-          )}
-          <span style={{ fontSize: 10, color: C.tx4, flexShrink: 0 }}>{noteCount}</span>
-        </div>
-        {isOpen && children.map(child => renderFolder(child, depth + 1))}
-        {isOpen && isSelected && allNotes.filter(n => n.folderId === folder.id).map(n => renderNoteItem(n, depth + 1))}
-      </div>
-    );
-  };
+  const handleTouchEnd = useCallback(() => {
+    if (touchRef.current?.active) {
+      const { id, type } = touchRef.current;
+      const target = dragOverId === "root" ? null : (dragOverId || null);
+      if (type === "note") moveNote(id, target);
+    }
+    touchRef.current = null;
+    setDragPos(null);
+    setDragOverId(null);
+  }, [dragOverId, moveNote]);
 
-  const renderNoteItem = (note, depth = 0) => {
-    const isSelected = selNoteId === note.id;
-    const isDragging = dragId === note.id;
+  /* ══════════════════════════════════════════
+     RENDER HELPERS (funções, não componentes)
+  ══════════════════════════════════════════ */
+  const renderNoteRow = (note, depth) => {
+    const isSel    = selNoteId === note.id;
+    const isDragging = touchRef.current?.active && touchRef.current?.id === note.id;
     return (
       <div
         key={note.id}
-        draggable
-        onDragStart={(e) => handleDragStart(e, note.id, "note")}
-        onDragEnd={handleDragEnd}
-        onClick={() => { setSelNoteId(note.id); if (!isDesktop) setSidebarOpen(false); }}
+        onTouchStart={(e) => handleTouchStart(e, note.id, "note", note.title || "Sem título")}
+        onClick={() => { setSelNoteId(note.id); if (!isDesktop) setMobileView("editor"); }}
         style={{
           display: "flex", alignItems: "center", gap: 6,
-          padding: "6px 10px", paddingLeft: 10 + depth * 16 + 14,
-          cursor: "pointer", fontSize: 11,
-          background: isSelected ? C.gold + "10" : "transparent",
-          color: isSelected ? C.gold : C.tx3,
-          opacity: isDragging ? 0.4 : 1,
-          borderLeft: "2px solid " + (isSelected ? C.gold + "60" : "transparent"),
-          transition: "background .12s, opacity .12s",
+          padding: `6px 10px 6px ${10 + depth * 14 + 16}px`,
+          cursor: "pointer", userSelect: "none",
+          background: isSel ? C.gold + "12" : "transparent",
+          color: isSel ? C.gold : C.tx3,
+          borderLeft: "2px solid " + (isSel ? C.gold + "70" : "transparent"),
+          opacity: isDragging ? 0.25 : 1,
+          fontSize: 12,
         }}
       >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+        </svg>
         <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {note.title || "Sem título"}
         </span>
@@ -238,77 +178,205 @@ function ReportsTab({ notes, folders, onUpdateNotes, onUpdateFolders }) {
     );
   };
 
-  /* ── Mobile: back to sidebar ── */
-  const backToSidebar = () => {
-    setSidebarOpen(true);
-    setSelNoteId(null);
+  const renderFolderRow = (folder, depth) => {
+    const isOpen      = expandedFolders[folder.id] !== false;
+    const isSel       = selFolderId === folder.id;
+    const isDragOver  = dragOverId === folder.id;
+    const isRenaming  = renamingFolder?.id === folder.id;
+    const noteCount   = allNotes.filter(n => n.folderId === folder.id).length;
+    const children    = allFolders.filter(f => f.parentId === folder.id);
+    const folderNotes = allNotes.filter(n => n.folderId === folder.id);
+
+    return (
+      <div key={folder.id}>
+        <div
+          data-folder-id={folder.id}
+          onClick={() => {
+            setSelFolderId(isSel ? null : folder.id);
+            setExpandedFolders(e => ({ ...e, [folder.id]: e[folder.id] === false ? true : !isOpen }));
+          }}
+          style={{
+            display: "flex", alignItems: "center", gap: 5,
+            padding: `8px 8px 8px ${8 + depth * 14}px`,
+            cursor: "pointer", userSelect: "none",
+            background: isDragOver ? C.gold + "20" : isSel ? C.gold + "10" : "transparent",
+            color: isSel ? C.gold : C.tx2,
+            borderLeft: "2px solid " + (isSel ? C.gold : isDragOver ? C.gold + "80" : "transparent"),
+            fontSize: 12,
+          }}
+        >
+          {/* Seta expand/collapse */}
+          <svg
+            width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+            onClick={(e) => { e.stopPropagation(); setExpandedFolders(prev => ({ ...prev, [folder.id]: !isOpen })); }}
+            style={{ transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform .15s", flexShrink: 0 }}
+          ><polyline points="6 9 12 15 18 9"/></svg>
+
+          {/* Ícone pasta */}
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          </svg>
+
+          {/* Nome (ou input renomear) */}
+          {isRenaming ? (
+            <input
+              autoFocus
+              value={renamingFolder.name}
+              onChange={(e) => setRenamingFolder({ ...renamingFolder, name: e.target.value })}
+              onBlur={() => renameFolder(folder.id, renamingFolder.name || folder.name)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter")  renameFolder(folder.id, renamingFolder.name || folder.name);
+                if (e.key === "Escape") setRenamingFolder(null);
+                e.stopPropagation();
+              }}
+              onClick={(e) => e.stopPropagation()}
+              style={{ flex: 1, background: C.bg, border: "1px solid " + C.goldBrd, borderRadius: 3, color: C.tx, fontSize: 11, padding: "2px 5px", outline: "none", minWidth: 0 }}
+            />
+          ) : (
+            <span
+              onDoubleClick={(e) => { e.stopPropagation(); setRenamingFolder({ id: folder.id, name: folder.name }); }}
+              style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+            >{folder.name}</span>
+          )}
+
+          {/* Contagem + botão excluir */}
+          <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0, marginLeft: 4 }}>
+            {noteCount > 0 && <span style={{ fontSize: 10, color: C.tx4 }}>{noteCount}</span>}
+            <span
+              onClick={(e) => { e.stopPropagation(); setConfirmDelete({ type: "folder", id: folder.id, name: folder.name }); }}
+              style={{ cursor: "pointer", display: "flex", alignItems: "center", color: C.tx4, padding: "2px" }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+              </svg>
+            </span>
+          </div>
+        </div>
+
+        {isOpen && (
+          <>
+            {children.map(child => renderFolderRow(child, depth + 1))}
+            {folderNotes.map(n => renderNoteRow(n, depth + 1))}
+          </>
+        )}
+      </div>
+    );
   };
 
-  /* ── SIDEBAR ── */
-  const Sidebar = () => (
-    <div style={{
-      width: isDesktop ? 240 : "100%",
-      minWidth: isDesktop ? 240 : undefined,
-      height: "100%",
-      background: C.bg,
-      borderRight: isDesktop ? "0.5px solid " + C.brd : "none",
-      display: "flex", flexDirection: "column",
-      overflow: "hidden",
-    }}>
-      {/* Header */}
-      <div style={{ padding: "14px 12px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{ fontSize: 14, fontWeight: 500, color: C.tx }}>Relatórios</span>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <span onClick={() => setShowSearch(!showSearch)} style={{ cursor: "pointer", display: "flex", alignItems: "center", color: showSearch ? C.gold : C.tx3 }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+  /* ── SIDEBAR (função, não componente) ── */
+  const renderSidebar = () => (
+    <div
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      style={{
+        width: isDesktop ? 220 : "100%",
+        flexShrink: 0,
+        height: "100%",
+        borderRight: isDesktop ? "0.5px solid " + C.brd : "none",
+        display: "flex", flexDirection: "column",
+        background: C.bg, overflow: "hidden",
+      }}
+    >
+      {/* Cabeçalho */}
+      <div style={{ padding: "14px 12px 8px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, borderBottom: "0.5px solid " + C.brd }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: C.tx, letterSpacing: 0.3 }}>Relatórios</span>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+
+          {/* Busca */}
+          <span onClick={() => setShowSearch(s => !s)} title="Buscar" style={{ cursor: "pointer", display: "flex", alignItems: "center", color: showSearch ? C.gold : C.tx3 }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
           </span>
-          <span onClick={() => setShowNewFolder(true)} style={{ cursor: "pointer", display: "flex", alignItems: "center", color: C.tx3 }} title="Nova pasta">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+
+          {/* Nova pasta */}
+          <span onClick={() => setShowNewFolder(true)} title="Nova pasta" style={{ cursor: "pointer", display: "flex", alignItems: "center", color: C.tx3 }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+              <line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>
+            </svg>
           </span>
-          <span onClick={() => createNote(selFolderId)} style={{ cursor: "pointer", display: "flex", alignItems: "center", color: C.tx3 }} title="Nova nota">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+
+          {/* Nova nota */}
+          <span onClick={() => createNote(selFolderId)} title="Nova nota" style={{ cursor: "pointer", display: "flex", alignItems: "center", color: C.tx3 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
           </span>
+
+          {/* ⋮ menu (nota rápida) — posição relativa ao header, não fixed */}
+          <div style={{ position: "relative" }}>
+            <span onClick={() => setShowMenu(s => !s)} title="Mais opções" style={{ cursor: "pointer", display: "flex", alignItems: "center", color: C.tx3 }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>
+              </svg>
+            </span>
+            {showMenu && (
+              <>
+                <div onClick={() => setShowMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 140 }} />
+                <div style={{ position: "absolute", top: 22, right: 0, background: C.card, border: "0.5px solid " + C.brd2, borderRadius: 8, padding: 4, minWidth: 148, boxShadow: "0 4px 16px #0008", zIndex: 150 }}>
+                  <div
+                    onClick={() => { createNote(null); setShowMenu(false); }}
+                    style={{ padding: "9px 12px", borderRadius: 5, cursor: "pointer", fontSize: 12, color: C.tx2, display: "flex", alignItems: "center", gap: 8 }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                    </svg>
+                    Nota rápida
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Search */}
+      {/* Campo de busca */}
       {showSearch && (
-        <div style={{ padding: "0 12px 8px" }}>
+        <div style={{ padding: "8px 10px", borderBottom: "0.5px solid " + C.brd, flexShrink: 0 }}>
           <input
             autoFocus
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar notas..."
+            placeholder="Buscar em notas..."
             style={{ width: "100%", padding: "6px 10px", background: C.card, border: "1px solid " + C.brd2, borderRadius: 6, color: C.tx, fontSize: 11, outline: "none", boxSizing: "border-box" }}
           />
         </div>
       )}
 
-      {/* Folder tree + notes */}
-      <div style={{ flex: 1, overflowY: "auto", paddingBottom: 12 }}
-        onDragOver={(e) => { e.preventDefault(); setDragOver("root"); }}
-        onDrop={(e) => handleDrop(e, null)}
+      {/* Área scrollável: pastas + notas */}
+      <div
+        data-folder-id="root"
+        style={{ flex: 1, overflowY: "auto", paddingBottom: 20 }}
       >
         {search.trim() ? (
-          /* Search results */
-          visibleNotes.length > 0 ? visibleNotes.map(n => renderNoteItem(n, 0)) : (
-            <div style={{ padding: "20px 12px", textAlign: "center", color: C.tx4, fontSize: 11 }}>Nenhum resultado</div>
-          )
+          // Resultados de busca
+          (() => {
+            const q = search.toLowerCase();
+            const res = allNotes.filter(n =>
+              (n.title || "").toLowerCase().includes(q) ||
+              (n.content || "").toLowerCase().includes(q)
+            );
+            return res.length > 0
+              ? res.map(n => renderNoteRow(n, 0))
+              : <div style={{ padding: "20px 12px", textAlign: "center", fontSize: 11, color: C.tx4 }}>Nenhum resultado</div>;
+          })()
         ) : (
           <>
-            {rootFolders.map(f => renderFolder(f))}
-            {/* Loose notes at bottom */}
-            {looseNotes.length > 0 && (
-              <div style={{ marginTop: rootFolders.length > 0 ? 6 : 0 }}>
-                {rootFolders.length > 0 && <div style={{ fontSize: 10, color: C.tx4, padding: "6px 12px 2px", textTransform: "uppercase", letterSpacing: 0.8 }}>Sem pasta</div>}
-                {looseNotes.map(n => renderNoteItem(n, 0))}
+            {rootFolders.map(f => renderFolderRow(f, 0))}
+            {looseNotes.length > 0 && rootFolders.length > 0 && (
+              <div style={{ fontSize: 10, color: C.tx4, padding: "8px 10px 2px", textTransform: "uppercase", letterSpacing: 0.8 }}>
+                Sem pasta
               </div>
             )}
+            {looseNotes.map(n => renderNoteRow(n, 0))}
             {allNotes.length === 0 && allFolders.length === 0 && (
               <div style={{ padding: "40px 16px", textAlign: "center" }}>
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={C.tx4} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ margin: "0 auto 10px", display: "block" }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-                <div style={{ fontSize: 12, color: C.tx3, marginBottom: 4 }}>Nenhuma nota</div>
-                <div style={{ fontSize: 11, color: C.tx4, lineHeight: 1.5 }}>Crie sua primeira nota ou pasta para começar.</div>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={C.tx4} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" style={{ margin: "0 auto 10px", display: "block" }}>
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                </svg>
+                <div style={{ fontSize: 12, color: C.tx3, marginBottom: 3 }}>Nenhuma nota ainda</div>
+                <div style={{ fontSize: 11, color: C.tx4 }}>Use + para criar a primeira nota</div>
               </div>
             )}
           </>
@@ -317,69 +385,84 @@ function ReportsTab({ notes, folders, onUpdateNotes, onUpdateFolders }) {
     </div>
   );
 
-  /* ── EDITOR ── */
-  const Editor = () => {
+  /* ── EDITOR (função, não componente) ── */
+  const renderEditor = () => {
     if (!selNote) return (
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: C.tx4, fontSize: 12 }}>
-        <div style={{ textAlign: "center" }}>
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke={C.tx4 + "80"} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" style={{ margin: "0 auto 10px", display: "block" }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-          Selecione ou crie uma nota
-        </div>
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8, color: C.tx4 }}>
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke={C.tx4 + "70"} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+        </svg>
+        <span style={{ fontSize: 12 }}>Selecione ou crie uma nota</span>
       </div>
     );
 
     const folder = selNote.folderId ? allFolders.find(f => f.id === selNote.folderId) : null;
 
     return (
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        {/* Top bar */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid " + C.brd, flexShrink: 0 }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+        {/* Barra superior do editor */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 14px", borderBottom: "0.5px solid " + C.brd, flexShrink: 0 }}>
           {!isDesktop && (
-            <span onClick={backToSidebar} style={{ cursor: "pointer", display: "flex", alignItems: "center", padding: "2px" }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.tx2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            <span onClick={() => setMobileView("sidebar")} style={{ cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0, padding: "2px 6px 2px 0" }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.tx2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6"/>
+              </svg>
             </span>
           )}
           <input
-            value={selNote.title || ""}
-            onChange={(e) => updateNote(selNote.id, { title: e.target.value })}
+            key={selNote.id + "_title"}
+            defaultValue={selNote.title || ""}
+            onBlur={(e) => updateNoteField(selNote.id, "title", e.target.value)}
+            onChange={(e) => updateNoteField(selNote.id, "title", e.target.value)}
             placeholder="Título da nota"
-            style={{ flex: 1, background: "transparent", border: "none", color: C.tx, fontSize: 14, fontWeight: 500, outline: "none", padding: 0 }}
+            style={{ flex: 1, background: "transparent", border: "none", color: C.tx, fontSize: 14, fontWeight: 500, outline: "none", padding: 0, minWidth: 0 }}
           />
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
-            {/* Download */}
-            <span onClick={() => downloadNote(selNote)} style={{ cursor: "pointer", display: "flex", alignItems: "center", color: C.tx3 }} title="Download .md">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexShrink: 0 }}>
+            <span onClick={() => downloadNote(selNote)} title="Download .md" style={{ cursor: "pointer", display: "flex", alignItems: "center", color: C.tx3 }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
             </span>
-            {/* Move */}
-            <span onClick={() => setShowMoveModal(selNote.id)} style={{ cursor: "pointer", display: "flex", alignItems: "center", color: C.tx3 }} title="Mover">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            <span onClick={() => setShowMoveModal(selNote.id)} title="Mover para pasta" style={{ cursor: "pointer", display: "flex", alignItems: "center", color: C.tx3 }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+              </svg>
             </span>
-            {/* Delete */}
-            <span onClick={() => setConfirmDelete({ type: "note", id: selNote.id, name: selNote.title || "Sem título" })} style={{ cursor: "pointer", display: "flex", alignItems: "center", color: C.tx4 }} title="Excluir">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+            <span onClick={() => setConfirmDelete({ type: "note", id: selNote.id, name: selNote.title || "Sem título" })} title="Excluir" style={{ cursor: "pointer", display: "flex", alignItems: "center", color: C.tx4 }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+              </svg>
             </span>
           </div>
         </div>
-        {/* Breadcrumb */}
+
+        {/* Breadcrumb da pasta */}
         {folder && (
-          <div style={{ padding: "4px 14px", fontSize: 10, color: C.tx4 }}>
+          <div style={{ padding: "4px 14px", fontSize: 10, color: C.tx4, borderBottom: "0.5px solid " + C.brd + "40", flexShrink: 0, display: "flex", alignItems: "center", gap: 4 }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            </svg>
             {folder.name}
           </div>
         )}
-        {/* Editor area */}
+
+        {/* Textarea — usa defaultValue + onBlur para NÃO perder foco a cada tecla */}
         <textarea
-          ref={editorRef}
-          value={selNote.content || ""}
-          onChange={(e) => updateNote(selNote.id, { content: e.target.value })}
+          key={selNote.id + "_content"}
+          defaultValue={selNote.content || ""}
+          onBlur={(e) => updateNoteField(selNote.id, "content", e.target.value)}
           placeholder="Comece a escrever..."
           style={{
-            flex: 1, padding: "12px 14px", background: "transparent",
-            border: "none", color: C.tx, fontSize: 13, fontFamily: "'Segoe UI','Helvetica Neue',system-ui,monospace",
-            lineHeight: 1.7, outline: "none", resize: "none", overflow: "auto",
+            flex: 1, padding: "14px 16px",
+            background: "transparent", border: "none",
+            color: C.tx, fontSize: 13,
+            fontFamily: "'Segoe UI', 'Helvetica Neue', system-ui, sans-serif",
+            lineHeight: 1.8, outline: "none", resize: "none", overflow: "auto",
           }}
         />
-        {/* Footer info */}
-        <div style={{ padding: "6px 14px", borderTop: "0.5px solid " + C.brd, display: "flex", justifyContent: "space-between", fontSize: 10, color: C.tx4, flexShrink: 0 }}>
+
+        {/* Rodapé */}
+        <div style={{ padding: "5px 14px", borderTop: "0.5px solid " + C.brd, display: "flex", justifyContent: "space-between", fontSize: 10, color: C.tx4, flexShrink: 0 }}>
           <span>{(selNote.content || "").length} caracteres</span>
           <span>{selNote.updatedAt ? fmtD(selNote.updatedAt) : ""}</span>
         </div>
@@ -387,119 +470,118 @@ function ReportsTab({ notes, folders, onUpdateNotes, onUpdateFolders }) {
     );
   };
 
-  /* ── New folder modal ── */
-  const NewFolderModal = () => (
-    <Modal>
-      <div style={{ fontSize: 13, fontWeight: 500, color: C.tx, marginBottom: 10 }}>Nova pasta</div>
-      <input
-        autoFocus
-        value={newFolderName}
-        onChange={(e) => setNewFolderName(e.target.value)}
-        placeholder="Nome da pasta"
-        onKeyDown={(e) => { if (e.key === "Enter") createFolder(selFolderId); if (e.key === "Escape") setShowNewFolder(false); }}
-        style={{ width: "100%", padding: "8px 10px", background: C.bg, border: "1px solid " + C.brd2, borderRadius: 6, color: C.tx, fontSize: 12, outline: "none", boxSizing: "border-box", marginBottom: 10 }}
-      />
-      <div style={{ display: "flex", gap: 8 }}>
-        <Btn onClick={() => { setShowNewFolder(false); setNewFolderName(""); }} style={{ flex: 1 }}>Cancelar</Btn>
-        <Btn primary onClick={() => createFolder(selFolderId)} style={{ flex: 1 }}>Criar</Btn>
-      </div>
-    </Modal>
-  );
-
-  /* ── Move modal ── */
-  const MoveModal = () => {
-    const noteToMove = allNotes.find(n => n.id === showMoveModal);
-    if (!noteToMove) return null;
-    return (
-      <Modal>
-        <div style={{ fontSize: 13, fontWeight: 500, color: C.tx, marginBottom: 4 }}>Mover nota</div>
-        <div style={{ fontSize: 11, color: C.tx3, marginBottom: 12 }}>{noteToMove.title || "Sem título"}</div>
-        <div style={{ maxHeight: 200, overflowY: "auto", marginBottom: 10 }}>
-          <div
-            onClick={() => moveNote(showMoveModal, null)}
-            style={{ padding: "8px 10px", borderRadius: 5, cursor: "pointer", fontSize: 12, color: !noteToMove.folderId ? C.gold : C.tx2, background: !noteToMove.folderId ? C.gold + "10" : "transparent", marginBottom: 2 }}
-          >
-            Sem pasta (solto)
-          </div>
-          {allFolders.map(f => (
-            <div
-              key={f.id}
-              onClick={() => moveNote(showMoveModal, f.id)}
-              style={{ padding: "8px 10px", borderRadius: 5, cursor: "pointer", fontSize: 12, color: noteToMove.folderId === f.id ? C.gold : C.tx2, background: noteToMove.folderId === f.id ? C.gold + "10" : "transparent", marginBottom: 2, display: "flex", alignItems: "center", gap: 6 }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-              {f.name}
-            </div>
-          ))}
-        </div>
-        <Btn onClick={() => setShowMoveModal(null)} style={{ width: "100%" }}>Cancelar</Btn>
-      </Modal>
-    );
-  };
-
-  /* ── Confirm delete ── */
-  const DeleteConfirm = () => {
-    if (!confirmDelete) return null;
-    return (
-      <Modal>
-        <div style={{ textAlign: "center", marginBottom: 14 }}>
-          <div style={{ fontSize: 13, fontWeight: 500, color: C.tx, marginBottom: 4 }}>
-            Excluir {confirmDelete.type === "folder" ? "pasta" : "nota"}?
-          </div>
-          <div style={{ fontSize: 11, color: C.tx3 }}>{confirmDelete.name}</div>
-          {confirmDelete.type === "folder" && <div style={{ fontSize: 11, color: C.tx4, marginTop: 4 }}>As notas serão movidas para "Sem pasta".</div>}
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <Btn onClick={() => setConfirmDelete(null)} style={{ flex: 1 }}>Cancelar</Btn>
-          <Btn danger onClick={() => confirmDelete.type === "folder" ? deleteFolder(confirmDelete.id) : deleteNote(confirmDelete.id)} style={{ flex: 1 }}>Excluir</Btn>
-        </div>
-      </Modal>
-    );
-  };
-
-  /* ── MAIN LAYOUT ── */
+  /* ══════════════════════════════════════════
+     LAYOUT PRINCIPAL
+  ══════════════════════════════════════════ */
   return (
-    <div style={{ height: isDesktop ? "calc(100vh - 0px)" : "calc(100vh - 56px)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      {/* 3-dot menu for quick note */}
-      <div style={{ position: "fixed", top: isDesktop ? 12 : 10, right: isDesktop ? 16 : 12, zIndex: 150 }}>
-        <div onClick={() => setShowMenu(!showMenu)} style={{ width: 32, height: 32, borderRadius: 8, background: C.card, border: "0.5px solid " + C.brd, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.tx3} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
-        </div>
-        {showMenu && (
-          <div style={{ position: "absolute", top: 36, right: 0, background: C.card, border: "0.5px solid " + C.brd, borderRadius: 8, padding: 4, minWidth: 160, boxShadow: "0 4px 16px #0008", zIndex: 160 }}>
-            <div onClick={createQuickNote} style={{ padding: "8px 12px", borderRadius: 5, cursor: "pointer", fontSize: 12, color: C.tx2, display: "flex", alignItems: "center", gap: 8 }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-              Nota rápida
-            </div>
-            <div onClick={() => { setShowNewFolder(true); setShowMenu(false); }} style={{ padding: "8px 12px", borderRadius: 5, cursor: "pointer", fontSize: 12, color: C.tx2, display: "flex", alignItems: "center", gap: 8 }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
-              Nova pasta
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Content area */}
+    <div
+      style={{
+        height: isDesktop ? "100vh" : "calc(100vh - 56px)",
+        display: "flex", flexDirection: "column", overflow: "hidden",
+      }}
+    >
+      {/* Área principal */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
         {isDesktop ? (
           <>
-            <Sidebar />
-            <Editor />
+            {renderSidebar()}
+            {renderEditor()}
           </>
         ) : (
-          sidebarOpen ? <Sidebar /> : <Editor />
+          mobileView === "sidebar" ? renderSidebar() : renderEditor()
         )}
       </div>
 
-      {/* Modals */}
-      {showNewFolder && <NewFolderModal />}
-      {showMoveModal && <MoveModal />}
-      {confirmDelete && <DeleteConfirm />}
+      {/* Mini-carta flutuante durante drag touch */}
+      {dragPos && touchRef.current?.active && (
+        <div style={{
+          position: "fixed",
+          left: dragPos.x - 55,
+          top: dragPos.y - 18,
+          pointerEvents: "none", zIndex: 9999,
+          background: C.card, border: "1px solid " + C.goldBrd,
+          borderRadius: 6, padding: "5px 10px",
+          fontSize: 11, color: C.gold,
+          boxShadow: "0 4px 16px #0009",
+          maxWidth: 130, opacity: 0.92,
+          transform: "scale(0.82) rotate(-2deg)",
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+        }}>
+          {touchRef.current.label || "Nota"}
+        </div>
+      )}
 
-      {/* Click-away for menu */}
-      {showMenu && <div onClick={() => setShowMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 140 }} />}
+      {/* ─── Modais ─── */}
+
+      {/* Nova pasta */}
+      {showNewFolder && (
+        <Modal>
+          <div style={{ fontSize: 13, fontWeight: 500, color: C.tx, marginBottom: 10 }}>Nova pasta</div>
+          <input
+            autoFocus
+            value={newFolderName}
+            onChange={(e) => setNewFolderName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") createFolder(); if (e.key === "Escape") { setShowNewFolder(false); setNewFolderName(""); } }}
+            placeholder="Nome da pasta"
+            style={{ width: "100%", padding: "8px 10px", background: C.bg, border: "1px solid " + C.brd2, borderRadius: 6, color: C.tx, fontSize: 12, outline: "none", boxSizing: "border-box", marginBottom: 10 }}
+          />
+          <div style={{ display: "flex", gap: 8 }}>
+            <Btn onClick={() => { setShowNewFolder(false); setNewFolderName(""); }} style={{ flex: 1 }}>Cancelar</Btn>
+            <Btn primary onClick={createFolder} style={{ flex: 1 }}>Criar</Btn>
+          </div>
+        </Modal>
+      )}
+
+      {/* Mover nota */}
+      {showMoveModal && (() => {
+        const note = allNotes.find(n => n.id === showMoveModal);
+        if (!note) return null;
+        return (
+          <Modal>
+            <div style={{ fontSize: 13, fontWeight: 500, color: C.tx, marginBottom: 4 }}>Mover nota</div>
+            <div style={{ fontSize: 11, color: C.tx3, marginBottom: 10 }}>{note.title || "Sem título"}</div>
+            <div style={{ maxHeight: 220, overflowY: "auto", marginBottom: 10 }}>
+              <div
+                onClick={() => moveNote(showMoveModal, null)}
+                style={{ padding: "8px 10px", borderRadius: 5, cursor: "pointer", fontSize: 12, marginBottom: 2, color: !note.folderId ? C.gold : C.tx2, background: !note.folderId ? C.gold + "10" : "transparent" }}
+              >
+                Sem pasta
+              </div>
+              {allFolders.map(f => (
+                <div key={f.id}
+                  onClick={() => moveNote(showMoveModal, f.id)}
+                  style={{ padding: "8px 10px", borderRadius: 5, cursor: "pointer", fontSize: 12, marginBottom: 2, display: "flex", alignItems: "center", gap: 6, color: note.folderId === f.id ? C.gold : C.tx2, background: note.folderId === f.id ? C.gold + "10" : "transparent" }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                  {f.name}
+                </div>
+              ))}
+            </div>
+            <Btn onClick={() => setShowMoveModal(null)} style={{ width: "100%" }}>Cancelar</Btn>
+          </Modal>
+        );
+      })()}
+
+      {/* Confirmar exclusão */}
+      {confirmDelete && (
+        <Modal>
+          <div style={{ textAlign: "center", marginBottom: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 500, color: C.tx, marginBottom: 4 }}>
+              Excluir {confirmDelete.type === "folder" ? "pasta" : "nota"}?
+            </div>
+            <div style={{ fontSize: 11, color: C.tx3 }}>{confirmDelete.name}</div>
+            {confirmDelete.type === "folder" && (
+              <div style={{ fontSize: 11, color: C.tx4, marginTop: 4 }}>As notas serão movidas para "Sem pasta".</div>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Btn onClick={() => setConfirmDelete(null)} style={{ flex: 1 }}>Cancelar</Btn>
+            <Btn danger onClick={() => confirmDelete.type === "folder" ? deleteFolder(confirmDelete.id) : deleteNote(confirmDelete.id)} style={{ flex: 1 }}>
+              Excluir
+            </Btn>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
-
-export default ReportsTab;

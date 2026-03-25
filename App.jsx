@@ -801,7 +801,7 @@ export default function App({ user, onSignOut }) {
           if (dx > 0 && cur > 0) { setTab(tabKeys[cur - 1]); setView("list"); }
         } : undefined}
       >
-        <div key={tab} style={isDesktop ? { maxWidth: 780, margin: "0 auto", animation: "tabFadeIn 0.22s ease" } : { animation: "tabFadeIn 0.22s ease" }}>
+        <div key={tab} style={isDesktop ? { ...(tab !== "reports" ? { maxWidth: 780, margin: "0 auto" } : {}), animation: "tabFadeIn 0.22s ease" } : { animation: "tabFadeIn 0.22s ease" }}>
         {tab === "dashboard" && <DashboardTab profile={profile} levelInfo={levelInfo} projects={projects} routines={routines} tasks={tasks} objectives={objectives} nav={nav} completeTask={completeTask} completeRoutine={completeRoutine} earn={earn} claimMission={claimMission} />}
         {tab === "activities" && view === "list" && <ActivitiesTab subTab={subTab} setSubTab={setSubTab} projects={projects} routines={routines} tasks={tasks} objectives={objectives} nav={nav} completeTask={completeTask} completeRoutine={completeRoutine} updProject={updProject} setProfile={setProfile} setCompletionConfirm={setCompletionConfirm} />}
         {tab === "activities" && view === "detail" && sel && selType === "project" && <ProjectDetail item={sel} onUpdate={updProject} onDelete={(i, p) => { deleteItem(i, "project", p); nav("activities", "projects", "list"); }} onComplete={completeTask} nav={nav} navBack={navBack} objectives={objectives} routines={routines} setCompletionConfirm={setCompletionConfirm} onValueUpdate={() => setProfile(p => ({ ...p, goalUpdatedToday: true }))} />}
@@ -837,7 +837,6 @@ export default function App({ user, onSignOut }) {
         {navTabs.map(([k, l, icon]) => (
           <div key={k} onClick={() => { setTab(k); setView("list"); }} style={{ flex: 1, padding: "8px 2px 6px", textAlign: "center", fontSize: 11, color: tab === k ? C.gold : C.tx3, borderTop: tab === k ? "2px solid " + C.gold : "2px solid transparent", cursor: "pointer", letterSpacing: 0.2, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, transition: "color .12s, border-color .12s" }}>
             <span style={{ lineHeight: 1 }}>{icon}</span>
-            <span>{l}</span>
           </div>
         ))}
       </div>}
