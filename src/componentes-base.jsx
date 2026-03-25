@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { C } from './temas.js';
-import { clamp } from './utilidades.js';
+import { clamp, fmtD } from './utilidades.js';
 import { COLORS } from './constantes.js';
 
 function Btn({ children, primary, danger, small, onClick, style: s }) {

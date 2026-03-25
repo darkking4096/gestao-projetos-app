@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { THEMES, setCurrentTheme, generateThemeTones, C } from './src/temas.js';
-import { uid, td, getLevelInfo, getMastery, getMasteryBonus, getXp, getCoins, getMultiplier, openChest, pickDailyMission, getMissionProgress, calcObjectiveXp, ACHIEVEMENTS, checkProjectCompletion, removeObjectiveLinksFromActivities, similarName, migrateFreq } from './src/utilidades.js';
+import { uid, td, getLevelInfo, getMastery, getMasteryBonus, getXp, getCoins, getMultiplier, openChest, pickDailyMission, getMissionProgress, calcObjectiveXp, ACHIEVEMENTS, checkProjectCompletion, removeObjectiveLinksFromActivities, similarName, migrateFreq, isRoutineDueOn } from './src/utilidades.js';
 import { CATEGORIES, FREQUENCIES, WEEK_DAYS, UNITS, DEFAULT_PRESETS, STREAK_RECOVER, CHEST_TYPES, COLORS } from './src/constantes.js';
 import { S, Social } from './src/armazenamento.js';
 import { SHOP_THEMES_LIST, getUpgradeCost, UPGRADE_LABELS } from './src/icones.jsx';
@@ -12,6 +12,7 @@ import { ProjectDetail, RoutineDetail, TaskDetail, ObjectiveDetail } from './src
 import HistoryTab from './src/abas/historico.jsx';
 import ShopTab from './src/abas/loja.jsx';
 import ConfigTab from './src/abas/configuracoes.jsx';
+import ReportsTab from './src/abas/relatorios.jsx';
 
 export default function App({ user, onSignOut }) {
   const [tab, setTab] = useState("dashboard");
@@ -25,6 +26,8 @@ export default function App({ user, onSignOut }) {
   const [tasks, setTasks] = useState([]);
   const [objectives, setObjectives] = useState([]);
   const [trash, setTrash] = useState([]);
+  const [reportNotes, setReportNotes] = useState([]);
+  const [reportFolders, setReportFolders] = useState([]);
   const [profile, setProfile] = useState({ totalXp: 0, coins: 0, streak: 0, bestStreak: 0, tasksCompleted: 0, xpToday: 0, coinsToday: 0, lastActiveDate: td(), dailyLog: [], difficultyPresets: DEFAULT_PRESETS, nextActionWeights: { priority: 3, deadline: 2, difficulty: 1 }, dailyMission: null, tasksToday: 0, projTasksToday: 0, hardTaskToday: false, maxTaskToday: false, goalUpdatedToday: false, totalCoinsEarned: 0, bestXpDay: 0, bestXpWeek: 0, maxTaskEver: false, projectsCompleted: 0, masteryGoldCount: 0, achievementsUnlocked: [], pendingChest: null, streakLostDays: 0, purchasedItems: ["t_iniciante", "i_estrela", "obsidiana", "b_simples"], equippedTitle: "t_iniciante", equippedIcon: "i_estrela", equippedTheme: "obsidiana", equippedBorder: "b_simples", upgradeLevels: {} });
   const [loaded, setLoaded] = useState(false);
   const [rewardPopup, setRewardPopup] = useState(null);
@@ -117,6 +120,8 @@ export default function App({ user, onSignOut }) {
         const t = await S.get("tasks"); if (t) setTasks(t);
         const ob = await S.get("objectives"); if (ob) setObjectives(ob);
         const tr = await S.get("trash"); if (tr) setTrash(tr);
+        const rn = await S.get("reportNotes"); if (rn) setReportNotes(rn);
+        const rf = await S.get("reportFolders"); if (rf) setReportFolders(rf);
         const pr = await S.get("profile"); if (pr) {
           if (!pr.purchasedItems) { pr.purchasedItems = ["t_iniciante", "i_estrela", "obsidiana", "b_simples"]; pr.equippedTitle = "t_iniciante"; pr.equippedIcon = "i_estrela"; pr.equippedTheme = "obsidiana"; pr.equippedBorder = "b_simples"; pr.upgradeLevels = pr.upgradeLevels || {}; }
           setProfile(pr);
@@ -132,6 +137,8 @@ export default function App({ user, onSignOut }) {
   useEffect(() => { if (loaded) S.set("objectives", objectives); }, [objectives, loaded]);
   useEffect(() => { if (loaded) S.set("trash", trash); }, [trash, loaded]);
   useEffect(() => { if (loaded) S.set("profile", profile); }, [profile, loaded]);
+  useEffect(() => { if (loaded) S.set("reportNotes", reportNotes); }, [reportNotes, loaded]);
+  useEffect(() => { if (loaded) S.set("reportFolders", reportFolders); }, [reportFolders, loaded]);
 
   useEffect(() => {
     if (!loaded) return;
@@ -742,6 +749,7 @@ export default function App({ user, onSignOut }) {
   const navTabs = [
     ["dashboard", "Início", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>],
     ["activities", "Atividades", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>],
+    ["reports", "Relatórios", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>],
     ["history", "Histórico", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>],
     ["shop", "Loja", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>],
     ["config", "Perfil", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>],
@@ -787,7 +795,7 @@ export default function App({ user, onSignOut }) {
           if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
           // Só troca de aba se estiver na tela de lista (não em detalhe/formulário)
           if (view !== "list") return;
-          const tabKeys = ["dashboard","activities","history","shop","config"];
+          const tabKeys = ["dashboard","activities","reports","history","shop","config"];
           const cur = tabKeys.indexOf(tab);
           if (dx < 0 && cur < tabKeys.length - 1) { setTab(tabKeys[cur + 1]); setView("list"); }
           if (dx > 0 && cur > 0) { setTab(tabKeys[cur - 1]); setView("list"); }
@@ -818,6 +826,7 @@ export default function App({ user, onSignOut }) {
         {tab === "activities" && view === "edit" && sel && selType === "routine" && <RoutineForm presets={profile.difficultyPresets} item={sel} onSave={(r) => { updRoutine(r); nav("activities", "routines", "detail", r.id, "routine"); }} onCancel={() => nav("activities", "routines", "detail", sel.id, "routine")} objectives={objectives} />}
         {tab === "activities" && view === "edit" && sel && selType === "task" && <TaskForm presets={profile.difficultyPresets} item={sel} onSave={(t) => { updTask(t); nav("activities", "tasks", "detail", t.id, "task"); }} onCancel={() => nav("activities", "tasks", "detail", sel.id, "task")} objectives={objectives} />}
         {tab === "activities" && view === "edit" && sel && selType === "objective" && <ObjectiveForm item={sel} onSave={(o) => { updObjective(o); nav("activities", "objectives", "detail", o.id, "objective"); }} onCancel={() => nav("activities", "objectives", "detail", sel.id, "objective")} objectives={objectives} />}
+        {tab === "reports" && <ReportsTab notes={reportNotes} folders={reportFolders} onUpdateNotes={setReportNotes} onUpdateFolders={setReportFolders} />}
         {tab === "history" && <HistoryTab profile={profile} projects={projects} routines={routines} recoverStreak={recoverStreak} openChestAction={openChestAction} claimAchievement={claimAchievement} />}
         {tab === "shop" && <ShopTab profile={profile} buyItem={buyItem} equipItem={equipItem} buyConsumable={buyConsumable} upgradeItem={upgradeItem} />}
         {tab === "config" && <ConfigTab profile={profile} setProfile={setProfile} trash={trash} setTrash={setTrash} restoreItem={restoreItem} projects={projects} routines={routines} tasks={tasks} objectives={objectives} setProjects={setProjects} setRoutines={setRoutines} setTasks={setTasks} setObjectives={setObjectives} levelInfo={levelInfo} onSignOut={!isDesktop ? onSignOut : null} user={user} />}
