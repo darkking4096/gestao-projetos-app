@@ -78,7 +78,7 @@ ESTRUTURA JSON OBRIGATÓRIA (sem variações):
       "Authorization": `Bearer ${apiKey}`
     },
     body: JSON.stringify({
-      model: "mixtral-8x7b-32768",
+      model: "llama-3.3-70b-versatile",
       messages: [{ role: "user", content: prompt }],
       temperature: 0.4,
       max_tokens: 3000
