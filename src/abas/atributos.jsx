@@ -17,24 +17,32 @@ async function gerarQuestionarioGroq(atributo, apiKey, tentativa = 0) {
     ? "ATENÇÃO: Retorne SOMENTE o objeto JSON puro, sem ```json, sem texto antes ou depois."
     : "Responda APENAS com JSON puro. Sem qualquer texto fora do JSON. Estrutura exata abaixo.";
 
-  const prompt = `Você é especialista em psicometria e avaliação comportamental. Crie um questionário para avaliar o atributo pessoal descrito.
+  const prompt = `Você é especialista em psicometria e avaliação comportamental. Crie um questionário aprofundado para avaliar o atributo pessoal descrito abaixo.
 
 ATRIBUTO:
 Nome: ${atributo.nome}
-${atributo.definicao ? `Definição: ${atributo.definicao}` : ""}
-${atributo.contexto ? `Contexto: ${atributo.contexto}` : ""}
-${(atributo.comportamentos || []).length ? `Comportamentos relacionados: ${atributo.comportamentos.join(", ")}` : ""}
+${atributo.definicao ? `Definição pessoal: ${atributo.definicao}` : ""}
+${atributo.contexto ? `Contexto de aplicação: ${atributo.contexto}` : ""}
+${(atributo.comportamentos || []).length ? `Comportamentos-chave: ${atributo.comportamentos.join(", ")}` : ""}
 
-REQUISITOS:
-- Exatamente 10 perguntas
-- Mix obrigatório: 4-5 tipo "likert" (escala 1-5), 3-4 tipo "multipla_escolha" (4 opções), 1-2 tipo "frequencia" (5 níveis)
-- Perguntas específicas e comportamentais (não filosóficas nem genéricas)
-- Relacionadas diretamente à definição e comportamentos do atributo
-- Em português do Brasil
+REQUISITOS DAS PERGUNTAS:
+- Exatamente 16 perguntas
+- Mix obrigatório: 6-7 tipo "likert" (escala 1-5), 5-6 tipo "multipla_escolha" (4 opções), 3-4 tipo "frequencia" (5 níveis)
+- Perguntas COMPORTAMENTAIS e SITUACIONAIS — descrevem ações concretas, não abstrações
+- Cada pergunta avalia um aspecto diferente do atributo (cognição, emoção, comportamento, hábito, resposta ao estresse)
+- Progressão de dificuldade: comece com perguntas básicas, avance para situações de maior pressão
+- Opções de múltipla escolha devem refletir graus reais de desenvolvimento (1=nenhum, 2=pouco, 3=moderado, 4=alto)
+- Evitar julgamentos morais; focar em padrões observáveis de comportamento
+- Em português do Brasil, linguagem direta e cotidiana
+
+EXEMPLOS DE BOAS PERGUNTAS (não copie, use como referência de estilo):
+- Likert: "Quando recebo uma crítica em público, consigo manter a calma e responder sem me defender imediatamente"
+- Frequência: "Com que frequência você age de acordo com seus valores mesmo quando há pressão social contrária?"
+- Múltipla escolha: "Quando você tem uma tarefa difícil pela frente, o que normalmente acontece?" (com 4 opções graduais)
 
 ${instrucaoFormato}
 
-ESTRUTURA JSON OBRIGATÓRIA (sem variações):
+ESTRUTURA JSON OBRIGATÓRIA (sem variações, 16 questoes no array):
 {
   "questoes": [
     {
@@ -49,10 +57,10 @@ ESTRUTURA JSON OBRIGATÓRIA (sem variações):
       "tipo": "multipla_escolha",
       "texto": "texto da pergunta aqui",
       "opcoes": [
-        {"valor": 1, "texto": "opção A"},
+        {"valor": 1, "texto": "opção A (nível mais baixo)"},
         {"valor": 2, "texto": "opção B"},
         {"valor": 3, "texto": "opção C"},
-        {"valor": 4, "texto": "opção D"}
+        {"valor": 4, "texto": "opção D (nível mais alto)"}
       ]
     },
     {
@@ -62,12 +70,12 @@ ESTRUTURA JSON OBRIGATÓRIA (sem variações):
       "opcoes": ["Nunca", "Raramente", "Às vezes", "Frequentemente", "Sempre"]
     }
   ],
-  "maximo_pontos": 50,
+  "maximo_pontos": 80,
   "interpretacoes": [
-    {"min": 0, "max": 25, "texto": "Desenvolvimento inicial nesta área"},
-    {"min": 26, "max": 37, "texto": "Desenvolvimento moderado"},
-    {"min": 38, "max": 45, "texto": "Bom desenvolvimento"},
-    {"min": 46, "max": 50, "texto": "Excelente desenvolvimento"}
+    {"min": 0, "max": 32, "texto": "Desenvolvimento inicial — há muito espaço para crescimento"},
+    {"min": 33, "max": 52, "texto": "Desenvolvimento moderado — bases estabelecidas, mas inconsistente"},
+    {"min": 53, "max": 68, "texto": "Bom desenvolvimento — comportamentos consistentes na maioria das situações"},
+    {"min": 69, "max": 80, "texto": "Excelente desenvolvimento — altamente consolidado"}
   ]
 }`;
 
@@ -81,7 +89,7 @@ ESTRUTURA JSON OBRIGATÓRIA (sem variações):
       model: "llama-3.3-70b-versatile",
       messages: [{ role: "user", content: prompt }],
       temperature: 0.4,
-      max_tokens: 3000
+      max_tokens: 5000
     })
   });
 
@@ -111,7 +119,7 @@ ESTRUTURA JSON OBRIGATÓRIA (sem variações):
   }
 
   // Validar estrutura
-  if (!parsed.questoes || !Array.isArray(parsed.questoes) || parsed.questoes.length < 5) {
+  if (!parsed.questoes || !Array.isArray(parsed.questoes) || parsed.questoes.length < 10) {
     if (tentativa < MAX_TENTATIVAS - 1) {
       return gerarQuestionarioGroq(atributo, apiKey, tentativa + 1);
     }
@@ -184,8 +192,8 @@ function RadarChart({ atributos, size = 260 }) {
 
   const cx = size / 2;
   const cy = size / 2;
-  const r = size * 0.33;
-  const labelR = r + 22;
+  const r = size * 0.30;
+  const labelR = r + 30;
   const gridLevels = [0.2, 0.4, 0.6, 0.8, 1.0];
 
   const getAngle = (i) => (Math.PI * 2 * i / n) - Math.PI / 2;
@@ -215,7 +223,7 @@ function RadarChart({ atributos, size = 260 }) {
     const lx = cx + labelR * Math.cos(angle);
     const ly = cy + labelR * Math.sin(angle);
     const anchor = Math.abs(Math.cos(angle)) < 0.1 ? "middle" : Math.cos(angle) > 0 ? "start" : "end";
-    const nome = a.nome.length > 11 ? a.nome.slice(0, 10) + "…" : a.nome;
+    const nome = a.nome.length > 16 ? a.nome.slice(0, 15) + "…" : a.nome;
     const score = a.historico[a.historico.length - 1]?.score || 0;
     return { lx, ly, anchor, nome, score, cor: a.cor };
   });
@@ -226,16 +234,6 @@ function RadarChart({ atributos, size = 260 }) {
       {gridPolygons.map((pts, gi) => (
         <polygon key={gi} points={pts} fill="none" stroke={C.brd} strokeWidth={gi === 4 ? "0.8" : "0.5"} />
       ))}
-
-      {/* Percentual no grid */}
-      {gridLevels.map((lv, gi) => {
-        const p = getPoint(0, lv);
-        return (
-          <text key={gi} x={p.x + 2} y={p.y - 2} fontSize="5.5" fill={C.tx4} textAnchor="start">
-            {Math.round(lv * 100)}%
-          </text>
-        );
-      })}
 
       {/* Linhas dos eixos */}
       {dados.map((_, i) => {
@@ -300,24 +298,40 @@ function AtributoForm({ item, onSave, onCancel, groqApiKey, onGerarQuestionario 
     <div style={{ padding: 14 }}>
       <TopBar title={item ? "Editar Atributo" : "Novo Atributo"} onBack={onCancel} />
 
-      <Field label="Nome" req>
-        <Input value={nome} onChange={setNome} placeholder="Ex: Coragem, Disciplina, Saúde..." />
+      {/* Dica de preenchimento */}
+      <div style={{ background: C.card, borderRadius: 8, padding: "10px 12px", marginBottom: 14, border: "1px solid " + C.brd }}>
+        <div style={{ fontSize: 11, color: C.tx3, lineHeight: 1.6 }}>
+          Quanto mais detalhado o preenchimento, mais precisas e personalizadas serão as perguntas geradas pela IA.
+        </div>
+      </div>
+
+      <Field label="Nome do atributo" req>
+        <Input value={nome} onChange={setNome} placeholder="Ex: Coragem, Disciplina, Saúde Física, Inteligência Emocional…" />
       </Field>
 
-      <Field label="O que significa para você?">
-        <Input value={definicao} onChange={setDefinicao} placeholder="Descreva o que você quer desenvolver nessa área" multiline />
+      <Field label="O que esse atributo significa para você?">
+        <div style={{ fontSize: 11, color: C.tx4, marginBottom: 5, lineHeight: 1.5 }}>
+          Descreva com suas próprias palavras. Ex: "Coragem para mim é conseguir agir mesmo com medo, especialmente ao falar em público ou tomar decisões difíceis."
+        </div>
+        <Input value={definicao} onChange={setDefinicao} placeholder="Descreva o que esse atributo significa na sua vida…" multiline />
       </Field>
 
-      <Field label="Contexto">
-        <Input value={contexto} onChange={setContexto} placeholder="Ex: Pessoal, profissional, relações..." />
+      <Field label="Contexto de aplicação">
+        <div style={{ fontSize: 11, color: C.tx4, marginBottom: 5, lineHeight: 1.5 }}>
+          Onde esse atributo é mais importante pra você? (trabalho, relações, saúde, finanças, etc.)
+        </div>
+        <Input value={contexto} onChange={setContexto} placeholder="Ex: No trabalho ao apresentar projetos, nas relações pessoais…" />
       </Field>
 
-      <Field label="Comportamentos relacionados">
+      <Field label="Comportamentos concretos">
+        <div style={{ fontSize: 11, color: C.tx4, marginBottom: 5, lineHeight: 1.5 }}>
+          Liste ações observáveis que demonstram esse atributo. Ex: "Dizer não quando necessário", "Acordar no horário planejado".
+        </div>
         <div style={{ display: "flex", gap: 6, marginBottom: comportamentos.length ? 6 : 0 }}>
           <Input
             value={comportamentoInput}
             onChange={setComportamentoInput}
-            placeholder="Ex: Falar verdade, acordar cedo..."
+            placeholder="Digite um comportamento e clique +"
             style={{ flex: 1 }}
           />
           <Btn small primary onClick={addComportamento}>+</Btn>
@@ -334,14 +348,14 @@ function AtributoForm({ item, onSave, onCancel, groqApiKey, onGerarQuestionario 
         )}
       </Field>
 
-      <Field label="Cor">
+      <Field label="Cor de identificação">
         <ColorPick value={cor} onChange={setCor} />
       </Field>
 
       {!groqApiKey && (
         <div style={{ background: C.card, border: "1px solid " + C.orange + "40", borderRadius: 8, padding: "10px 12px", marginBottom: 12 }}>
-          <div style={{ fontSize: 11, color: C.orange, marginBottom: 3, fontWeight: 500 }}>Chave da API não configurada</div>
-          <div style={{ fontSize: 11, color: C.tx3 }}>Configure a chave da API Groq em Perfil → Configurações para gerar questionários automaticamente.</div>
+          <div style={{ fontSize: 11, color: C.orange, marginBottom: 3, fontWeight: 500 }}>API Groq não configurada</div>
+          <div style={{ fontSize: 11, color: C.tx3 }}>Vá em Perfil → Configurações e insira sua chave Groq gratuita para gerar questionários automaticamente ao criar atributos.</div>
         </div>
       )}
 
@@ -618,11 +632,131 @@ function ResultadoView({ atributo, score, onVoltar }) {
 }
 
 /* ══════════════════════════════════════════
+   DETALHE DO ATRIBUTO — histórico + perguntas
+══════════════════════════════════════════ */
+
+function AtributoDetalheView({ atributo, onVoltar, onResponder, groqApiKey, onGerarQuestionario, gerandoId, erroGeracao }) {
+  const historico = atributo.historico || [];
+  const questoes = atributo.questionario?.questoes || [];
+  const corAttr = atributo.cor || C.gold;
+
+  const getCor = (s) => {
+    if (s >= 75) return C.green;
+    if (s >= 50) return C.gold;
+    if (s >= 25) return C.orange;
+    return C.red || "#e74c3c";
+  };
+
+  const tipoLabel = { likert: "Concordância", frequencia: "Frequência", multipla_escolha: "Múltipla Escolha" };
+
+  const gerando = gerandoId === atributo.id;
+  const erro = erroGeracao?.id === atributo.id;
+
+  return (
+    <div style={{ padding: 14 }}>
+      <TopBar title={atributo.nome} onBack={onVoltar} />
+
+      {/* Info do atributo */}
+      {atributo.definicao && (
+        <Card style={{ borderLeft: "3px solid " + corAttr, marginBottom: 12 }}>
+          <div style={{ fontSize: 11, color: C.tx3, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>Definição</div>
+          <div style={{ fontSize: 12, color: C.tx2, lineHeight: 1.6 }}>{atributo.definicao}</div>
+          {atributo.contexto && (
+            <div style={{ fontSize: 11, color: C.tx4, marginTop: 6 }}>Contexto: {atributo.contexto}</div>
+          )}
+          {(atributo.comportamentos || []).length > 0 && (
+            <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 4 }}>
+              {atributo.comportamentos.map((c, i) => (
+                <div key={i} style={{ padding: "2px 8px", background: corAttr + "18", border: "0.5px solid " + corAttr + "40", borderRadius: 10, fontSize: 10, color: corAttr }}>{c}</div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Histórico de medições */}
+      <div style={{ fontSize: 11, fontWeight: 600, color: C.tx, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+        Histórico de medições ({historico.length})
+      </div>
+      {historico.length === 0 ? (
+        <Card style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 11, color: C.tx4, textAlign: "center", padding: "8px 0" }}>Nenhuma medição realizada ainda.</div>
+        </Card>
+      ) : (
+        <Card style={{ marginBottom: 12 }}>
+          {[...historico].reverse().map((h, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: i < historico.length - 1 ? "0.5px solid " + C.brd : "none" }}>
+              <div style={{ width: 6, height: 6, borderRadius: 3, background: getCor(h.score), flexShrink: 0 }} />
+              <span style={{ fontSize: 11, color: C.tx4, flex: 1 }}>{h.data ? new Date(h.data).toLocaleDateString("pt-BR") : "—"}</span>
+              <div style={{ flex: 2, height: 5, background: C.brd, borderRadius: 3, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: h.score + "%", background: corAttr, borderRadius: 3, transition: "width .4s" }} />
+              </div>
+              <span style={{ fontSize: 12, fontWeight: 700, color: getCor(h.score), minWidth: 36, textAlign: "right" }}>{h.score}%</span>
+              {h.tempoSegundos && (
+                <span style={{ fontSize: 10, color: C.tx4, minWidth: 30 }}>{Math.floor(h.tempoSegundos / 60)}m{h.tempoSegundos % 60 ? (h.tempoSegundos % 60) + "s" : ""}</span>
+              )}
+            </div>
+          ))}
+        </Card>
+      )}
+
+      {/* Lista de perguntas do questionário */}
+      <div style={{ fontSize: 11, fontWeight: 600, color: C.tx, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+        Perguntas do questionário ({questoes.length})
+      </div>
+      {gerando ? (
+        <Card style={{ marginBottom: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0" }}>
+            <div style={{ width: 12, height: 12, border: "2px solid " + C.gold, borderTopColor: "transparent", borderRadius: 6, animation: "spin 0.8s linear infinite" }} />
+            <span style={{ fontSize: 11, color: C.gold }}>Gerando questionário com IA…</span>
+          </div>
+        </Card>
+      ) : erro ? (
+        <Card style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 11, color: C.orange, marginBottom: 8 }}>Erro ao gerar: {erroGeracao.msg}</div>
+          <Btn small onClick={() => onGerarQuestionario(atributo)}>Tentar novamente</Btn>
+        </Card>
+      ) : questoes.length === 0 ? (
+        <Card style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 11, color: C.tx4, textAlign: "center", padding: "4px 0 8px" }}>Nenhum questionário gerado ainda.</div>
+          {groqApiKey ? (
+            <Btn small primary onClick={() => onGerarQuestionario(atributo)} style={{ width: "100%" }}>Gerar questionário com IA</Btn>
+          ) : (
+            <div style={{ fontSize: 11, color: C.tx4, textAlign: "center" }}>Configure a API Groq em Perfil para gerar automaticamente.</div>
+          )}
+        </Card>
+      ) : (
+        <div style={{ marginBottom: 12 }}>
+          {questoes.map((q, i) => (
+            <div key={i} style={{ background: C.card, borderRadius: 8, padding: "10px 12px", marginBottom: 6, borderLeft: "3px solid " + corAttr + "60" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                <span style={{ fontSize: 10, color: corAttr, fontWeight: 600, background: corAttr + "18", padding: "1px 7px", borderRadius: 8 }}>
+                  {tipoLabel[q.tipo] || q.tipo}
+                </span>
+                <span style={{ fontSize: 10, color: C.tx4 }}>#{i + 1}</span>
+              </div>
+              <div style={{ fontSize: 12, color: C.tx2, lineHeight: 1.5 }}>{q.texto}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Botão responder */}
+      {questoes.length > 0 && (
+        <Btn primary onClick={onResponder} style={{ width: "100%" }}>
+          {historico.length > 0 ? "Refazer Questionário" : "Responder Questionário"}
+        </Btn>
+      )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════
    ABA PRINCIPAL DE ATRIBUTOS
 ══════════════════════════════════════════ */
 
 export function AtributosSection({ atributos, setAtributos, groqApiKey, subTab }) {
-  const [view, setView] = useState("lista"); // "lista" | "criar" | "editar" | "gerando" | "responder" | "resultado"
+  const [view, setView] = useState("lista"); // "lista" | "criar" | "editar" | "responder" | "resultado" | "detalhe"
   const [selected, setSelected] = useState(null);
   const [gerandoId, setGerandoId] = useState(null);
   const [erroGeracao, setErroGeracao] = useState(null);
@@ -740,21 +874,74 @@ export function AtributosSection({ atributos, setAtributos, groqApiKey, subTab }
     );
   }
 
+  /* ── Render: detalhe do atributo ── */
+  if (view === "detalhe" && selected) {
+    return (
+      <AtributoDetalheView
+        atributo={selected}
+        onVoltar={() => { setView("lista"); setSelected(null); }}
+        onResponder={() => setView("responder")}
+        groqApiKey={groqApiKey}
+        onGerarQuestionario={gerarQuestionario}
+        gerandoId={gerandoId}
+        erroGeracao={erroGeracao}
+      />
+    );
+  }
+
   /* ── Render: lista principal ── */
   const temAtributos = atributos.length > 0;
+  const [showHelp, setShowHelp] = useState(false);
 
   return (
     <div style={{ padding: 14 }}>
+      {/* Modal de ajuda */}
+      {showHelp && (
+        <Modal onClose={() => setShowHelp(false)}>
+          <div style={{ padding: "4px 0" }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.tx, marginBottom: 10 }}>O que são Atributos?</div>
+            <div style={{ fontSize: 12, color: C.tx2, lineHeight: 1.7, marginBottom: 10 }}>
+              Atributos são dimensões do seu desenvolvimento pessoal que você quer acompanhar — como Disciplina, Coragem, Saúde Física, Inteligência Emocional, etc.
+            </div>
+            <div style={{ fontSize: 12, color: C.tx2, lineHeight: 1.7, marginBottom: 10 }}>
+              Para cada atributo que você cria, a IA gera um questionário psicométrico personalizado com 16 perguntas comportamentais. Ao responder, você recebe um score de 0 a 100% que alimenta o gráfico de desenvolvimento.
+            </div>
+            <div style={{ fontSize: 12, color: C.tx2, lineHeight: 1.7, marginBottom: 10 }}>
+              Você pode refazer o questionário quando quiser para acompanhar sua evolução ao longo do tempo. O histórico completo fica salvo para cada atributo.
+            </div>
+            <div style={{ background: C.card, borderRadius: 8, padding: "10px 12px", border: "1px solid " + C.goldBrd }}>
+              <div style={{ fontSize: 11, color: C.gold, fontWeight: 600, marginBottom: 4 }}>Como começar</div>
+              <div style={{ fontSize: 11, color: C.tx3, lineHeight: 1.6 }}>
+                1. Clique em "+ Novo Atributo" abaixo<br/>
+                2. Preencha o nome e a definição pessoal<br/>
+                3. Aguarde a IA gerar o questionário<br/>
+                4. Responda o questionário na aba Questionários<br/>
+                5. Veja seu score no gráfico aqui!
+              </div>
+            </div>
+          </div>
+          <Btn primary onClick={() => setShowHelp(false)} style={{ width: "100%", marginTop: 14 }}>Entendi</Btn>
+        </Modal>
+      )}
+
       {/* ── Sub-view: PROGRESSO (radar chart) ── */}
       {subTab === "progresso" && (
         <>
           {/* Radar chart */}
+          {/* Título da seção com botão de ajuda */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: C.tx, textTransform: "uppercase", letterSpacing: 0.5 }}>
+              Mapa de Desenvolvimento
+            </div>
+            <div
+              onClick={() => setShowHelp(true)}
+              style={{ width: 22, height: 22, borderRadius: 11, border: "1.5px solid " + C.brd2, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: C.tx4, fontSize: 12, fontWeight: 700 }}
+            >?</div>
+          </div>
+
           {temAtributos ? (
             <Card style={{ marginBottom: 12, padding: "16px 8px" }}>
-              <div style={{ fontSize: 11, color: C.tx2, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600, textAlign: "center", marginBottom: 12 }}>
-                Mapa de Desenvolvimento
-              </div>
-              <RadarChart atributos={atributos} size={260} />
+              <RadarChart atributos={atributos} size={280} />
             </Card>
           ) : (
             <div style={{ textAlign: "center", padding: "30px 20px", color: C.tx3, fontSize: 11 }}>
@@ -841,7 +1028,10 @@ export function AtributosSection({ atributos, setAtributos, groqApiKey, subTab }
 
                 return (
                   <Card key={a.id} style={{ borderLeft: "3px solid " + (a.cor || C.gold), marginBottom: 8 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                    <div
+                      onClick={() => { setSelected(a); setView("detalhe"); }}
+                      style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8, cursor: "pointer" }}
+                    >
                       <div style={{ flex: 1 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
                           <span style={{ fontSize: 12, fontWeight: 600, color: C.tx }}>{a.nome}</span>
@@ -864,6 +1054,7 @@ export function AtributosSection({ atributos, setAtributos, groqApiKey, subTab }
                           </div>
                         )}
                       </div>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.tx4} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginLeft: 6, marginTop: 2 }}><polyline points="9 18 15 12 9 6"/></svg>
                     </div>
 
                     {gerando ? (

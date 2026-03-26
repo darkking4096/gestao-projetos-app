@@ -141,7 +141,7 @@ function DashboardTab({ profile, levelInfo, projects, routines, tasks, objective
       <div style={{ display: "flex", gap: 4, marginBottom: 12, background: C.card, borderRadius: 8, padding: 4 }}>
         {[
           ["overview", <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>, "Visão Geral"],
-          ["progresso", <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12,2 19,7 19,17 12,22 5,17 5,7"/><polygon points="12,7 16,9.5 16,14.5 12,17 8,14.5 8,9.5"/></svg>, "Progresso"],
+          ["progresso", <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12,3 20.5,8.5 20.5,15.5 12,21 3.5,15.5 3.5,8.5"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="3.5" y1="8.5" x2="20.5" y2="15.5"/><line x1="3.5" y1="15.5" x2="20.5" y2="8.5"/></svg>, "Progresso"],
           ["questionarios", <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>, "Questionários"],
         ].map(([key, icon, label]) => {
           const active = dashSubTab === key;
