@@ -762,6 +762,7 @@ export function AtributosSection({ atributos, setAtributos, groqApiKey, subTab }
   const [erroGeracao, setErroGeracao] = useState(null);
   const [resultadoRecente, setResultadoRecente] = useState(null); // {score}
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [showHelp, setShowHelp] = useState(false);
 
   const criarAtributo = (dados) => {
     const novo = {
@@ -891,7 +892,6 @@ export function AtributosSection({ atributos, setAtributos, groqApiKey, subTab }
 
   /* ── Render: lista principal ── */
   const temAtributos = atributos.length > 0;
-  const [showHelp, setShowHelp] = useState(false);
 
   return (
     <div style={{ padding: 14 }}>
