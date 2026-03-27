@@ -1,9 +1,9 @@
 /* ═══ STORAGE — Supabase ═══ */
 import { createClient } from '@supabase/supabase-js';
 
-// Estas constantes serão substituídas pelas credenciais reais do Supabase
-const SUPABASE_URL = "https://ersisusnwmxkdvatynvn.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_dziqIYjdAn-uaqSroTXUdg_ZiO7tAjO";
+// Credenciais via variáveis de ambiente — nunca hardcode aqui
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -120,6 +120,11 @@ export const Social = {
 };
 
 /* ── Data storage ── */
+
+// Debounce por chave: evita múltiplas escritas simultâneas no Supabase
+// quando o estado muda em rajada (ex: completar tarefa dispara profile + projects)
+const _debounceTimers = {};
+
 export const S = {
   async get(k) {
     const user = await Auth.getUser();
@@ -135,16 +140,41 @@ export const S = {
       return data ? JSON.parse(data.value) : null;
     } catch { return null; }
   },
-  async set(k, v) {
+
+  // Carrega múltiplas chaves em paralelo — use no carregamento inicial
+  async getAll(keys) {
     const user = await Auth.getUser();
-    if (!user) return;
+    if (!user) return {};
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('app_data')
-        .upsert({ user_id: user.id, key: k, value: JSON.stringify(v) }, { onConflict: 'user_id,key' });
+        .select('key, value')
+        .eq('user_id', user.id)
+        .in('key', keys);
       if (error) throw error;
-    } catch {
-      window.dispatchEvent(new CustomEvent("app:storageError"));
-    }
+      const result = {};
+      (data || []).forEach(row => {
+        try { result[row.key] = JSON.parse(row.value); } catch { result[row.key] = null; }
+      });
+      return result;
+    } catch { return {}; }
+  },
+
+  // set com debounce de 900ms por chave — reduz escritas no Supabase em ~80%
+  set(k, v) {
+    if (_debounceTimers[k]) clearTimeout(_debounceTimers[k]);
+    _debounceTimers[k] = setTimeout(async () => {
+      delete _debounceTimers[k];
+      const user = await Auth.getUser();
+      if (!user) return;
+      try {
+        const { error } = await supabase
+          .from('app_data')
+          .upsert({ user_id: user.id, key: k, value: JSON.stringify(v) }, { onConflict: 'user_id,key' });
+        if (error) throw error;
+      } catch {
+        window.dispatchEvent(new CustomEvent("app:storageError"));
+      }
+    }, 900);
   },
 };

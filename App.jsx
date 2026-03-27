@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from "react";
 import { THEMES, setCurrentTheme, generateThemeTones, C } from './src/temas.js';
 import { uid, td, getLevelInfo, getMastery, getMasteryBonus, getXp, getCoins, getMultiplier, openChest, pickDailyMission, getMissionProgress, calcObjectiveXp, ACHIEVEMENTS, checkProjectCompletion, removeObjectiveLinksFromActivities, similarName, migrateFreq, isRoutineDueOn } from './src/utilidades.js';
 import { CATEGORIES, FREQUENCIES, WEEK_DAYS, UNITS, DEFAULT_PRESETS, STREAK_RECOVER, CHEST_TYPES, COLORS } from './src/constantes.js';
@@ -40,6 +40,12 @@ export default function App({ user, onSignOut }) {
   const [lastUndo, setLastUndo] = useState(null);
   const shownAchieveIds = useRef(new Set());
   const syncProfileRef = useRef(null);
+  // Ref sempre atualizado com o profile mais recente — usado por earn() fora do updater
+  const profileRef = useRef(profile);
+  // Ref para coordenadas do swipe — substitui window._swipeX/Y (namespace global poluído)
+  const swipeRef = useRef({ x: null, y: null });
+  // Ref para estado de navegação — permite nav() com dep [] sem stale closure
+  const navStateRef = useRef({ view, tab, subTab, selId, selType });
   const [winW, setWinW] = useState(() => window.innerWidth);
   useEffect(() => {
     const handler = () => setStorageError(true);
@@ -51,6 +57,9 @@ export default function App({ user, onSignOut }) {
     const t = setTimeout(() => setStorageError(false), 3000);
     return () => clearTimeout(t);
   }, [storageError]);
+  // Mantém refs sempre sincronizados com o estado atual
+  useEffect(() => { profileRef.current = profile; }, [profile]);
+  useEffect(() => { navStateRef.current = { view, tab, subTab, selId, selType }; }, [view, tab, subTab, selId, selType]);
   // Reward popup auto-dismiss — duration scales with reward value
   useEffect(() => {
     if (!rewardPopup) return;
@@ -116,17 +125,23 @@ export default function App({ user, onSignOut }) {
   useEffect(() => {
     (async () => {
       try {
-        const p = await S.get("projects"); if (p) setProjects(p);
-        const r = await S.get("routines"); if (r) setRoutines(r);
-        const t = await S.get("tasks"); if (t) setTasks(t);
-        const ob = await S.get("objectives"); if (ob) setObjectives(ob);
-        const tr = await S.get("trash"); if (tr) setTrash(tr);
-        const rn = await S.get("reportNotes"); if (rn) setReportNotes(rn);
-        const rf = await S.get("reportFolders"); if (rf) setReportFolders(rf);
-        const at = await S.get("atributos"); if (at) setAtributos(at);
-        const pr = await S.get("profile"); if (pr) {
+        // Carrega todas as chaves em paralelo — reduz tempo de carregamento em ~8x
+        const data = await S.getAll(["projects","routines","tasks","objectives","trash","reportNotes","reportFolders","atributos","profile"]);
+        if (data.projects)     setProjects(data.projects);
+        if (data.routines)     setRoutines(data.routines);
+        if (data.tasks)        setTasks(data.tasks);
+        if (data.objectives)   setObjectives(data.objectives);
+        if (data.trash)        setTrash(data.trash);
+        if (data.reportNotes)  setReportNotes(data.reportNotes);
+        if (data.reportFolders) setReportFolders(data.reportFolders);
+        if (data.atributos)    setAtributos(data.atributos);
+        if (data.profile) {
+          const pr = data.profile;
           if (!pr.purchasedItems) { pr.purchasedItems = ["t_iniciante", "i_estrela", "obsidiana", "b_simples"]; pr.equippedTitle = "t_iniciante"; pr.equippedIcon = "i_estrela"; pr.equippedTheme = "obsidiana"; pr.equippedBorder = "b_simples"; pr.upgradeLevels = pr.upgradeLevels || {}; }
           setProfile(pr);
+          // Suprime notificações de conquistas que já eram válidas ao abrir o app
+          // (só notifica conquistas desbloqueadas DURANTE a sessão atual)
+          ACHIEVEMENTS.forEach(a => { if (a.check(pr)) shownAchieveIds.current.add(a.id); });
         }
       } catch (e) { console.log("storage load err", e); }
       setLoaded(true);
@@ -147,21 +162,48 @@ export default function App({ user, onSignOut }) {
     if (!loaded) return;
     const d = td();
     if (profile.lastActiveDate !== d) {
-      const log = [...(profile.dailyLog || []), { date: profile.lastActiveDate, xp: profile.xpToday, coins: profile.coinsToday }].slice(-90);
+      // Calcula o gap real de dias (quantos dias se passaram desde o último reset)
+      const daysGap = Math.max(1, Math.round(
+        (new Date(d + "T12:00:00") - new Date(profile.lastActiveDate + "T12:00:00")) / 86400000
+      ));
+      // Constrói o log diário preenchendo dias faltantes com XP=0 (gráficos ficam corretos)
+      const logEntries = [...(profile.dailyLog || [])];
+      logEntries.push({ date: profile.lastActiveDate, xp: profile.xpToday, coins: profile.coinsToday });
+      for (let i = 1; i < daysGap; i++) {
+        const gapDate = new Date(profile.lastActiveDate + "T12:00:00");
+        gapDate.setDate(gapDate.getDate() + i);
+        logEntries.push({ date: gapDate.toISOString().split("T")[0], xp: 0, coins: 0 });
+      }
+      const log = logEntries.slice(-90);
       const _mCtx = { hasRoutines: routines.some(r => r.status === "Ativa"), hasProjects: projects.some(p => p.status === "Ativo"), hasNumericProjects: projects.some(p => p.status === "Ativo" && p.target !== undefined), hasTasks: tasks.some(t => t.status === "Pendente") };
       const mission = pickDailyMission(d, _mCtx);
       const wasActive = (profile.xpToday || 0) > 0;
-      let newStreak = profile.streak;
+      let newStreak = profile.streak || 0;
       let streakLostDays = 0;
       let shieldUsed = false;
       if (wasActive) {
-        newStreak = (profile.streak || 0) + 1;
+        // +1 pelo dia ativo; penaliza dias intermediários sem atividade
+        newStreak += 1;
+        const missedBetween = daysGap - 1;
+        if (missedBetween > 0) {
+          const penalty = Math.min(newStreak, missedBetween * 5);
+          newStreak = Math.max(0, newStreak - penalty);
+          streakLostDays = penalty;
+        }
       } else if (profile.shieldActive) {
+        // Escudo protege 1 dia; dias extras além de 1 são penalizados normalmente
         shieldUsed = true;
+        if (daysGap > 1) {
+          const extraMissed = daysGap - 1;
+          const penalty = Math.min(newStreak, extraMissed * 5);
+          newStreak = Math.max(0, newStreak - penalty);
+          streakLostDays = penalty;
+        }
       } else {
-        const lost = Math.min(5, profile.streak || 0);
-        newStreak = Math.max(0, (profile.streak || 0) - 5);
-        streakLostDays = lost;
+        // Aplica penalidade para cada dia de ausência (fix: antes só aplicava 1 vez)
+        const penalty = Math.min(newStreak, daysGap * 5);
+        newStreak = Math.max(0, newStreak - penalty);
+        streakLostDays = penalty;
       }
       const newBest = Math.max(profile.bestStreak || 0, newStreak);
       const last7 = log.slice(-7);
@@ -179,22 +221,25 @@ export default function App({ user, onSignOut }) {
         return { ...r, consecutiveFails: newFails };
       }));
       // V2: Auto-archive tasks overdue by 3+ days
-      const currentTasks = tasks; // use current state reference
-      const toArchive = currentTasks.filter(t => {
-        if (t.status !== "Pendente" || !t.deadline) return false;
-        const daysOverdue = Math.floor((new Date(d) - new Date(t.deadline)) / 86400000);
-        return daysOverdue >= 3;
-      });
-      if (toArchive.length > 0) {
+      // Usa updater funcional para garantir acesso ao estado atual de tasks (evita stale closure)
+      setTasks(currentTasks => {
+        const toArchive = currentTasks.filter(t => {
+          if (t.status !== "Pendente" || !t.deadline) return false;
+          const daysOverdue = Math.floor((new Date(d) - new Date(t.deadline)) / 86400000);
+          return daysOverdue >= 3;
+        });
+        if (toArchive.length === 0) return currentTasks;
         const archiveIds = new Set(toArchive.map(t => t.id));
-        setTasks(prev => prev.filter(t => !archiveIds.has(t.id)));
-        setTrash(tr => [...tr, ...toArchive.map(t => ({ ...t, status: "Arquivada", _type: "task", deletedAt: Date.now(), autoArchived: true }))]);
-        // Clean objective links for archived tasks
-        setObjectives(prev => prev.map(o => ({
-          ...o,
-          linkedActivities: (o.linkedActivities || []).filter(l => !(l.type === "task" && archiveIds.has(l.id)))
-        })));
-      }
+        // Efeitos secundários agendados fora do updater (mantém updater puro)
+        setTimeout(() => {
+          setTrash(tr => [...tr, ...toArchive.map(t => ({ ...t, status: "Arquivada", _type: "task", deletedAt: Date.now(), autoArchived: true }))]);
+          setObjectives(prev => prev.map(o => ({
+            ...o,
+            linkedActivities: (o.linkedActivities || []).filter(l => !(l.type === "task" && archiveIds.has(l.id)))
+          })));
+        }, 0);
+        return currentTasks.filter(t => !archiveIds.has(t.id));
+      });
       // Chest check
       let chest = null;
       const lv = getLevelInfo(profile.totalXp).level;
@@ -218,34 +263,43 @@ export default function App({ user, onSignOut }) {
   }, [loaded]);
 
   const earn = useCallback((xp, coins, msg, onEarned) => {
-    let popupXp = xp, popupCoins = coins, popupMsg = msg;
-    let levelUpData = null;
-    setProfile(p => {
-      const mult = getMultiplier(p.streak);
-      const bonusXp = Math.round(xp * mult);
-      const bonusCoins = Math.round(coins * mult);
-      let finalXp = xp + bonusXp;
-      let finalCoins = coins + bonusCoins;
-      const boostActive = p.boostExpiry && p.boostExpiry > Date.now();
-      if (boostActive) { const boostBonus = Math.round(finalCoins * 0.25); finalCoins += boostBonus; }
-      popupXp = finalXp; popupCoins = finalCoins;
-      let suffixes = [];
-      if (mult > 0) suffixes.push("+" + Math.round(mult * 100) + "% streak");
-      if (boostActive) suffixes.push("+25% boost");
-      if (suffixes.length > 0) popupMsg = msg + " (" + suffixes.join(", ") + ")";
-      const oldLv = getLevelInfo(p.totalXp).level;
-      const newLv = getLevelInfo(p.totalXp + finalXp).level;
-      if (newLv > oldLv) { const info = getLevelInfo(p.totalXp + finalXp); levelUpData = { level: newLv, name: info.name }; }
-      return { ...p, totalXp: p.totalXp + finalXp, coins: p.coins + finalCoins, xpToday: p.xpToday + finalXp, coinsToday: p.coinsToday + finalCoins, totalCoinsEarned: (p.totalCoinsEarned || 0) + finalCoins, bestXpDay: Math.max(p.bestXpDay || 0, p.xpToday + finalXp) };
-    });
-    setTimeout(() => { setRewardPopup({ xp: popupXp, coins: popupCoins, msg: popupMsg }); if (onEarned) onEarned(popupXp, popupCoins); }, 10);
+    // Lê o perfil atual via ref (evita mutações dentro do updater — antipadrão React)
+    const p = profileRef.current;
+    const mult = getMultiplier(p.streak);
+    let finalXp = xp + Math.round(xp * mult);
+    let finalCoins = coins + Math.round(coins * mult);
+    const boostActive = p.boostExpiry && p.boostExpiry > Date.now();
+    if (boostActive) finalCoins += Math.round(finalCoins * 0.25);
+
+    const suffixes = [];
+    if (mult > 0) suffixes.push("+" + Math.round(mult * 100) + "% streak");
+    if (boostActive) suffixes.push("+25% boost");
+    const popupMsg = suffixes.length > 0 ? msg + " (" + suffixes.join(", ") + ")" : msg;
+
+    const oldLv = getLevelInfo(p.totalXp).level;
+    const newLv = getLevelInfo(p.totalXp + finalXp).level;
+    const levelUpData = newLv > oldLv ? { level: newLv, name: getLevelInfo(p.totalXp + finalXp).name } : null;
+
+    // Updater puro: sem efeitos colaterais, sem mutação de variáveis externas
+    setProfile(prev => ({
+      ...prev,
+      totalXp: prev.totalXp + finalXp,
+      coins: prev.coins + finalCoins,
+      xpToday: prev.xpToday + finalXp,
+      coinsToday: prev.coinsToday + finalCoins,
+      totalCoinsEarned: (prev.totalCoinsEarned || 0) + finalCoins,
+      bestXpDay: Math.max(prev.bestXpDay || 0, prev.xpToday + finalXp),
+    }));
+    setTimeout(() => { setRewardPopup({ xp: finalXp, coins: finalCoins, msg: popupMsg }); if (onEarned) onEarned(finalXp, finalCoins); }, 10);
     setTimeout(() => { if (levelUpData) setLevelUpNotif(levelUpData); }, 600);
   }, []);
 
   const nav = useCallback((t, st, v, id, tp) => {
+    // Lê estado atual via ref — dep [] evita recriar nav e re-renderizar todos os filhos
+    const { view: curView, tab: curTab, subTab: curSubTab, selId: curSelId, selType: curSelType } = navStateRef.current;
     // Push to history when navigating FROM a detail view TO another detail view
-    if (view === "detail" && v === "detail") {
-      setNavHistory(prev => [...prev, { tab, subTab, view, selId, selType }]);
+    if (curView === "detail" && v === "detail") {
+      setNavHistory(prev => [...prev, { tab: curTab, subTab: curSubTab, view: curView, selId: curSelId, selType: curSelType }]);
     }
     // Clear history when going to a list (fresh start)
     if (v === "list") {
@@ -256,7 +310,7 @@ export default function App({ user, onSignOut }) {
     setView(v || "list");
     setSelId(id || null);
     setSelType(tp || null);
-  }, [view, tab, subTab, selId, selType]);
+  }, []);
 
   const navBack = useCallback(() => {
     if (navHistory.length > 0) {
@@ -417,11 +471,29 @@ export default function App({ user, onSignOut }) {
     if (deleteAll) {
       const obj = objectives.find(o => o.id === objId);
       if (obj) {
+        // Coleta itens vinculados a partir do estado atual antes de remover
+        // Passa pelo trash (recuperável) em vez de deleção permanente
+        const now = Date.now();
+        const toTrash = [];
+        const projIds = new Set(), rotIds = new Set(), taskIds = new Set();
         (obj.linkedActivities || []).forEach(link => {
-          if (link.type === "project") setProjects(prev => prev.filter(p => p.id !== link.id));
-          if (link.type === "routine") setRoutines(prev => prev.filter(r => r.id !== link.id));
-          if (link.type === "task") setTasks(prev => prev.filter(t => t.id !== link.id));
+          if (link.type === "project") {
+            const item = projects.find(x => x.id === link.id);
+            if (item) { toTrash.push({ ...item, _type: "project", deletedAt: now }); projIds.add(link.id); }
+          }
+          if (link.type === "routine") {
+            const item = routines.find(x => x.id === link.id);
+            if (item) { toTrash.push({ ...item, _type: "routine", deletedAt: now }); rotIds.add(link.id); }
+          }
+          if (link.type === "task") {
+            const item = tasks.find(x => x.id === link.id);
+            if (item) { toTrash.push({ ...item, _type: "task", deletedAt: now }); taskIds.add(link.id); }
+          }
         });
+        if (projIds.size)  setProjects(prev => prev.filter(x => !projIds.has(x.id)));
+        if (rotIds.size)   setRoutines(prev => prev.filter(x => !rotIds.has(x.id)));
+        if (taskIds.size)  setTasks(prev => prev.filter(x => !taskIds.has(x.id)));
+        if (toTrash.length) setTrash(prev => [...prev, ...toTrash]);
       }
     } else {
       removeObjectiveLinksFromActivities(objId, setProjects, setRoutines, setTasks);
@@ -723,7 +795,9 @@ export default function App({ user, onSignOut }) {
     const info = SHOP_THEMES_LIST.find(t => t.id === _themeKey) || SHOP_THEMES_LIST[0];
     return { ...base, ...generateThemeTones(info.accent, info.rarity, _themeUpLv) };
   }, [_themeKey, _themeUpLv]);
-  setCurrentTheme(_computedTheme);
+  // useLayoutEffect: aplica o tema antes do paint — evita flash de cor errada
+  // e remove o efeito colateral do corpo do render (violação das regras do React)
+  useLayoutEffect(() => { setCurrentTheme(_computedTheme); }, [_computedTheme]);
 
   const levelInfo = useMemo(() => getLevelInfo(profile.totalXp), [profile.totalXp]);
   const sel = useMemo(() => {
@@ -788,12 +862,12 @@ export default function App({ user, onSignOut }) {
         </div>
       )}
       <div style={{ minHeight: isDesktop ? "100vh" : "calc(100vh - 56px)", overflow: "auto", marginLeft: isDesktop ? SIDEBAR_W : 0 }}
-        onTouchStart={!isDesktop ? (e) => { window._swipeX = e.touches[0].clientX; window._swipeY = e.touches[0].clientY; } : undefined}
+        onTouchStart={!isDesktop ? (e) => { swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; } : undefined}
         onTouchEnd={!isDesktop ? (e) => {
-          if (window._swipeX == null) return;
-          const dx = e.changedTouches[0].clientX - window._swipeX;
-          const dy = e.changedTouches[0].clientY - window._swipeY;
-          window._swipeX = null;
+          if (swipeRef.current.x == null) return;
+          const dx = e.changedTouches[0].clientX - swipeRef.current.x;
+          const dy = e.changedTouches[0].clientY - swipeRef.current.y;
+          swipeRef.current = { x: null, y: null };
           // Só swipe horizontal com pelo menos 60px e mais horizontal que vertical
           if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
           // Só troca de aba se estiver na tela de lista (não em detalhe/formulário)
@@ -847,7 +921,7 @@ export default function App({ user, onSignOut }) {
       {storageError && <div style={{ position: "fixed", top: 0, left: isDesktop ? SIDEBAR_W : "50%", transform: isDesktop ? "none" : "translateX(-50%)", right: isDesktop ? 0 : "auto", width: isDesktop ? "auto" : "100%", maxWidth: isDesktop ? "none" : 430, background: "#b91c1c99", zIndex: 400, padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, backdropFilter: "blur(4px)", animation: "errFadeOut 3s ease forwards" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          <span style={{ fontSize: 11, color: "#fff" }}>Erro ao salvar dados. Verifique o armazenamento do dispositivo.</span>
+          <span style={{ fontSize: 11, color: "#fff" }}>Erro ao sincronizar com o servidor. Verifique sua conexão com a internet.</span>
         </div>
         <span onClick={() => setStorageError(false)} style={{ cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0 }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>

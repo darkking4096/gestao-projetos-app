@@ -147,7 +147,11 @@ export function getXp(d) { return XP_TABLE[clamp(d, 1, 10)] || 0; }
 export function getCoins(d) { return COIN_TABLE[clamp(d, 1, 10)] || 0; }
 
 /* ═══ V2: Objective utility functions ═══ */
-export function calcObjectiveXp(objectiveId, projects, routines, tasks, objectives) {
+export function calcObjectiveXp(objectiveId, projects, routines, tasks, objectives, _visited = new Set()) {
+  // Proteção anti-ciclo: se já visitamos este nó na recursão atual, retorna 0
+  if (_visited.has(objectiveId)) return 0;
+  _visited.add(objectiveId);
+
   const obj = objectives.find(o => o.id === objectiveId);
   if (!obj) return 0;
   let total = 0;
@@ -168,7 +172,7 @@ export function calcObjectiveXp(objectiveId, projects, routines, tasks, objectiv
   (obj.linkedObjectives || [])
     .filter(l => l.relation === "menor")
     .forEach(l => {
-      total += calcObjectiveXp(l.id, projects, routines, tasks, objectives);
+      total += calcObjectiveXp(l.id, projects, routines, tasks, objectives, _visited);
     });
   return total;
 }
