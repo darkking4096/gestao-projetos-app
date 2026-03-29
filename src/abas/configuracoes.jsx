@@ -30,6 +30,182 @@ function FriendRow({ fp, onView, onRemove, onAccept, onDecline, onCancel }) {
   );
 }
 
+/* ── Dev Panel ── */
+function DevField({ label, value, onChange, type = "number", min, max, step = 1 }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+      <span style={{ fontSize: 11, color: C.tx3, flex: "0 0 140px" }}>{label}</span>
+      <input
+        type={type}
+        value={value}
+        min={min} max={max} step={step}
+        onChange={e => onChange(type === "number" ? Number(e.target.value) : e.target.value)}
+        style={{
+          flex: 1, padding: "5px 8px",
+          background: C.bg, border: "1px solid #ff6b0055",
+          borderRadius: 6, color: "#ff6b00", fontSize: 12,
+          fontWeight: 600, outline: "none",
+        }}
+      />
+    </div>
+  );
+}
+
+function DevPanel({ open, taps, onTap, onClose, profile, setProfile, poderInfo, rankInfo }) {
+  const tapHint = taps > 0 && taps < 5 ? taps : null;
+  if (!open) {
+    return (
+      <div
+        onClick={onTap}
+        style={{
+          marginTop: 24, marginBottom: 8, textAlign: "center",
+          fontSize: 10, color: C.tx4 + "44", cursor: "default",
+          letterSpacing: 1, userSelect: "none",
+        }}
+      >
+        v2.0{tapHint ? ` · · · (${tapHint}/5)` : ""}
+      </div>
+    );
+  }
+
+  const set = (key, val) => setProfile(p => ({ ...p, [key]: val }));
+
+  return (
+    <div style={{
+      marginTop: 16,
+      background: "#1a0a00",
+      border: "1px solid #ff6b0055",
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 12,
+    }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 14 }}>🔧</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: "#ff6b00", letterSpacing: 0.5 }}>PAINEL DEV</span>
+        </div>
+        <div style={{
+          fontSize: 11, color: rankInfo.color || "#ff6b00", fontWeight: 600,
+          background: (rankInfo.color || "#ff6b00") + "20",
+          border: "1px solid " + (rankInfo.color || "#ff6b00") + "40",
+          padding: "2px 8px", borderRadius: 5,
+        }}>
+          PODER {poderInfo.poder} · {rankInfo.label || "—"}
+        </div>
+        <span onClick={onClose} style={{ fontSize: 11, color: "#ff6b0088", cursor: "pointer" }}>✕ fechar</span>
+      </div>
+
+      {/* ENERGIA → drives PODER + Rank */}
+      <div style={{ background: "#ff6b0010", borderRadius: 8, padding: "8px 10px", marginBottom: 10 }}>
+        <div style={{ fontSize: 10, color: "#ff6b0088", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
+          ⚡ ENERGIA — controla PODER e Rank
+        </div>
+        <DevField label="ENERGIA total (totalXp)" value={profile.totalXp || 0} min={0} step={100}
+          onChange={v => set("totalXp", v)} />
+        <div style={{ fontSize: 10, color: "#ff6b0066", marginTop: -4, marginBottom: 4, paddingLeft: 148 }}>
+          → PODER {Math.floor((profile.totalXp || 0) / 100)}
+        </div>
+        <DevField label="⚡ ENERGIA hoje (xpToday)" value={profile.xpToday || 0} min={0}
+          onChange={v => set("xpToday", v)} />
+        <DevField label="Melhor dia ⚡ (bestXpDay)" value={profile.bestXpDay || 0} min={0}
+          onChange={v => set("bestXpDay", v)} />
+      </div>
+
+      {/* Moedas */}
+      <div style={{ background: "#f0a50010", borderRadius: 8, padding: "8px 10px", marginBottom: 10 }}>
+        <div style={{ fontSize: 10, color: "#f0a50088", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
+          🪙 Moedas
+        </div>
+        <DevField label="Moedas" value={profile.coins || 0} min={0}
+          onChange={v => set("coins", v)} />
+        <DevField label="Moedas hoje" value={profile.coinsToday || 0} min={0}
+          onChange={v => set("coinsToday", v)} />
+        <DevField label="Total moedas ganhas" value={profile.totalCoinsEarned || 0} min={0}
+          onChange={v => set("totalCoinsEarned", v)} />
+      </div>
+
+      {/* Streak */}
+      <div style={{ background: "#f9731610", borderRadius: 8, padding: "8px 10px", marginBottom: 10 }}>
+        <div style={{ fontSize: 10, color: "#f9731688", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
+          🔥 Streak
+        </div>
+        <DevField label="Streak atual" value={profile.streak || 0} min={0}
+          onChange={v => set("streak", v)} />
+        <DevField label="Melhor streak" value={profile.bestStreak || 0} min={0}
+          onChange={v => set("bestStreak", v)} />
+      </div>
+
+      {/* Tarefas / Conquistas */}
+      <div style={{ background: "#2ecc7110", borderRadius: 8, padding: "8px 10px", marginBottom: 10 }}>
+        <div style={{ fontSize: 10, color: "#2ecc7188", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
+          ✅ Tarefas / Conquistas
+        </div>
+        <DevField label="Tarefas concluídas" value={profile.tasksCompleted || 0} min={0}
+          onChange={v => set("tasksCompleted", v)} />
+        <DevField label="Projetos concluídos" value={profile.projectsCompleted || 0} min={0}
+          onChange={v => set("projectsCompleted", v)} />
+        <DevField label="Maestrias Gold" value={profile.masteryGoldCount || 0} min={0}
+          onChange={v => set("masteryGoldCount", v)} />
+        {/* Boolean flags */}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
+          {[
+            ["hardTaskToday", "Tarefa difícil hoje"],
+            ["maxTaskToday", "Tarefa impossível hoje"],
+            ["maxTaskEver", "Impossível alguma vez"],
+          ].map(([key, label]) => (
+            <div
+              key={key}
+              onClick={() => set(key, !profile[key])}
+              style={{
+                fontSize: 10, cursor: "pointer", padding: "3px 8px", borderRadius: 5,
+                background: profile[key] ? "#2ecc7130" : C.bg,
+                border: "1px solid " + (profile[key] ? "#2ecc71" : C.brd),
+                color: profile[key] ? "#2ecc71" : C.tx4,
+                transition: "all .12s",
+              }}
+            >
+              {profile[key] ? "✓" : "○"} {label}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Atalhos rápidos */}
+      <div style={{ fontSize: 10, color: "#ff6b0066", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
+        ⚡ Atalhos rápidos de PODER
+      </div>
+      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+        {[
+          [0,    "Humano"],
+          [500,  "PODER 5"],
+          [1400, "F-"],
+          [1500, "F"],
+          [2500, "E-"],
+          [5000, "D--"],
+          [10000,"C-"],
+          [15000,"B-"],
+          [20000,"A-"],
+          [25000,"S-"],
+        ].map(([xp, label]) => (
+          <div
+            key={xp}
+            onClick={() => set("totalXp", xp)}
+            style={{
+              fontSize: 10, cursor: "pointer", padding: "4px 8px",
+              borderRadius: 5, background: "#ff6b0015",
+              border: "1px solid #ff6b0035", color: "#ff6b00",
+              transition: "background .1s",
+            }}
+          >
+            {label}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ── Main ConfigTab ── */
 function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects, routines, tasks, objectives, setProjects, setRoutines, setTasks, setObjectives, levelInfo, poderInfo: poderInfoProp, rankInfo: rankInfoProp, onSignOut }) {
   const [showReset, setShowReset] = useState(false);
@@ -37,6 +213,8 @@ function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects
   const [confirmDel, setConfirmDel] = useState(null);
   const [openSections, setOpenSections] = useState({ presets: false, weights: false });
   const toggleSection = (k) => setOpenSections(s => ({ ...s, [k]: !s[k] }));
+  const [devOpen, setDevOpen] = useState(false);
+  const [devTaps, setDevTaps] = useState(0);
 
   /* Username */
   const [usernameEditing, setUsernameEditing] = useState(false);
@@ -637,6 +815,22 @@ function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects
           ]}
         />
       )}
+
+      {/* ── Dev Panel ── */}
+      <DevPanel
+        open={devOpen}
+        taps={devTaps}
+        onTap={() => {
+          const next = devTaps + 1;
+          setDevTaps(next);
+          if (next >= 5) { setDevOpen(true); setDevTaps(0); }
+        }}
+        onClose={() => { setDevOpen(false); setDevTaps(0); }}
+        profile={profile}
+        setProfile={setProfile}
+        poderInfo={_poderInfo}
+        rankInfo={_rankInfo}
+      />
     </div>
   );
 }
