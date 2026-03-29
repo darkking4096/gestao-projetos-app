@@ -51,20 +51,70 @@ function DevField({ label, value, onChange, type = "number", min, max, step = 1 
   );
 }
 
-function DevPanel({ open, taps, onTap, onClose, profile, setProfile, poderInfo, rankInfo }) {
-  const tapHint = taps > 0 && taps < 5 ? taps : null;
+const DEV_PASSWORD = "darkking";
+
+function DevPanel({ open, onOpen, onClose, profile, setProfile, poderInfo, rankInfo }) {
+  const [showPrompt, setShowPrompt] = useState(false);
+  const [pwInput, setPwInput]       = useState("");
+  const [pwError, setPwError]       = useState(false);
+
+  const handleSubmit = () => {
+    if (pwInput === DEV_PASSWORD) {
+      setPwInput(""); setPwError(false); setShowPrompt(false); onOpen();
+    } else {
+      setPwError(true);
+      setTimeout(() => setPwError(false), 1200);
+    }
+  };
+
   if (!open) {
     return (
-      <div
-        onClick={onTap}
-        style={{
-          marginTop: 24, marginBottom: 8, textAlign: "center",
-          fontSize: 10, color: C.tx4 + "44", cursor: "default",
-          letterSpacing: 1, userSelect: "none",
-        }}
-      >
-        v2.0{tapHint ? ` · · · (${tapHint}/5)` : ""}
-      </div>
+      <>
+        <div
+          onClick={() => { setShowPrompt(s => !s); setPwInput(""); setPwError(false); }}
+          style={{
+            marginTop: 24, marginBottom: 4, textAlign: "center",
+            fontSize: 10, color: C.tx4 + "33", cursor: "default",
+            letterSpacing: 1, userSelect: "none",
+          }}
+        >
+          v2.0
+        </div>
+        {showPrompt && (
+          <div style={{
+            display: "flex", gap: 6, alignItems: "center",
+            marginBottom: 10, padding: "8px 10px",
+            background: "#0d0d0d", borderRadius: 8,
+            border: "1px solid " + (pwError ? "#e74c3c88" : "#ff6b0033"),
+            transition: "border-color .2s",
+          }}>
+            <span style={{ fontSize: 11, color: "#ff6b0066", flexShrink: 0 }}>🔒</span>
+            <input
+              autoFocus
+              type="password"
+              value={pwInput}
+              onChange={e => setPwInput(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") handleSubmit(); if (e.key === "Escape") setShowPrompt(false); }}
+              placeholder="Senha dev..."
+              style={{
+                flex: 1, background: "transparent", border: "none", outline: "none",
+                fontSize: 12, color: pwError ? "#e74c3c" : "#ff6b00",
+                letterSpacing: pwInput ? 3 : 0,
+              }}
+            />
+            <span
+              onClick={handleSubmit}
+              style={{
+                fontSize: 11, color: "#ff6b0088", cursor: "pointer",
+                padding: "2px 8px", borderRadius: 4,
+                background: "#ff6b0015", border: "1px solid #ff6b0033",
+              }}
+            >
+              Entrar
+            </span>
+          </div>
+        )}
+      </>
     );
   }
 
@@ -214,7 +264,6 @@ function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects
   const [openSections, setOpenSections] = useState({ presets: false, weights: false });
   const toggleSection = (k) => setOpenSections(s => ({ ...s, [k]: !s[k] }));
   const [devOpen, setDevOpen] = useState(false);
-  const [devTaps, setDevTaps] = useState(0);
 
   /* Username */
   const [usernameEditing, setUsernameEditing] = useState(false);
@@ -819,13 +868,8 @@ function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects
       {/* ── Dev Panel ── */}
       <DevPanel
         open={devOpen}
-        taps={devTaps}
-        onTap={() => {
-          const next = devTaps + 1;
-          setDevTaps(next);
-          if (next >= 5) { setDevOpen(true); setDevTaps(0); }
-        }}
-        onClose={() => { setDevOpen(false); setDevTaps(0); }}
+        onOpen={() => setDevOpen(true)}
+        onClose={() => setDevOpen(false)}
         profile={profile}
         setProfile={setProfile}
         poderInfo={_poderInfo}
