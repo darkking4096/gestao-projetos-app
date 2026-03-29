@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from "react";
 import { THEMES, setCurrentTheme, generateThemeTones, C } from './src/temas.js';
-import { uid, td, getLevelInfo, getMastery, getMasteryBonus, getXp, getCoins, getMultiplier, openChest, pickDailyMission, getMissionProgress, calcObjectiveXp, ACHIEVEMENTS, checkProjectCompletion, removeObjectiveLinksFromActivities, similarName, migrateFreq, isRoutineDueOn } from './src/utilidades.js';
+import { uid, td, getLevelInfo, getPoderInfo, getRankInfo, getMastery, getMasteryBonus, getEnergia, getMoedas, getXp, getCoins, migrateDifficulty, getMultiplier, openChest, pickDailyMission, getMissionProgress, calcObjectiveXp, ACHIEVEMENTS, checkProjectCompletion, removeObjectiveLinksFromActivities, similarName, migrateFreq, isRoutineDueOn } from './src/utilidades.js';
 import { CATEGORIES, FREQUENCIES, WEEK_DAYS, UNITS, DEFAULT_PRESETS, STREAK_RECOVER, CHEST_TYPES, COLORS } from './src/constantes.js';
 import { S, Social } from './src/armazenamento.js';
 import { SHOP_THEMES_LIST, getUpgradeCost, UPGRADE_LABELS } from './src/icones.jsx';
@@ -242,7 +242,7 @@ export default function App({ user, onSignOut }) {
       });
       // Chest check
       let chest = null;
-      const lv = getLevelInfo(profile.totalXp).level;
+      const lv = getPoderInfo(profile.totalXp || 0).poder;
       if (newStreak >= 30 && lv >= 200) chest = "legendary";
       else if (newStreak >= 7 && lv >= 100) chest = "epic";
       else if (wasActive && (profile.tasksToday || 0) >= 5 && lv >= 50) chest = "rare";
@@ -265,20 +265,46 @@ export default function App({ user, onSignOut }) {
   const earn = useCallback((xp, coins, msg, onEarned) => {
     // Lê o perfil atual via ref (evita mutações dentro do updater — antipadrão React)
     const p = profileRef.current;
-    const mult = getMultiplier(p.streak);
-    let finalXp = xp + Math.round(xp * mult);
-    let finalCoins = coins + Math.round(coins * mult);
+
+    // Multiplicadores: CULTIVO (rank) + Streak são aditivos
+    const streakMult = getMultiplier(p.streak);
+    const currentRank = getRankInfo(getPoderInfo(p.totalXp || 0).poder);
+    const cultivoPct = (currentRank.cultivo || 0) / 100;
+    const totalMult = streakMult + cultivoPct;
+
+    let finalXp = xp + Math.round(xp * totalMult);
+    let finalCoins = coins + Math.round(coins * (streakMult + cultivoPct));
     const boostActive = p.boostExpiry && p.boostExpiry > Date.now();
     if (boostActive) finalCoins += Math.round(finalCoins * 0.25);
 
     const suffixes = [];
-    if (mult > 0) suffixes.push("+" + Math.round(mult * 100) + "% streak");
+    if (cultivoPct > 0) suffixes.push("+" + Math.round(cultivoPct * 100) + "% cultivo");
+    if (streakMult > 0) suffixes.push("+" + Math.round(streakMult * 100) + "% streak");
     if (boostActive) suffixes.push("+25% boost");
     const popupMsg = suffixes.length > 0 ? msg + " (" + suffixes.join(", ") + ")" : msg;
 
-    const oldLv = getLevelInfo(p.totalXp).level;
-    const newLv = getLevelInfo(p.totalXp + finalXp).level;
-    const levelUpData = newLv > oldLv ? { level: newLv, name: getLevelInfo(p.totalXp + finalXp).name } : null;
+    // Verifica progressão de PODER e rank
+    const oldPoder = getPoderInfo(p.totalXp || 0).poder;
+    const newPoder = getPoderInfo((p.totalXp || 0) + finalXp).poder;
+    let notifData = null;
+    if (newPoder > oldPoder) {
+      const oldRankInfo = getRankInfo(oldPoder);
+      const newRankInfo = getRankInfo(newPoder);
+      if (oldRankInfo.rankMain !== newRankInfo.rankMain) {
+        // Mudança de rank principal → notificação especial
+        notifData = { type: "rank", poder: newPoder, label: newRankInfo.subRank, rankMain: newRankInfo.rankMain, color: newRankInfo.color };
+        // Mensagem especial para primeiro rank (F-)
+        if (newRankInfo.rankMain === "F" && oldRankInfo.rankMain === null) {
+          notifData.welcomeMsg = "Parabéns, Você começou a Jogar o Jogo de VERDADE (o da Vida). Conclua mais tarefas para alcançar novos patamares.";
+        }
+      } else {
+        // Verifica se atingiu milestone de notificação de PODER
+        const interval = newRankInfo.notifInterval;
+        if (Math.floor(oldPoder / interval) < Math.floor(newPoder / interval)) {
+          notifData = { type: "poder", poder: newPoder, label: newRankInfo.subRank, color: newRankInfo.color };
+        }
+      }
+    }
 
     // Updater puro: sem efeitos colaterais, sem mutação de variáveis externas
     setProfile(prev => ({
@@ -291,7 +317,7 @@ export default function App({ user, onSignOut }) {
       bestXpDay: Math.max(prev.bestXpDay || 0, prev.xpToday + finalXp),
     }));
     setTimeout(() => { setRewardPopup({ xp: finalXp, coins: finalCoins, msg: popupMsg }); if (onEarned) onEarned(finalXp, finalCoins); }, 10);
-    setTimeout(() => { if (levelUpData) setLevelUpNotif(levelUpData); }, 600);
+    setTimeout(() => { if (notifData) setLevelUpNotif(notifData); }, 600);
   }, []);
 
   const nav = useCallback((t, st, v, id, tp) => {
@@ -586,7 +612,7 @@ export default function App({ user, onSignOut }) {
           const allPhaseDone = updTasks.length > 0 && updTasks.every(t => t.status === "Concluída");
           return { ...ph, tasks: updTasks, status: allPhaseDone ? "Concluída" : (ph.status || "Ativa") };
         });
-        setProfile(pr => ({ ...pr, tasksCompleted: (pr.tasksCompleted || 0) + 1, tasksToday: (pr.tasksToday || 0) + 1, projTasksToday: (pr.projTasksToday || 0) + 1, hardTaskToday: pr.hardTaskToday || taskDiff >= 7, maxTaskToday: pr.maxTaskToday || taskDiff >= 10, maxTaskEver: pr.maxTaskEver || taskDiff >= 10 }));
+        setProfile(pr => ({ ...pr, tasksCompleted: (pr.tasksCompleted || 0) + 1, tasksToday: (pr.tasksToday || 0) + 1, projTasksToday: (pr.projTasksToday || 0) + 1, hardTaskToday: pr.hardTaskToday || taskDiff >= 11, maxTaskToday: pr.maxTaskToday || taskDiff >= 20, maxTaskEver: pr.maxTaskEver || taskDiff >= 20 }));
         const all = phases.flatMap(ph => ph.tasks || []);
         const done = all.filter(t => t.status === "Concluída").length;
         const progress = all.length ? Math.round(done / all.length * 100) : 0;
@@ -615,7 +641,7 @@ export default function App({ user, onSignOut }) {
         earn(getXp(d), getCoins(d), t.name, (xpAdded, coinsAdded) => {
           setLastUndo({ type: 'task', id: taskId, xpAdded, coinsAdded, prevItem: _prevTask });
         });
-        setProfile(pr => ({ ...pr, tasksCompleted: (pr.tasksCompleted || 0) + 1, tasksToday: (pr.tasksToday || 0) + 1, hardTaskToday: pr.hardTaskToday || d >= 7, maxTaskToday: pr.maxTaskToday || d >= 10, maxTaskEver: pr.maxTaskEver || d >= 10 }));
+        setProfile(pr => ({ ...pr, tasksCompleted: (pr.tasksCompleted || 0) + 1, tasksToday: (pr.tasksToday || 0) + 1, hardTaskToday: pr.hardTaskToday || d >= 11, maxTaskToday: pr.maxTaskToday || d >= 20, maxTaskEver: pr.maxTaskEver || d >= 20 }));
         return { ...t, status: "Concluída", completedAt: td() };
       }));
     }
@@ -799,7 +825,9 @@ export default function App({ user, onSignOut }) {
   // e remove o efeito colateral do corpo do render (violação das regras do React)
   useLayoutEffect(() => { setCurrentTheme(_computedTheme); }, [_computedTheme]);
 
-  const levelInfo = useMemo(() => getLevelInfo(profile.totalXp), [profile.totalXp]);
+  const levelInfo  = useMemo(() => getLevelInfo(profile.totalXp || 0), [profile.totalXp]);
+  const poderInfo  = useMemo(() => getPoderInfo(profile.totalXp || 0), [profile.totalXp]);
+  const rankInfo   = useMemo(() => getRankInfo(poderInfo.poder), [poderInfo.poder]);
   const sel = useMemo(() => {
     if (!selId) return null;
     if (selType === "project") return projects.find(x => x.id === selId) || null;
@@ -879,7 +907,7 @@ export default function App({ user, onSignOut }) {
         } : undefined}
       >
         <div key={tab} style={isDesktop ? { ...(tab !== "reports" ? { maxWidth: 780, margin: "0 auto" } : {}), animation: "tabFadeIn 0.22s ease" } : { animation: "tabFadeIn 0.22s ease" }}>
-        {tab === "dashboard" && <DashboardTab profile={profile} levelInfo={levelInfo} projects={projects} routines={routines} tasks={tasks} objectives={objectives} nav={nav} completeTask={completeTask} completeRoutine={completeRoutine} earn={earn} claimMission={claimMission} atributos={atributos} setAtributos={setAtributos} groqApiKey={profile.groqApiKey || ""} />}
+        {tab === "dashboard" && <DashboardTab profile={profile} levelInfo={levelInfo} poderInfo={poderInfo} rankInfo={rankInfo} projects={projects} routines={routines} tasks={tasks} objectives={objectives} nav={nav} completeTask={completeTask} completeRoutine={completeRoutine} earn={earn} claimMission={claimMission} atributos={atributos} setAtributos={setAtributos} groqApiKey={profile.groqApiKey || ""} />}
         {tab === "activities" && view === "list" && <ActivitiesTab subTab={subTab} setSubTab={setSubTab} projects={projects} routines={routines} tasks={tasks} objectives={objectives} nav={nav} completeTask={completeTask} completeRoutine={completeRoutine} updProject={updProject} setProfile={setProfile} setCompletionConfirm={setCompletionConfirm} />}
         {tab === "activities" && view === "detail" && sel && selType === "project" && <ProjectDetail item={sel} onUpdate={updProject} onDelete={(i, p) => { deleteItem(i, "project", p); nav("activities", "projects", "list"); }} onComplete={completeTask} nav={nav} navBack={navBack} objectives={objectives} routines={routines} setCompletionConfirm={setCompletionConfirm} onValueUpdate={() => setProfile(p => ({ ...p, goalUpdatedToday: true }))} />}
         {tab === "activities" && view === "detail" && sel && selType === "routine" && <RoutineDetail item={sel} onUpdate={updRoutine} onDelete={(i, p) => { deleteItem(i, "routine", p); nav("activities", "routines", "list"); }} onComplete={completeRoutine} nav={nav} navBack={navBack} objectives={objectives} projects={projects} />}
@@ -906,7 +934,7 @@ export default function App({ user, onSignOut }) {
         {tab === "reports" && <ReportsTab notes={reportNotes} folders={reportFolders} onUpdateNotes={setReportNotes} onUpdateFolders={setReportFolders} />}
         {tab === "history" && <HistoryTab profile={profile} projects={projects} routines={routines} tasks={tasks} recoverStreak={recoverStreak} openChestAction={openChestAction} claimAchievement={claimAchievement} />}
         {tab === "shop" && <ShopTab profile={profile} buyItem={buyItem} equipItem={equipItem} buyConsumable={buyConsumable} upgradeItem={upgradeItem} />}
-        {tab === "config" && <ConfigTab profile={profile} setProfile={setProfile} trash={trash} setTrash={setTrash} restoreItem={restoreItem} projects={projects} routines={routines} tasks={tasks} objectives={objectives} setProjects={setProjects} setRoutines={setRoutines} setTasks={setTasks} setObjectives={setObjectives} levelInfo={levelInfo} onSignOut={!isDesktop ? onSignOut : null} user={user} />}
+        {tab === "config" && <ConfigTab profile={profile} setProfile={setProfile} trash={trash} setTrash={setTrash} restoreItem={restoreItem} projects={projects} routines={routines} tasks={tasks} objectives={objectives} setProjects={setProjects} setRoutines={setRoutines} setTasks={setTasks} setObjectives={setObjectives} levelInfo={levelInfo} poderInfo={poderInfo} rankInfo={rankInfo} onSignOut={!isDesktop ? onSignOut : null} user={user} />}
         </div>
       </div>
       {/* Bottom tabs — mobile only */}
@@ -941,7 +969,7 @@ export default function App({ user, onSignOut }) {
             <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 16, marginBottom: rewardPopup.msg ? 6 : 0 }}>
               {rewardPopup.xp > 0 && <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <svg width={iconSz} height={iconSz} viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                <span style={{ fontSize: numSz, fontWeight: 700, color: C.gold }}>+{rewardPopup.xp} XP</span>
+                <span style={{ fontSize: numSz, fontWeight: 700, color: C.gold }}>+{rewardPopup.xp} ⚡</span>
               </div>}
               {rewardPopup.coins > 0 && <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <svg width={iconSz} height={iconSz} viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
@@ -955,17 +983,37 @@ export default function App({ user, onSignOut }) {
           </div>
         );
       })()}
-      {/* Level-up notification */}
-      {levelUpNotif && <div style={{ position: "fixed", top: "50%", left: popupLeft, transform: "translate(-50%,-50%)", background: "linear-gradient(160deg," + C.bg + "fc," + C.card + "fc)", border: "1.5px solid " + C.gold + "55", borderRadius: 20, padding: "28px 44px", zIndex: 350, textAlign: "center", boxShadow: "0 0 56px " + C.gold + "1a, 0 8px 32px #000a", minWidth: 230, animation: "popupSlideIn 0.34s cubic-bezier(0.175,0.885,0.32,1.275)" }}>
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
-          <div style={{ width: 52, height: 52, borderRadius: 26, background: C.gold + "15", border: "1.5px solid " + C.gold + "44", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+      {/* PODER / Rank notification */}
+      {levelUpNotif && (() => {
+        const isRankUp = levelUpNotif.type === "rank";
+        const nc = levelUpNotif.color || C.gold;
+        return (
+          <div onClick={() => setLevelUpNotif(null)} style={{ position: "fixed", top: "50%", left: popupLeft, transform: "translate(-50%,-50%)", background: "linear-gradient(160deg," + C.bg + "fc," + C.card + "fc)", border: "1.5px solid " + nc + "66", borderRadius: 20, padding: isRankUp ? "32px 48px" : "24px 40px", zIndex: 350, textAlign: "center", boxShadow: "0 0 64px " + nc + "22, 0 8px 32px #000a", minWidth: 230, animation: "popupSlideIn 0.34s cubic-bezier(0.175,0.885,0.32,1.275)", cursor: "pointer" }}>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
+              <div style={{ width: 56, height: 56, borderRadius: 28, background: nc + "18", border: "1.5px solid " + nc + "55", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                {isRankUp
+                  ? <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={nc} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg>
+                  : <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={nc} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                }
+              </div>
+            </div>
+            {isRankUp ? (
+              <>
+                <div style={{ fontSize: 10, letterSpacing: 3, textTransform: "uppercase", color: nc, fontWeight: 700, marginBottom: 6 }}>Novo Rank!</div>
+                <div style={{ fontSize: 44, fontWeight: 900, color: nc, letterSpacing: -1, lineHeight: 1, marginBottom: 6 }}>{levelUpNotif.rankMain}</div>
+                <div style={{ fontSize: 14, color: C.tx, fontWeight: 600, marginBottom: levelUpNotif.welcomeMsg ? 10 : 0 }}>{levelUpNotif.label}</div>
+                {levelUpNotif.welcomeMsg && <div style={{ fontSize: 11, color: C.tx2, maxWidth: 260, lineHeight: 1.5, marginTop: 8, fontStyle: "italic" }}>{levelUpNotif.welcomeMsg}</div>}
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 10, letterSpacing: 3, textTransform: "uppercase", color: nc, fontWeight: 700, marginBottom: 6 }}>PODER aumentou</div>
+                <div style={{ fontSize: 42, fontWeight: 800, color: C.tx, letterSpacing: -2, lineHeight: 1, marginBottom: 5 }}>{levelUpNotif.poder}</div>
+                <div style={{ fontSize: 13, color: nc, fontWeight: 600, letterSpacing: 0.2 }}>{levelUpNotif.label}</div>
+              </>
+            )}
           </div>
-        </div>
-        <div style={{ fontSize: 11, letterSpacing: 2.5, textTransform: "uppercase", color: C.gold, fontWeight: 700, marginBottom: 8 }}>Subiu de nível</div>
-        <div style={{ fontSize: 42, fontWeight: 800, color: C.tx, letterSpacing: -2, lineHeight: 1, marginBottom: 5 }}>{levelUpNotif.level}</div>
-        <div style={{ fontSize: 13, color: C.gold, fontWeight: 600, letterSpacing: 0.2 }}>{levelUpNotif.name}</div>
-      </div>}
+        );
+      })()}
       {/* V2: Completion confirmation — sem recompensa */}
       {completionConfirm && <Modal>
         <div style={{ textAlign: "center", marginBottom: 12 }}>
@@ -1001,12 +1049,12 @@ export default function App({ user, onSignOut }) {
         <div style={{ position: "fixed", inset: 0, background: C.bg, zIndex: 500, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "28px 24px", ...(isDesktop ? {} : { maxWidth: 430, width: "100%", left: "50%", transform: "translateX(-50%)" }) }}>
           <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: 20 }}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="18" width="12" height="4"/></svg>
           <div style={{ fontSize: 22, fontWeight: 700, color: C.tx, marginBottom: 10, textAlign: "center", letterSpacing: -0.3 }}>Bem-vindo ao Atividades</div>
-          <div style={{ fontSize: 13, color: C.tx3, textAlign: "center", lineHeight: 1.7, marginBottom: 28, maxWidth: 300 }}>Transforme seus objetivos em XP. Cada conclusão te aproxima de um novo nível.</div>
+          <div style={{ fontSize: 13, color: C.tx3, textAlign: "center", lineHeight: 1.7, marginBottom: 28, maxWidth: 300 }}>Transforme seus objetivos em ENERGIA ⚡. Cada conclusão aumenta seu PODER.</div>
           <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 8, marginBottom: 28 }}>
             {[
               ["1", C.purple, "Crie um Objetivo", "Sua meta de longo prazo"],
               ["2", C.gold, "Adicione Projetos e Rotinas", "Atividades que te levam lá"],
-              ["3", C.green, "Complete e suba de nível", "XP, moedas e conquistas"],
+              ["3", C.green, "Complete e aumente seu PODER", "ENERGIA ⚡, moedas e conquistas"],
             ].map(([n, col, title, sub]) => (
               <div key={n} style={{ display: "flex", gap: 12, alignItems: "center", padding: "10px 14px", background: C.card, borderRadius: 10, border: "1px solid " + C.brd }}>
                 <div style={{ width: 24, height: 24, borderRadius: 12, background: col + "22", border: "1.5px solid " + col + "66", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: col, flexShrink: 0 }}>{n}</div>

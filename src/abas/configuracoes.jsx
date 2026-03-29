@@ -1,15 +1,15 @@
 import { useState, useEffect, useRef } from "react";
 import { C } from '../temas.js';
-import { uid, td, getLevelInfo, clamp } from '../utilidades.js';
+import { uid, td, getLevelInfo, getPoderInfo, getRankInfo, clamp } from '../utilidades.js';
 import { THEMES } from '../temas.js';
 import { DEFAULT_PRESETS, CATEGORIES, COLORS } from '../constantes.js';
-import { Btn, Card, Badge, TopBar, Modal, ConfirmModal, DeleteModal, XpBar, SLabel, getDiffColor } from '../componentes-base.jsx';
+import { Btn, Card, Badge, TopBar, Modal, ConfirmModal, DeleteModal, EnergiaBarDupla, SLabel, getDiffColor } from '../componentes-base.jsx';
 import { IconSVG, SHOP_THEMES_LIST, BorderSVG, TitleBanner, SHOP_BORDERS, SHOP_TITLES, getTitleTargetColor, getTitleStyle, getUpgradeCost, getBorderStyle, UPGRADE_LABELS, RARITY_LABELS, RARITY_COLORS } from '../icones.jsx';
 import { Social } from '../armazenamento.js';
 
 /* ── Friend row component ── */
 function FriendRow({ fp, onView, onRemove, onAccept, onDecline, onCancel }) {
-  const lvl = getLevelInfo(fp.xp || 0).level;
+  const poder = getPoderInfo(fp.xp || 0).poder;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "0.5px solid " + C.brd }}>
       <div style={{ width: 34, height: 34, borderRadius: 17, background: C.goldDim, border: "1px solid " + C.goldBrd, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -17,7 +17,7 @@ function FriendRow({ fp, onView, onRemove, onAccept, onDecline, onCancel }) {
       </div>
       <div style={{ flex: 1, minWidth: 0, cursor: onView ? "pointer" : "default" }} onClick={onView}>
         <div style={{ fontSize: 12, fontWeight: 700, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>@{fp.username}</div>
-        <div style={{ fontSize: 11, color: C.tx4 }}>Nível {lvl} · {(fp.xp || 0).toLocaleString()} XP</div>
+        <div style={{ fontSize: 11, color: C.tx4 }}>PODER {poder} · {(fp.xp || 0).toLocaleString()} ⚡</div>
       </div>
       <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
         {onView && <span onClick={onView} style={{ fontSize: 11, color: C.gold, cursor: "pointer", padding: "3px 7px", borderRadius: 4, background: C.goldDim, border: "0.5px solid " + C.goldBrd }}>Ver</span>}
@@ -31,7 +31,7 @@ function FriendRow({ fp, onView, onRemove, onAccept, onDecline, onCancel }) {
 }
 
 /* ── Main ConfigTab ── */
-function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects, routines, tasks, objectives, setProjects, setRoutines, setTasks, setObjectives, levelInfo, onSignOut }) {
+function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects, routines, tasks, objectives, setProjects, setRoutines, setTasks, setObjectives, levelInfo, poderInfo: poderInfoProp, rankInfo: rankInfoProp, onSignOut }) {
   const [showReset, setShowReset] = useState(false);
   const [resetInput, setResetInput] = useState("");
   const [confirmDel, setConfirmDel] = useState(null);
@@ -65,11 +65,15 @@ function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects
     </div>
   );
 
+  /* PODER / Rank info — fallback to compute locally if not passed as props */
+  const _poderInfo = poderInfoProp || getPoderInfo(profile.totalXp || 0);
+  const _rankInfo  = rankInfoProp  || getRankInfo(_poderInfo.poder);
+
   const presets = profile.difficultyPresets || DEFAULT_PRESETS;
   const weights = profile.nextActionWeights || { priority: 3, deadline: 2, difficulty: 1 };
 
   const setPreset = (cat, val) => {
-    const v = clamp(parseInt(val) || 1, 1, 10);
+    const v = clamp(parseInt(val) || 1, 1, 20);
     setProfile(p => ({ ...p, difficultyPresets: { ...(p.difficultyPresets || DEFAULT_PRESETS), [cat]: v } }));
   };
   const setWeight = (key, val) => {
@@ -216,7 +220,7 @@ function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects
           <div style={{ flex: 1 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
-                <div style={{ fontSize: 15, fontWeight: 600, color: C.tx }}>{"Nível "}{levelInfo.level}</div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: _rankInfo.color || C.gold }}>{"PODER "}{_poderInfo.poder}</div>
                 {profile.username ? (
                   <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 3 }}>
                     <span style={{ fontSize: 13, color: C.gold, fontWeight: 700 }}>@{profile.username}</span>
@@ -232,8 +236,8 @@ function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects
                 )}
               </div>
               <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 16, fontWeight: 700, color: C.gold }}>{profile.totalXp.toLocaleString()}</div>
-                <div style={{ fontSize: 11, color: C.tx3 }}>XP total</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: C.gold }}>{(profile.totalXp || 0).toLocaleString()}</div>
+                <div style={{ fontSize: 11, color: C.tx3 }}>⚡ ENERGIA total</div>
               </div>
             </div>
           </div>
@@ -244,11 +248,7 @@ function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects
           </TitleBanner>
         </div>
         <div style={{ marginBottom: 10 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.tx4, marginBottom: 2 }}>
-            <span>{levelInfo.xpInLevel} / {levelInfo.xpForLevel}</span>
-            <span>Nv. {Math.min(levelInfo.level + 1, 500)}</span>
-          </div>
-          <XpBar cur={levelInfo.xpInLevel} max={levelInfo.xpForLevel} />
+          <EnergiaBarDupla poderInfo={_poderInfo} rankInfo={_rankInfo} />
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 10 }}>
           {[
@@ -272,7 +272,7 @@ function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects
             <div key={i} style={{ fontSize: 11, color: C.tx3, background: C.bg, padding: "3px 8px", borderRadius: 4 }}><span style={{ color: C.tx4 }}>{label}:</span> {name}</div>
           ))}
           {profile.bestStreak > 0 && <div style={{ fontSize: 11, color: C.orange, background: C.bg, padding: "3px 8px", borderRadius: 4 }}>Melhor: {profile.bestStreak}d</div>}
-          {profile.bestXpDay > 0 && <div style={{ fontSize: 11, color: C.tx3, background: C.bg, padding: "3px 8px", borderRadius: 4 }}>Recorde: {profile.bestXpDay} XP/dia</div>}
+          {profile.bestXpDay > 0 && <div style={{ fontSize: 11, color: C.tx3, background: C.bg, padding: "3px 8px", borderRadius: 4 }}>Recorde: {profile.bestXpDay} ⚡/dia</div>}
         </div>
       </div>
 
@@ -518,7 +518,7 @@ function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: C.tx }}>@{r.username}</div>
-                <div style={{ fontSize: 11, color: C.tx4 }}>Nível {getLevelInfo(r.xp || 0).level}</div>
+                <div style={{ fontSize: 11, color: C.tx4 }}>PODER {getPoderInfo(r.xp || 0).poder}</div>
               </div>
               {r.isAlreadyFriend ? (
                 <span style={{ fontSize: 11, color: C.tx4, padding: "3px 7px" }}>Amigo</span>
@@ -540,7 +540,8 @@ function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects
 
       {/* Friend profile view modal */}
       {viewFriend && (() => {
-        const fl = getLevelInfo(viewFriend.xp || 0);
+        const fPoder = getPoderInfo(viewFriend.xp || 0).poder;
+        const fRank  = getRankInfo(fPoder);
         const titleItem = SHOP_TITLES.find(t => t.id === viewFriend.equipped_title) || SHOP_TITLES[0];
         return (
           <Modal>
@@ -551,7 +552,7 @@ function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects
                 </BorderSVG>
               </div>
               <div style={{ fontSize: 18, fontWeight: 800, color: C.gold, letterSpacing: -0.5 }}>@{viewFriend.username}</div>
-              <div style={{ fontSize: 12, color: C.tx3, marginTop: 3 }}>Nível {fl.level} · {(viewFriend.xp || 0).toLocaleString()} XP</div>
+              <div style={{ fontSize: 12, color: fRank.color || C.tx3, marginTop: 3 }}>PODER {fPoder} · {(viewFriend.xp || 0).toLocaleString()} ⚡</div>
               <div style={{ display: "inline-block", marginTop: 6 }}>
                 <TitleBanner level={(viewFriend.upgrade_levels || {})[viewFriend.equipped_title] || 0} color={C.gold} accentColor={getTitleTargetColor(titleItem.price) || C.gold}>
                   <span style={{ fontSize: 11, fontStyle: "italic", fontWeight: 600, color: C.gold }}>{titleItem.name}</span>
@@ -582,7 +583,7 @@ function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects
           <div style={{ textAlign: "center", marginBottom: 14 }}>
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={C.red} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ display: "block", margin: "0 auto 8px" }}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
             <div style={{ fontSize: 13, fontWeight: 600, color: C.tx, marginBottom: 4 }}>Resetar tudo?</div>
-            <div style={{ fontSize: 11, color: C.tx3, marginBottom: 14 }}>Todos os dados, XP e moedas serão perdidos. Seu @username será mantido.</div>
+            <div style={{ fontSize: 11, color: C.tx3, marginBottom: 14 }}>Todos os dados, ENERGIA ⚡ e moedas serão perdidos. Seu @username será mantido.</div>
             <div style={{ fontSize: 11, color: C.tx4, marginBottom: 6 }}>Digite <span style={{ color: C.red, fontWeight: 600 }}>RESETAR</span> para confirmar:</div>
             <input
               value={resetInput}

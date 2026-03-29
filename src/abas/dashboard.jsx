@@ -1,13 +1,13 @@
 import { useState, useMemo } from "react";
 import { C } from '../temas.js';
-import { td, getLevelInfo, getMastery, getXp, getCoins, fmtD, fmtFreq, getMasteryBonus, getMultiplier, isRoutineDueToday, calcObjectiveXp, pickDailyMission, getMissionProgress, scoreNextAction, migrateFreq } from '../utilidades.js';
+import { td, getMastery, getEnergia, getMoedas, getXp, fmtD, fmtFreq, getMasteryBonus, getMultiplier, isRoutineDueToday, calcObjectiveXp, pickDailyMission, getMissionProgress, scoreNextAction, migrateFreq } from '../utilidades.js';
 import { MISSION_POOL, MASTERY_LEVELS, PRI_ORDER, COLORS } from '../constantes.js';
 import { ACHIEVEMENTS } from '../utilidades.js';
-import { Btn, Card, Badge, PBar, XpBar, Chk, TopBar, FilterBtn, FilterModal } from '../componentes-base.jsx';
+import { Btn, Card, Badge, PBar, EnergiaBarDupla, Chk, TopBar, FilterBtn, FilterModal, RankEmblemSVG } from '../componentes-base.jsx';
 import { IconSVG, ConsumableSVG, BorderSVG, TitleBanner, MaestriaSVG, SHOP_BORDERS, SHOP_TITLES, getTitleTargetColor, getTitleBannerColor, getTitleStyle, getUpgradeCost, getBorderStyle, UPGRADE_LABELS, RARITY_LABELS, RARITY_COLORS } from '../icones.jsx';
 import { AtributosSection } from './atributos.jsx';
 
-function DashboardTab({ profile, levelInfo, projects, routines, tasks, objectives, nav, completeTask, completeRoutine, earn, claimMission, atributos, setAtributos, groqApiKey }) {
+function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routines, tasks, objectives, nav, completeTask, completeRoutine, earn, claimMission, atributos, setAtributos, groqApiKey }) {
   const [dashSubTab, setDashSubTab] = useState("overview");
   const [showFilter, setShowFilter] = useState(false);
   const [filter, setFilter] = useState({ key: null, mode: null });
@@ -21,7 +21,7 @@ function DashboardTab({ profile, levelInfo, projects, routines, tasks, objective
     const items = [
       ...projects.map(p => ({ ...p, _t: "project", _xp: p.xpAccum || 0, _mastery: getMastery(p.xpAccum || 0), _pct: p.progress || 0, _pri: p.priority, _diff: 0, _streak: 0, _deadline: p.deadline })),
       ...routines.map(r => ({ ...r, _t: "routine", _xp: r.xpAccum || 0, _mastery: getMastery(r.xpAccum || 0), _pct: 0, _pri: r.priority, _diff: r.difficulty || 0, _streak: r.streak || 0, _deadline: null })),
-      ...tasks.map(t => ({ ...t, _t: "task", _xp: getXp(t.difficulty || 1), _mastery: null, _pct: t.status === "Concluída" ? 100 : 0, _pri: t.priority, _diff: t.difficulty || 0, _streak: 0, _deadline: t.deadline })),
+      ...tasks.map(t => ({ ...t, _t: "task", _xp: getEnergia(t.difficulty || 1), _mastery: null, _pct: t.status === "Concluída" ? 100 : 0, _pri: t.priority, _diff: t.difficulty || 0, _streak: 0, _deadline: t.deadline })),
     ];
     if (filter.key) {
       const { key, mode } = filter;
@@ -42,7 +42,10 @@ function DashboardTab({ profile, levelInfo, projects, routines, tasks, objective
   }, [projects, routines, tasks, filter]);
 
   const dailyLog = profile.dailyLog || [];
-  const todayEntry = { date: td(), xp: profile.xpToday, coins: profile.coinsToday };
+  const todayEntry = { date: td(), xp: profile.xpToday || 0, coins: profile.coinsToday || 0 };
+  // Retrocompatibilidade: usa poderInfo/rankInfo recebidos do App, ou calcula se não houver
+  const _poderInfo = poderInfo || { poder: 0, totalEnergia: 0, energiaInPoder: 0, energiaForPoder: 100 };
+  const _rankInfo  = rankInfo  || { label: "Humano", rankMain: null, color: C.gold, colorSecondary: C.gold };
   const allDays = [...dailyLog, todayEntry];
   const chartData = useMemo(() => {
     let from, to;
@@ -71,7 +74,7 @@ function DashboardTab({ profile, levelInfo, projects, routines, tasks, objective
 
   const filterOpts = [
     { key: "type", label: "Tipo de atividade", values: ["project", "routine", "task"] },
-    { key: "xp", label: "XP ganho", modes: ["asc", "desc"] },
+    { key: "xp", label: "ENERGIA ⚡ ganho", modes: ["asc", "desc"] },
     { key: "streak", label: "Sequência", modes: ["asc", "desc"] },
     { key: "mastery", label: "Maestria", modes: ["asc", "desc"] },
     { key: "priority", label: "Prioridade", modes: ["asc", "desc"] },
@@ -118,10 +121,13 @@ function DashboardTab({ profile, levelInfo, projects, routines, tasks, objective
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ position: "relative" }}>
             <BorderSVG level={(profile.upgradeLevels || {})[profile.equippedBorder] || 0} color={C.gold} accentColor={(SHOP_BORDERS.find(b => b.id === profile.equippedBorder) || SHOP_BORDERS[0]).color} size={54}><IconSVG id={profile.equippedIcon || "i_estrela"} size={20} color={C.gold} /></BorderSVG>
-            <div style={{ position: "absolute", bottom: -2, right: -2, background: C.gold, borderRadius: 4, padding: "0 4px", fontSize: 11, fontWeight: 700, color: C.bg, lineHeight: "14px" }}>{levelInfo.level}</div>
+            <div style={{ position: "absolute", bottom: -2, right: -2, background: _rankInfo.color || C.gold, borderRadius: 4, padding: "0 4px", fontSize: 11, fontWeight: 700, color: C.bg, lineHeight: "14px" }}>{_poderInfo.poder}</div>
           </div>
           <div>
-            <div style={{ fontSize: 12, fontWeight: 500, color: C.tx }}>{levelInfo.band}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <RankEmblemSVG rank={_rankInfo.rankMain} modifier={_rankInfo.modifier || ""} size={28} color={_rankInfo.color} colorSecondary={_rankInfo.colorSecondary} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: _rankInfo.color || C.tx }}>{_rankInfo.label}</span>
+            </div>
             <div style={{ display: "flex", alignItems: "center", gap: 3 }}><TitleBanner level={(profile.upgradeLevels || {})[(profile.equippedTitle)] || 0} color={C.gold} accentColor={getTitleTargetColor((SHOP_TITLES.find(t => t.id === profile.equippedTitle) || SHOP_TITLES[0]).price) || C.gold}><span style={{ fontSize: 11, fontStyle: "italic", fontWeight: 600, color: C.gold }}>{(SHOP_TITLES.find(t => t.id === profile.equippedTitle) || SHOP_TITLES[0]).name}</span></TitleBanner></div>
           </div>
         </div>
@@ -130,12 +136,12 @@ function DashboardTab({ profile, levelInfo, projects, routines, tasks, objective
           <span style={{ fontSize: 14, fontWeight: 600, color: C.tx }}>{profile.coins}</span>
         </div>
       </div>
-      {/* XP bar */}
+      {/* ENERGIA / PODER bars */}
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.tx3, marginBottom: 3 }}>
-        <span>{levelInfo.xpInLevel} / {levelInfo.xpForLevel} XP</span>
-        <span>Nv. {Math.min(levelInfo.level + 1, 500)} em {levelInfo.xpForLevel - levelInfo.xpInLevel} XP</span>
+        <span>⚡ {(profile.xpToday || 0).toLocaleString()} ENERGIA hoje</span>
+        <span style={{ color: _rankInfo.color || C.gold }}>+{Math.round((_rankInfo.cultivo || 0))}% CULTIVO</span>
       </div>
-      <div style={{ marginBottom: 10 }}><XpBar cur={levelInfo.xpInLevel} max={levelInfo.xpForLevel} /></div>
+      <div style={{ marginBottom: 10 }}><EnergiaBarDupla poderInfo={_poderInfo} rankInfo={_rankInfo} /></div>
 
       {/* Sub-abas do Dashboard */}
       <div style={{ display: "flex", gap: 4, marginBottom: 12, background: C.card, borderRadius: 8, padding: 4 }}>
@@ -180,7 +186,7 @@ function DashboardTab({ profile, levelInfo, projects, routines, tasks, objective
 
       {/* Stats */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 5, marginBottom: 12 }}>
-        {[[totalActive, "Ativas", null], ["+" + profile.xpToday, "XP hoje", null], ["+" + profile.coinsToday, "Moedas", null], [profile.streak, "Streak", getMultiplier(profile.streak) > 0 ? "+" + Math.round(getMultiplier(profile.streak)*100) + "%" : null]].map(([v, l, sub], i) => (
+        {[[totalActive, "Ativas", null], ["+" + (profile.xpToday || 0), "⚡ hoje", null], ["+" + (profile.coinsToday || 0), "Moedas", null], [profile.streak, "Streak", getMultiplier(profile.streak) > 0 ? "+" + Math.round(getMultiplier(profile.streak)*100) + "%" : null]].map(([v, l, sub], i) => (
           <div key={i} style={{ background: C.card, borderRadius: 6, padding: "7px 4px", textAlign: "center" }}>
             <div style={{ fontSize: 14, fontWeight: 600, color: i === 3 ? C.orange : C.tx }}>{v}</div>
             <div style={{ fontSize: 11, color: C.tx3 }}>{l}</div>
@@ -192,13 +198,13 @@ function DashboardTab({ profile, levelInfo, projects, routines, tasks, objective
       {projects.length === 0 && routines.length === 0 && tasks.length === 0 && (objectives || []).length === 0 && (
         <div style={{ background: C.card, borderRadius: 12, padding: 16, marginBottom: 12, border: "1px solid " + C.goldBrd, boxShadow: "0 2px 12px " + C.gold + "18" }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: C.gold, marginBottom: 6 }}>Bem-vindo ao Atividades!</div>
-          <div style={{ fontSize: 11, color: C.tx2, lineHeight: 1.6, marginBottom: 12 }}>Este app gamifica seu progresso pessoal. Cada atividade que você cria e conclui gera XP e moedas — desbloqueie conquistas e suba de nível.</div>
+          <div style={{ fontSize: 11, color: C.tx2, lineHeight: 1.6, marginBottom: 12 }}>Este app gamifica seu progresso pessoal. Cada atividade que você cria e conclui gera ENERGIA ⚡ e moedas — desbloqueie conquistas e aumente seu PODER.</div>
           <div style={{ fontSize: 11, fontWeight: 600, color: C.tx3, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 8 }}>Por onde começar:</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
             {[
               ["1", "Crie um Objetivo", "Uma meta grande de longo prazo", "activities", "objectives"],
               ["2", "Adicione um Projeto ou Rotina", "Atividades que te levam ao objetivo", "activities", "projects"],
-              ["3", "Complete e ganhe XP", "Cada conclusão te faz avançar", null, null],
+              ["3", "Complete e ganhe ENERGIA ⚡", "Cada conclusão te faz avançar", null, null],
             ].map(([num, title, desc, tab, sub]) => (
               <div key={num} onClick={tab ? () => nav(tab, sub, "list") : undefined} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "8px 10px", background: C.bg, borderRadius: 8, cursor: tab ? "pointer" : "default" }}>
                 <div style={{ width: 20, height: 20, borderRadius: 10, background: C.goldDim, border: "1px solid " + C.goldBrd, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: C.gold, flexShrink: 0 }}>{num}</div>
@@ -234,7 +240,7 @@ function DashboardTab({ profile, levelInfo, projects, routines, tasks, objective
                   <div style={{ fontSize: 11, color: C.tx, fontWeight: 500 }}>{o.name}</div>
                   <div style={{ fontSize: 11, color: C.tx3 }}>{projCount > 0 ? projCount + " projeto" + (projCount > 1 ? "s" : "") : ""}{projCount > 0 && routCount > 0 ? " · " : ""}{routCount > 0 ? routCount + " rotina" + (routCount > 1 ? "s" : "") : ""}{actCount === 0 ? "Sem vínculos" : ""}</div>
                 </div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: C.gold }}>{o.xpMirror.toLocaleString()} XP</div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: C.gold }}>{o.xpMirror.toLocaleString()} ⚡</div>
               </div>
             );
           })}
@@ -248,7 +254,7 @@ function DashboardTab({ profile, levelInfo, projects, routines, tasks, objective
           <div style={{ border: "1px dashed " + C.brd2, borderRadius: 10, padding: 20, marginBottom: 10, textAlign: "center" }}>
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={C.tx4} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: "block", margin: "0 auto 8px" }}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
             <div style={{ fontSize: 11, color: C.tx3, marginBottom: 4 }}>Nenhuma ação pendente</div>
-            <div style={{ fontSize: 11, color: C.tx4 }}>Crie projetos, rotinas ou tarefas para começar a ganhar XP.</div>
+            <div style={{ fontSize: 11, color: C.tx4 }}>Crie projetos, rotinas ou tarefas para começar a ganhar ENERGIA ⚡.</div>
           </div>
         );
         return (
@@ -264,7 +270,7 @@ function DashboardTab({ profile, levelInfo, projects, routines, tasks, objective
             <div style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 11, color: C.tx3, marginBottom: 8 }}>
               <span style={{ color: cur.color || C.gold }}>{cur._label}</span>
               {cur._pri && <span>{cur._pri}</span>}
-              <span style={{ color: C.gold }}>+{getXp(cur._diff)} XP</span>
+              <span style={{ color: C.gold }}>+{getEnergia(cur._diff)} ⚡</span>
               {cur._deadline && <span>{fmtD(cur._deadline)}</span>}
             </div>
             <Btn small primary onClick={() => {
@@ -310,7 +316,7 @@ function DashboardTab({ profile, levelInfo, projects, routines, tasks, objective
       {/* Chart */}
       <Card style={{ marginBottom: 10 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <div style={{ fontSize: 11, color: C.tx2 }}>XP por dia</div>
+          <div style={{ fontSize: 11, color: C.tx2 }}>⚡ ENERGIA por dia</div>
           <div style={{ display: "flex", gap: 3 }}>
             {["7d", "30d", "90d"].map(r => (
               <div key={r} onClick={() => { setChartRange(r); setShowDatePicker(false); }} style={{ padding: "2px 8px", borderRadius: 4, fontSize: 11, cursor: "pointer", background: chartRange === r && !showDatePicker ? C.goldDim : C.bg, color: chartRange === r && !showDatePicker ? C.gold : C.tx4, border: "0.5px solid " + (chartRange === r && !showDatePicker ? C.goldBrd : C.brd), transition: "background .12s, color .12s, border-color .12s" }}>{r}</div>
@@ -327,7 +333,7 @@ function DashboardTab({ profile, levelInfo, projects, routines, tasks, objective
           </div>
         )}
         <div style={{ display: "flex", gap: 12, marginBottom: 8, fontSize: 11, color: C.tx3 }}>
-          <span><span style={{ color: C.gold }}>+{totalXpRange}</span> XP</span>
+          <span><span style={{ color: C.gold }}>+{totalXpRange}</span> ⚡</span>
           <span><span style={{ color: "#e0a030" }}>+{totalCoinsRange}</span> moedas</span>
           <span>{chartData.length} {chartData.length > 15 ? "semanas" : "dias"}</span>
         </div>
@@ -365,7 +371,7 @@ function DashboardTab({ profile, levelInfo, projects, routines, tasks, objective
               {it._t === "project" && it.target !== undefined && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>}
             </div>
             <div style={{ display: "flex", gap: 10, fontSize: 11, color: C.tx3, flexWrap: "wrap" }}>
-              <span style={{ color: C.gold }}>XP {it._xp}</span>
+              <span style={{ color: C.gold }}>⚡ {it._xp}</span>
               {it._t === "project" && <span>{it._pct}%</span>}
               {it._t === "routine" && it._streak > 0 && <span style={{ color: C.orange }}>{it._streak}</span>}
               {it._mastery && <span style={{ display: "inline-flex", alignItems: "center", gap: 2 }}><MaestriaSVG tier={it._mastery.name} size={14} /><Badge color={it.color || C.gold}>{it._mastery.name}</Badge></span>}

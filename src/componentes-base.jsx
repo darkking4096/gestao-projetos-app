@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { C } from './temas.js';
 import { clamp, fmtD } from './utilidades.js';
-import { COLORS } from './constantes.js';
+import { COLORS, DIFF_CATEGORIES, ENERGIA_TABLE } from './constantes.js';
 
 function Btn({ children, primary, danger, small, onClick, style: s }) {
   const hasTones = primary && C.gold2;
@@ -147,7 +147,7 @@ function DeleteModal({ onTrash, onPerm, onCancel }) {
   return (
     <ConfirmModal
       title="Deletar atividade"
-      subtitle="XP e moedas ganhos são mantidos."
+      subtitle="ENERGIA ⚡ e moedas ganhos são mantidos."
       actions={[
         { label: "Mover pra lixeira (30 dias)", onClick: onTrash },
         { label: "Deletar definitivamente", danger: true, onClick: onPerm },
@@ -379,43 +379,249 @@ function getDiffColor(d) {
   if (d <= 9) return "#f97316";
   return "#ef4444";
 }
-function DiffPick({ value, onChange }) {
-  const diffLabel = !value ? null : value <= 3 ? "Fácil" : value <= 6 ? "Médio" : value <= 9 ? "Difícil" : "Extremo";
+/* ═══ RANK EMBLEM SVG ═══ */
+/**
+ * Emblema do rank atual do jogador.
+ * rank: "F","E","D","C","B","A","S","MAX" ou null (Humano)
+ * modifier: "","−","−−","−−−","+","++","+++"
+ * size: tamanho em px
+ */
+function RankEmblemSVG({ rank, modifier, size = 32, color, colorSecondary }) {
+  if (!rank) {
+    // Humano — ícone neutro
+    const c = color || "#888888";
+    return (
+      <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+        <circle cx="16" cy="16" r="14" stroke={c} strokeWidth="1.5" fill={c + "18"} />
+        <circle cx="16" cy="12" r="4" stroke={c} strokeWidth="1.5" fill={c + "30"} />
+        <path d="M8 24c0-4 3.6-7 8-7s8 3 8 7" stroke={c} strokeWidth="1.5" strokeLinecap="round" fill="none" />
+      </svg>
+    );
+  }
+
+  if (rank === "MAX") {
+    // MAX — emblema cromático/especial
+    return (
+      <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+        <defs>
+          <linearGradient id="maxGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%"   stopColor="#ff6b00" />
+            <stop offset="25%"  stopColor="#e74c3c" />
+            <stop offset="50%"  stopColor="#9b59b6" />
+            <stop offset="75%"  stopColor="#3498db" />
+            <stop offset="100%" stopColor="#2ecc71" />
+          </linearGradient>
+        </defs>
+        <polygon points="16,2 20,12 30,12 22,19 25,29 16,23 7,29 10,19 2,12 12,12" stroke="url(#maxGrad)" strokeWidth="1.5" fill="url(#maxGrad)" fillOpacity="0.25" />
+        <text x="16" y="20" textAnchor="middle" fontSize="8" fontWeight="900" fill="url(#maxGrad)" fontFamily="sans-serif" letterSpacing="-0.5">MAX</text>
+      </svg>
+    );
+  }
+
+  const c = color || "#a0a0a0";
+  const cs = colorSecondary || c + "80";
+  // Determina complexidade visual pelo modificador
+  const modLevel = modifier === "+++" || modifier === "++" ? 3
+                 : modifier === "+"                        ? 2
+                 : modifier === ""                         ? 1
+                 : modifier === "-"                        ? 0
+                 : modifier === "--"                       ? -1
+                 : -2; // "---"
+
+  const fillOpacity = 0.12 + Math.max(0, modLevel + 2) * 0.05;
+  const strokeW = modLevel >= 1 ? 2 : 1.5;
+
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+      {/* Glow para modificadores positivos */}
+      {modLevel >= 2 && <circle cx="16" cy="16" r="15" fill={c} fillOpacity="0.08" />}
+      {/* Forma do emblema: escudo para ranks principais */}
+      <path
+        d="M16 2 L26 6 L26 17 C26 23 21 27.5 16 30 C11 27.5 6 23 6 17 L6 6 Z"
+        stroke={c} strokeWidth={strokeW} fill={c} fillOpacity={fillOpacity}
+      />
+      {/* Borda interna para modificadores negativos */}
+      {modLevel <= -1 && (
+        <path d="M16 5 L24 8.5 L24 17 C24 21.5 20.5 25.5 16 28 C11.5 25.5 8 21.5 8 17 L8 8.5 Z"
+          stroke={cs} strokeWidth="0.5" fill="none" />
+      )}
+      {/* Estrelas/detalhes para modificadores positivos */}
+      {modLevel >= 3 && <>
+        <circle cx="10" cy="6" r="1.2" fill={c} />
+        <circle cx="22" cy="6" r="1.2" fill={c} />
+        <circle cx="16" cy="3"  r="1.2" fill={c} />
+      </>}
+      {modLevel === 2 && <>
+        <circle cx="10" cy="7"  r="1" fill={c} />
+        <circle cx="22" cy="7"  r="1" fill={c} />
+      </>}
+      {/* Letra do rank */}
+      <text x="16" y="20" textAnchor="middle" fontSize={rank.length > 1 ? "9" : "11"} fontWeight="800"
+        fill={modLevel >= 1 ? c : cs} fontFamily="sans-serif" letterSpacing="-0.5">
+        {rank}
+      </text>
+      {/* Modificador abaixo da letra */}
+      {modifier && (
+        <text x="16" y="27" textAnchor="middle" fontSize="5.5" fontWeight="600"
+          fill={c + "bb"} fontFamily="sans-serif" letterSpacing="0.5">
+          {modifier.replace(/-/g, "−")}
+        </text>
+      )}
+    </svg>
+  );
+}
+
+/* ═══ ENERGIA BAR DUPLA ═══ */
+/**
+ * Barra dupla de progresso:
+ * - Primária: progresso rumo ao próximo sub-rank (baseado em PODER)
+ * - Secundária: progresso rumo à próxima notificação de PODER
+ */
+function EnergiaBarDupla({ poderInfo, rankInfo }) {
+  if (!poderInfo || !rankInfo) return null;
+  const { poder, totalEnergia, energiaInPoder } = poderInfo;
+  const { subRankMinPoder, subRankMaxPoder, nextSubRankId, nextSubRankMinPoder, lastNotifPoder, nextNotifPoder, color, label } = rankInfo;
+
+  // Barra primária: progresso dentro do sub-rank atual
+  const subRankTotal = (subRankMaxPoder - subRankMinPoder + 1) * 100;
+  const subRankProgress = (poder - subRankMinPoder) * 100 + energiaInPoder;
+  const primaryPct = subRankTotal > 0 ? clamp(subRankProgress / subRankTotal * 100, 0, 100) : 100;
+  const energiaToNextSub = nextSubRankMinPoder != null
+    ? Math.max(0, nextSubRankMinPoder * 100 - totalEnergia)
+    : 0;
+
+  // Barra secundária: progresso para próxima notificação de PODER
+  const notifRange = (nextNotifPoder - lastNotifPoder) * 100;
+  const notifProgress = (poder - lastNotifPoder) * 100 + energiaInPoder;
+  const secondaryPct = notifRange > 0 ? clamp(notifProgress / notifRange * 100, 0, 100) : 100;
+
+  const c = color || C.gold;
+  const grad = "linear-gradient(90deg," + c + "80," + c + ")";
+
   return (
     <div>
-      <div style={{ display: "flex", gap: 3 }}>
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(d => {
-          const dc = getDiffColor(d);
-          const sel = value === d;
+      {/* Barra primária (sub-rank) */}
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: C.tx3, marginBottom: 3 }}>
+        <span>Rank <span style={{ color: c, fontWeight: 600 }}>{label}</span></span>
+        <span style={{ color: C.tx4 }}>
+          {nextSubRankId
+            ? <>→ <span style={{ color: c }}>{nextSubRankId}</span> em {energiaToNextSub.toLocaleString()} ⚡</>
+            : <span style={{ color: c }}>Sub-rank máximo</span>
+          }
+        </span>
+      </div>
+      <div style={{ height: 6, background: C.card, borderRadius: 3, overflow: "hidden", marginBottom: 6 }}>
+        <div style={{ height: "100%", borderRadius: 3, background: grad, width: primaryPct + "%", transition: "width .4s" }} />
+      </div>
+
+      {/* Barra secundária (notificação de PODER) */}
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: C.tx4, marginBottom: 2 }}>
+        <span>⚡ PODER <span style={{ color: c, fontWeight: 600 }}>{poder.toLocaleString()}</span></span>
+        <span>próx. notif. PODER {nextNotifPoder.toLocaleString()}</span>
+      </div>
+      <div style={{ height: 3, background: C.brd, borderRadius: 2, overflow: "hidden" }}>
+        <div style={{ height: "100%", borderRadius: 2, background: c + "99", width: secondaryPct + "%", transition: "width .4s" }} />
+      </div>
+    </div>
+  );
+}
+
+/* ═══ SELETOR DE DIFICULDADE EM 2 ETAPAS ═══ */
+function DiffPick({ value, onChange }) {
+  const [step, setStep] = useState("category"); // "category" | "sub"
+  const [selectedCat, setSelectedCat] = useState(null);
+
+  // Detecta categoria e variação do valor atual
+  const currentCat = value ? DIFF_CATEGORIES.find(c => c.levels.includes(value)) : null;
+  const catColor = currentCat ? currentCat.color : C.tx3;
+
+  const handleCatSelect = (cat) => {
+    if (!cat.subs) {
+      // Categoria sem variação (F ou MAX) — seleciona direto
+      onChange(cat.levels[0]);
+      setStep("category");
+      setSelectedCat(null);
+    } else {
+      setSelectedCat(cat);
+      setStep("sub");
+    }
+  };
+
+  const handleSubSelect = (level) => {
+    onChange(level);
+    setStep("category");
+    setSelectedCat(null);
+  };
+
+  const handleBack = () => {
+    setStep("category");
+    setSelectedCat(null);
+  };
+
+  if (step === "sub" && selectedCat) {
+    const cc = selectedCat.color;
+    return (
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+          <span onClick={handleBack} style={{ cursor: "pointer", color: C.tx3, fontSize: 11, display: "flex", alignItems: "center", gap: 3 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            Voltar
+          </span>
+          <span style={{ fontSize: 11, color: cc, fontWeight: 600 }}>{selectedCat.label}</span>
+        </div>
+        <div style={{ display: "flex", gap: 4 }}>
+          {selectedCat.subs.map((sub, i) => {
+            const lvl = selectedCat.levels[i];
+            const energia = ENERGIA_TABLE[lvl] || 0;
+            const sel = value === lvl;
+            return (
+              <div key={sub} onClick={() => handleSubSelect(lvl)} style={{
+                flex: 1, padding: "10px 4px", borderRadius: 7, cursor: "pointer", textAlign: "center",
+                background: sel ? cc + "25" : cc + "10",
+                border: "1px solid " + (sel ? cc + "88" : cc + "30"),
+                transition: "background .12s, border-color .12s",
+              }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: sel ? cc : cc + "aa" }}>{sub}</div>
+                <div style={{ fontSize: 10, color: C.tx4, marginTop: 2 }}>{energia} ⚡</div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ fontSize: 10, color: C.tx4, marginTop: 6, textAlign: "center" }}>
+          Escolha a intensidade dentro de "{selectedCat.label}"
+        </div>
+      </div>
+    );
+  }
+
+  // Step 1: categorias
+  return (
+    <div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 4 }}>
+        {DIFF_CATEGORIES.map(cat => {
+          const isCurrent = currentCat && currentCat.id === cat.id;
+          const cc = cat.color;
           return (
-            <div key={d} onClick={() => onChange(d)} style={{
-              flex: 1, height: 30, borderRadius: 5, display: "flex",
-              alignItems: "center", justifyContent: "center", fontSize: 11, cursor: "pointer",
-              background: sel ? dc + "2e" : dc + "12",
-              color: sel ? dc : dc + "99",
-              border: "1px solid " + (sel ? dc + "99" : dc + "38"),
-              fontWeight: sel ? 700 : 500,
-              transition: "background .12s, color .12s, border-color .12s",
-            }}>{d}</div>
+            <div key={cat.id} onClick={() => handleCatSelect(cat)} style={{
+              padding: "8px 4px", borderRadius: 7, cursor: "pointer", textAlign: "center",
+              background: isCurrent ? cc + "25" : cc + "10",
+              border: "1px solid " + (isCurrent ? cc + "88" : cc + "28"),
+              transition: "background .12s, border-color .12s",
+            }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: isCurrent ? cc : cc + "99", lineHeight: 1 }}>{cat.id}</div>
+              <div style={{ fontSize: 9, color: C.tx4, marginTop: 2, lineHeight: 1.2 }}>{ENERGIA_TABLE[cat.levels[0]]}–{ENERGIA_TABLE[cat.levels[cat.levels.length - 1]]} ⚡</div>
+            </div>
           );
         })}
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 3, paddingLeft: 1, paddingRight: 1 }}>
-        {[["1–3", "Fácil", "#22c55e"], ["4–6", "Médio", "#f59e0b"], ["7–9", "Difícil", "#f97316"], ["10", "Extremo", "#ef4444"]].map(([range, lbl, clr]) => (
-          <div key={range} style={{ fontSize: 10, color: clr + "88", lineHeight: 1.3, textAlign: "center", flex: range === "10" ? "0 0 auto" : 1 }}>
-            <span style={{ fontWeight: 600 }}>{range}</span> <span>{lbl}</span>
-          </div>
-        ))}
-      </div>
-      <div style={{ minHeight: 16, marginTop: 3 }}>
-        {diffLabel && (
-          <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11 }}>
-            <div style={{ width: 6, height: 6, borderRadius: 3, background: getDiffColor(value), flexShrink: 0 }} />
-            <span style={{ color: getDiffColor(value), fontWeight: 500 }}>{diffLabel}</span>
-            <span style={{ color: C.tx4 }}>· nível {value}</span>
-          </div>
-        )}
-      </div>
+      {currentCat && (
+        <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, marginTop: 6 }}>
+          <div style={{ width: 6, height: 6, borderRadius: 3, background: catColor, flexShrink: 0 }} />
+          <span style={{ color: catColor, fontWeight: 600 }}>{currentCat.label}</span>
+          {currentCat.subs && <span style={{ color: C.tx4 }}>· {currentCat.subs[currentCat.levels.indexOf(value)]}</span>}
+          <span style={{ color: C.tx4 }}>· {ENERGIA_TABLE[value]} ⚡</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -441,4 +647,5 @@ export {
   TopBar, Modal, ConfirmModal, DeleteModal,
   FilterModal, FilterBtn, NotesLog,
   Field, Input, SelBtns, ColorPick, getDiffColor, DiffPick, Toggle,
+  RankEmblemSVG, EnergiaBarDupla,
 };

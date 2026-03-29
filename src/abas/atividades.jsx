@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { C } from '../temas.js';
-import { uid, td, fmtD, fmtFreq, getXp, getCoins, getLevelInfo, getMastery, isRoutineDueToday, calcObjectiveXp, checkProjectCompletion, scoreNextAction, migrateFreq } from '../utilidades.js';
+import { uid, td, fmtD, fmtFreq, getEnergia, getMoedas, getXp, getMastery, isRoutineDueToday, calcObjectiveXp, checkProjectCompletion, scoreNextAction, migrateFreq } from '../utilidades.js';
 import { PRIORITIES, CATEGORIES, PRI_ORDER } from '../constantes.js';
 import { Btn, Card, Badge, TopBar, Modal, ConfirmModal, DeleteModal, FilterModal, FilterBtn, NotesLog, PBar, Chk, SLabel, Input, getDiffColor } from '../componentes-base.jsx';
 import { IconSVG, ConsumableSVG } from '../icones.jsx';
@@ -34,7 +34,7 @@ function ProjectsList({ projects, nav, completeTask, updProject, setProfile: set
   const [quickVal, setQuickVal] = useState("");
   const toggleExpand = (id) => setExpandedCards(e => ({ ...e, [id]: !e[id] }));
   const filterOpts = [
-    { key: "xp", label: "XP acumulado", modes: ["asc", "desc"] },
+    { key: "xp", label: "ENERGIA ⚡ acumulada", modes: ["asc", "desc"] },
     { key: "priority", label: "Prioridade", modes: ["asc", "desc"] },
     { key: "deadline", label: "Prazo", modes: ["asc", "desc"] },
   ];
@@ -87,7 +87,7 @@ function ProjectsList({ projects, nav, completeTask, updProject, setProfile: set
           <div style={{ fontSize: 13, fontWeight: 600, color: C.tx, marginBottom: 8 }}>O que são Projetos?</div>
           <div style={{ fontSize: 11, color: C.tx2, lineHeight: 1.6, marginBottom: 8 }}>Projetos são conjuntos de tarefas organizadas em fases, com progresso rastreado. Úteis para trabalhos com etapas definidas — como "Montar portfólio" ou "Estudar para concurso".</div>
           <div style={{ fontSize: 11, color: C.tx3, lineHeight: 1.6, marginBottom: 6 }}>
-            <span style={{ color: C.gold }}>→ XP</span>: Ganho ao concluir tarefas do projeto{"\n"}
+            <span style={{ color: C.gold }}>→ ENERGIA ⚡</span>: Ganho ao concluir tarefas do projeto{"\n"}
           </div>
           <div style={{ fontSize: 11, color: C.tx3, lineHeight: 1.6, marginBottom: 6 }}>
             <span style={{ color: C.gold }}>→ Progresso</span>: Calculado pelas tarefas concluídas nas fases
@@ -156,7 +156,7 @@ function ProjectsList({ projects, nav, completeTask, updProject, setProfile: set
                           return (
                             <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0" }}>
                               <Chk done={false} onClick={() => completeTask(t.id, "project", p.id, phId ? phId.id : null)} />
-                              <div style={{ flex: 1 }}><div style={{ fontSize: 11, color: C.tx }}>{t.name}</div><div style={{ fontSize: 11, color: C.tx3 }}><span style={{ color: C.gold }}>+{getXp(t.difficulty || 1)} XP</span></div></div>
+                              <div style={{ flex: 1 }}><div style={{ fontSize: 11, color: C.tx }}>{t.name}</div><div style={{ fontSize: 11, color: C.tx3 }}><span style={{ color: C.gold }}>+{getEnergia(t.difficulty || 1)} ⚡</span></div></div>
                             </div>
                           );
                         })}
@@ -187,7 +187,7 @@ function RoutinesList({ routines, projects, nav, completeRoutine }) {
   const [search, setSearch] = useState("");
   const [showHelp, setShowHelp] = useState(false);
   const filterOpts = [
-    { key: "xp", label: "XP acumulado", modes: ["asc", "desc"] },
+    { key: "xp", label: "ENERGIA ⚡ acumulada", modes: ["asc", "desc"] },
     { key: "streak", label: "Sequência", modes: ["asc", "desc"] },
     { key: "difficulty", label: "Dificuldade", modes: ["asc", "desc"] },
   ];
@@ -228,7 +228,7 @@ function RoutinesList({ routines, projects, nav, completeRoutine }) {
       {showHelp && <Modal>
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: C.tx, marginBottom: 8 }}>O que são Rotinas?</div>
-          <div style={{ fontSize: 11, color: C.tx2, lineHeight: 1.6, marginBottom: 8 }}>Rotinas são hábitos recorrentes — diários, semanais ou personalizados. A cada conclusão você acumula streak e ganha XP. Quanto mais consistente, maior o multiplicador de recompensa.</div>
+          <div style={{ fontSize: 11, color: C.tx2, lineHeight: 1.6, marginBottom: 8 }}>Rotinas são hábitos recorrentes — diários, semanais ou personalizados. A cada conclusão você acumula streak e ganha ENERGIA ⚡. Quanto mais consistente, maior o multiplicador de recompensa.</div>
           <div style={{ fontSize: 11, color: C.tx3, lineHeight: 1.6, marginBottom: 6 }}>
             <span style={{ color: C.gold }}>→ Streak</span>: Dias consecutivos de conclusão. Não quebre — bônus chegam a +100%!
           </div>
@@ -258,7 +258,7 @@ function RoutinesList({ routines, projects, nav, completeRoutine }) {
                 <Badge color={C.gold}>{fmtFreq(r)}</Badge>
                 {!isLibre && <span style={{ color: C.gold }}>{r.streak}</span>}
                 {isLibre && <span>{r.totalCompletions || 0} execuções</span>}
-                <span style={{ color: C.gold }}>+{getXp(r.difficulty || 1)} XP</span>
+                <span style={{ color: C.gold }}>+{getEnergia(r.difficulty || 1)} ⚡</span>
                 {projRef && <span style={{ color: C.tx3 }}>→ {projRef.name}</span>}
               </div>
             </div>
@@ -274,7 +274,7 @@ function RoutinesList({ routines, projects, nav, completeRoutine }) {
         <div style={{ textAlign: "center", padding: "32px 16px" }}>
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={C.tx4} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: "block", margin: "0 auto 10px" }}><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
           <div style={{ fontSize: 12, fontWeight: 500, color: C.tx3, marginBottom: 4 }}>Nenhuma rotina ainda</div>
-          <div style={{ fontSize: 11, color: C.tx4, marginBottom: 14 }}>Crie rotinas para hábitos que você quer repetir e ganhe XP e streak a cada conclusão.</div>
+          <div style={{ fontSize: 11, color: C.tx4, marginBottom: 14 }}>Crie rotinas para hábitos que você quer repetir e ganhe ENERGIA ⚡ e streak a cada conclusão.</div>
           <Btn primary small onClick={() => nav("activities", "routines", "create", null, "routine")}>Criar primeira rotina</Btn>
         </div>
       )}
@@ -333,10 +333,10 @@ function TasksList({ tasks, nav, completeTask }) {
           <div style={{ fontSize: 13, fontWeight: 600, color: C.tx, marginBottom: 8 }}>O que são Tarefas?</div>
           <div style={{ fontSize: 11, color: C.tx2, lineHeight: 1.6, marginBottom: 8 }}>Tarefas avulsas são atividades pontuais — sem repetição e sem pertencer a um projeto. Ideais para demandas únicas do dia a dia, como "Responder e-mail do cliente" ou "Comprar livro".</div>
           <div style={{ fontSize: 11, color: C.tx3, lineHeight: 1.6, marginBottom: 6 }}>
-            <span style={{ color: C.gold }}>→ XP imediato</span>: Ganho instantaneamente ao marcar como concluída
+            <span style={{ color: C.gold }}>→ ENERGIA ⚡ imediato</span>: Ganho instantaneamente ao marcar como concluída
           </div>
           <div style={{ fontSize: 11, color: C.tx3, lineHeight: 1.6, marginBottom: 6 }}>
-            <span style={{ color: C.gold }}>→ Dificuldade</span>: Quanto mais difícil, maior o XP e as moedas
+            <span style={{ color: C.gold }}>→ Dificuldade</span>: Quanto mais difícil, maior o ENERGIA ⚡ e as moedas
           </div>
           <div style={{ fontSize: 11, color: C.tx3, lineHeight: 1.6 }}>
             <span style={{ color: C.gold }}>→ Dica</span>: Para tarefas recorrentes, prefira criar uma Rotina
@@ -356,7 +356,7 @@ function TasksList({ tasks, nav, completeTask }) {
             <div style={{ flex: 1, cursor: "pointer" }} onClick={() => nav("activities", "tasks", "detail", t.id, "task")}>
               <div style={{ fontSize: 11, color: C.tx }}>{t.name}</div>
               <div style={{ fontSize: 11, color: C.tx3 }}>
-                <span style={{ color: C.gold }}>+{getXp(t.difficulty || 1)} XP</span> Dif.{t.difficulty || 1} {t.priority && t.priority}
+                <span style={{ color: C.gold }}>+{getEnergia(t.difficulty || 1)} ⚡</span> Dif.{t.difficulty || 1} {t.priority && t.priority}
                 {overdueDays > 0 && <span style={{ color: C.red, fontWeight: 600, marginLeft: 6 }}>Vencida há {overdueDays} dia{overdueDays > 1 ? "s" : ""}</span>}
               </div>
             </div>
@@ -396,7 +396,7 @@ function ObjectivesList({ objectives, projects, routines, tasks, nav }) {
     return byStatus.filter(o => o.name.toLowerCase().includes(q));
   }, [byStatus, search]);
 
-  // Memoize all XP calculations — calcObjectiveXp faz DFS recursivo, evitar em cada render
+  // Memoize all ENERGIA ⚡ calculations — calcObjectiveXp faz DFS recursivo, evitar em cada render
   const xpByObj = useMemo(() => {
     const map = {};
     (objectives || []).forEach(o => {
@@ -424,9 +424,9 @@ function ObjectivesList({ objectives, projects, routines, tasks, nav }) {
       {showHelp && <Modal>
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: C.tx, marginBottom: 8 }}>O que são Objetivos?</div>
-          <div style={{ fontSize: 11, color: C.tx2, lineHeight: 1.6, marginBottom: 8 }}>Objetivos são metas maiores de longo prazo. Eles agrupam projetos, rotinas e tarefas relacionados — e acumulam automaticamente o XP de todas as atividades vinculadas a eles.</div>
+          <div style={{ fontSize: 11, color: C.tx2, lineHeight: 1.6, marginBottom: 8 }}>Objetivos são metas maiores de longo prazo. Eles agrupam projetos, rotinas e tarefas relacionados — e acumulam automaticamente o ENERGIA ⚡ de todas as atividades vinculadas a eles.</div>
           <div style={{ fontSize: 11, color: C.tx3, lineHeight: 1.6, marginBottom: 6 }}>
-            <span style={{ color: C.gold }}>→ XP espelhado</span>: Cada XP ganho em uma atividade vinculada soma ao objetivo
+            <span style={{ color: C.gold }}>→ ENERGIA ⚡ espelhado</span>: Cada ENERGIA ⚡ ganho em uma atividade vinculada soma ao objetivo
           </div>
           <div style={{ fontSize: 11, color: C.tx3, lineHeight: 1.6, marginBottom: 6 }}>
             <span style={{ color: C.gold }}>→ Hierarquia</span>: Objetivos podem estar dentro de outros (maior/menor)
@@ -444,7 +444,7 @@ function ObjectivesList({ objectives, projects, routines, tasks, nav }) {
           <Card key={o.id} onClick={() => nav("activities", "objectives", "detail", o.id, "objective")} style={{ borderLeft: "3px solid " + (o.color || "#534AB7"), marginBottom: 6, cursor: "pointer" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
               <span style={{ fontSize: 13, fontWeight: 500, color: C.tx }}>{o.name}</span>
-              <span style={{ fontSize: 11, fontWeight: 600, color: C.gold }}>{xp.toLocaleString()} XP</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: C.gold }}>{xp.toLocaleString()} ENERGIA ⚡</span>
             </div>
             {o.purpose && <div style={{ fontSize: 11, color: C.tx2, fontStyle: "italic", marginBottom: 4 }}>{o.purpose}</div>}
             <div style={{ fontSize: 11, color: C.tx3 }}>{actCount} atividade{actCount !== 1 ? "s" : ""} vinculada{actCount !== 1 ? "s" : ""}</div>

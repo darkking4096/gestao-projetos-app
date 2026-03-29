@@ -1,8 +1,8 @@
 import { useState, useMemo } from "react";
 import { C } from '../temas.js';
-import { td, uid, fmtD, fmtFreq, getXp, getCoins, getLevelInfo, getMastery, isRoutineDueToday, calcObjectiveXp, checkProjectCompletion, wouldCreateCycle, removeObjectiveLinksFromActivities, migrateFreq } from '../utilidades.js';
+import { td, uid, fmtD, fmtFreq, getXp, getCoins, getEnergia, getMoedas, getLevelInfo, getMastery, isRoutineDueToday, calcObjectiveXp, checkProjectCompletion, wouldCreateCycle, removeObjectiveLinksFromActivities, migrateFreq } from '../utilidades.js';
 import { PRIORITIES, CATEGORIES, MASTERY_LEVELS, STREAK_MULT } from '../constantes.js';
-import { Btn, Card, Badge, PBar, XpBar, TopBar, Modal, ConfirmModal, DeleteModal, NotesLog, SLabel, Input, Chk } from '../componentes-base.jsx';
+import { Btn, Card, Badge, PBar, TopBar, Modal, ConfirmModal, DeleteModal, NotesLog, SLabel, Input, Chk } from '../componentes-base.jsx';
 import { IconSVG, ConsumableSVG, MaestriaSVG } from '../icones.jsx';
 import { ProjectForm, RoutineForm, TaskForm, ObjectiveForm, ActivitySearchModal, ObjectiveSearchModal } from '../formularios.jsx';
 
@@ -116,7 +116,7 @@ function ProjectDetail({ item, onUpdate, onDelete, onComplete, nav, navBack, obj
                   <Chk done={t.status === "Concluída"} onClick={() => { if (t.status !== "Concluída") onComplete(t.id, "project", item.id, ph.id); }} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 11, color: t.status === "Concluída" ? C.tx4 : C.tx, textDecoration: t.status === "Concluída" ? "line-through" : "none" }}>{t.name}</div>
-                    <div style={{ fontSize: 11, color: C.tx3 }}><span style={{ color: C.gold }}>+{getXp(t.difficulty || 1)} XP</span></div>
+                    <div style={{ fontSize: 11, color: C.tx3 }}><span style={{ color: C.gold }}>+{getEnergia(t.difficulty || 1)} ⚡</span></div>
                     {t.notes && <div style={{ fontSize: 11, color: C.tx4, fontStyle: "italic", marginTop: 2 }}>{t.notes}</div>}
                   </div>
                 </div>
@@ -187,7 +187,7 @@ function RoutineDetail({ item, onUpdate, onDelete, onComplete, nav, navBack, obj
       {item.description && <div style={{ fontSize: 11, color: C.tx2, marginBottom: 8, lineHeight: 1.5 }}>{item.description}</div>}
       <div style={{ fontSize: 11, color: C.tx2, marginBottom: 10 }}>
         <Badge color={item.frequency === "Diário" ? C.gold : C.purple}>{fmtFreq(item)}</Badge>
-        <span style={{ marginLeft: 8 }}>Dif. {item.difficulty} +{getXp(item.difficulty)} XP +{getCoins(item.difficulty)} moedas</span>
+        <span style={{ marginLeft: 8 }}>Dif. {item.difficulty} +{getEnergia(item.difficulty)} ⚡ +{getMoedas(item.difficulty)} moedas</span>
       </div>
       {projRef && <div style={{ fontSize: 11, color: C.purple, marginBottom: 8, padding: "4px 8px", background: C.purple + "15", borderRadius: 5 }}>→ {projRef.name}</div>}
       <div style={{ display: "grid", gridTemplateColumns: isLibre ? "1fr" : "1fr 1fr 1fr", gap: 5, marginBottom: !isLibre && item.streak > 0 ? 6 : 10 }}>
@@ -215,7 +215,7 @@ function RoutineDetail({ item, onUpdate, onDelete, onComplete, nav, navBack, obj
       })()}
       {item.status === "Ativa" && <Btn primary onClick={() => { if (!done) onComplete(item.id); }} style={{ width: "100%", marginBottom: 10, opacity: done ? 0.5 : 1 }}>{done ? "Concluída hoje" : "Marcar como concluída"}</Btn>}
       {item.status === "Desativada" && <Btn primary onClick={() => onUpdate({ ...item, status: "Ativa", consecutiveFails: 0, streak: 0 })} style={{ width: "100%", marginBottom: 10 }}>Reativar rotina</Btn>}
-      {mastery && <div style={{ fontSize: 11, color: C.tx2, marginBottom: 8 }}>Maestria: <Badge color={item.color || C.green}>{mastery.name}</Badge> {item.xpAccum || 0} XP</div>}
+      {mastery && <div style={{ fontSize: 11, color: C.tx2, marginBottom: 8 }}>Maestria: <Badge color={item.color || C.green}>{mastery.name}</Badge> {item.xpAccum || 0} ⚡</div>}
       {/* V2: Chips de objetivos */}
       {(item.linkedObjectives || []).length > 0 && <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 }}>
         {(item.linkedObjectives || []).map(l => {
@@ -228,7 +228,7 @@ function RoutineDetail({ item, onUpdate, onDelete, onComplete, nav, navBack, obj
       <NotesLog notes={item.notes} onAdd={(text) => { const entry = { id: uid(), text, date: td() }; const cur = Array.isArray(item.notes) ? item.notes : (item.notes ? [{ id: uid(), text: item.notes, date: "" }] : []); onUpdate({ ...item, notes: [...cur, entry] }); }} onEdit={(noteId, newText) => { const cur = Array.isArray(item.notes) ? item.notes : []; onUpdate({ ...item, notes: cur.map(n => n.id === noteId ? { ...n, text: newText } : n) }); }} onRemove={(noteId) => { const cur = Array.isArray(item.notes) ? item.notes : []; onUpdate({ ...item, notes: cur.filter(n => n.id !== noteId) }); }} />
       {(item.completionLog || []).length > 0 && <div><SLabel>Conclusões</SLabel>
         {[...(item.completionLog || [])].reverse().slice(0, 10).map((l, i) => (
-          <div key={i} style={{ fontSize: 11, color: C.tx2, padding: "2px 0" }}>{fmtD(l.date)} +{l.xp} XP +{l.coins} moedas</div>
+          <div key={i} style={{ fontSize: 11, color: C.tx2, padding: "2px 0" }}>{fmtD(l.date)} +{l.xp} ⚡ +{l.coins} moedas</div>
         ))}
       </div>}
       {showDel && <DeleteModal onTrash={() => { setShowDel(false); onDelete(item, false); }} onPerm={() => { setShowDel(false); onDelete(item, true); }} onCancel={() => setShowDel(false)} />}
@@ -252,7 +252,7 @@ function TaskDetail({ item, onUpdate, onDelete, onComplete, nav, navBack, object
       <div style={{ fontSize: 17, fontWeight: 600, color: doneTask ? C.tx4 : C.tx, textDecoration: doneTask ? "line-through" : "none", marginBottom: 2 }}>{item.name}</div>
       {item.description && <div style={{ fontSize: 11, color: C.tx2, marginBottom: 8, lineHeight: 1.5 }}>{item.description}</div>}
       <div style={{ fontSize: 11, color: C.tx2, marginBottom: 10 }}>
-        Dif. {item.difficulty || 1} <span style={{ color: C.gold }}>+{getXp(item.difficulty || 1)} XP</span> +{getCoins(item.difficulty || 1)} moedas
+        Dif. {item.difficulty || 1} <span style={{ color: C.gold }}>+{getEnergia(item.difficulty || 1)} ⚡</span> +{getMoedas(item.difficulty || 1)} moedas
         {item.priority && (" " + item.priority)} {item.deadline && ("Prazo: " + fmtD(item.deadline))}
       </div>
       {overdueDays > 0 && !doneTask && <div style={{ fontSize: 11, color: C.red, fontWeight: 600, marginBottom: 8, padding: "4px 8px", background: C.red + "15", borderRadius: 5 }}>Vencida há {overdueDays} dia{overdueDays > 1 ? "s" : ""}</div>}
@@ -319,7 +319,7 @@ function ObjectiveDetail({ item, onUpdate, onDelete, objectives, projects, routi
       {item.purpose && <div style={{ fontSize: 11, color: C.tx2, fontStyle: "italic", marginBottom: 8, lineHeight: 1.5 }}>{item.purpose}</div>}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5, marginBottom: 12 }}>
-        <div style={{ background: C.card, borderRadius: 6, padding: 8, textAlign: "center" }}><div style={{ fontSize: 14, fontWeight: 600, color: C.gold }}>{xp.toLocaleString()}</div><div style={{ fontSize: 11, color: C.tx3 }}>XP espelhado</div></div>
+        <div style={{ background: C.card, borderRadius: 6, padding: 8, textAlign: "center" }}><div style={{ fontSize: 14, fontWeight: 600, color: C.gold }}>{xp.toLocaleString()}</div><div style={{ fontSize: 11, color: C.tx3 }}>⚡ ENERGIA espelhada</div></div>
         <div style={{ background: C.card, borderRadius: 6, padding: 8, textAlign: "center" }}><div style={{ fontSize: 14, fontWeight: 600, color: C.tx }}>{(item.linkedActivities || []).length}</div><div style={{ fontSize: 11, color: C.tx3 }}>Atividades</div></div>
         <div style={{ background: C.card, borderRadius: 6, padding: 8, textAlign: "center" }}><div style={{ fontSize: 14, fontWeight: 600, color: C.tx }}>{subObjs.length}</div><div style={{ fontSize: 11, color: C.tx3 }}>Sub-obj.</div></div>
       </div>
@@ -369,7 +369,7 @@ function ObjectiveDetail({ item, onUpdate, onDelete, objectives, projects, routi
           <div key={o.id} onClick={() => nav("activities", "objectives", "detail", o.id, "objective")} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 0", borderBottom: "0.5px solid " + C.brd, cursor: "pointer" }}>
             <span style={{ width: 8, height: 8, borderRadius: 4, background: o.color }} />
             <div style={{ flex: 1 }}><div style={{ fontSize: 11, color: C.tx }}>{o.name}</div></div>
-            <span style={{ fontSize: 11, color: C.gold }}>{(subObjsXp[o.id] || 0).toLocaleString()} XP</span>
+            <span style={{ fontSize: 11, color: C.gold }}>{(subObjsXp[o.id] || 0).toLocaleString()} ⚡</span>
           </div>
         ))}
       </div>}

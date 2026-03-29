@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { C } from '../temas.js';
-import { td, fmtD, getMultiplier, getMastery, getXp, ACHIEVEMENTS } from '../utilidades.js';
+import { td, fmtD, getMultiplier, getMastery, getXp, getEnergia, ACHIEVEMENTS } from '../utilidades.js';
 import { STREAK_RECOVER, STREAK_MULT, CHEST_TYPES } from '../constantes.js';
 import { Btn } from '../componentes-base.jsx';
 
@@ -222,7 +222,7 @@ function HistoryTab({ profile, projects, routines, tasks, recoverStreak, openChe
           Nenhuma atividade neste período
         </div>
       ) : grouped.map(([date, entries]) => {
-        const totalXp = entries.reduce((s, e) => s + getXp(e.difficulty), 0);
+        const totalXp = entries.reduce((s, e) => s + getEnergia(e.difficulty), 0);
         return (
           <div key={date} style={{ marginBottom: 14 }}>
             {/* Day header */}
@@ -232,7 +232,7 @@ function HistoryTab({ profile, projects, routines, tasks, recoverStreak, openChe
               </span>
               <div style={{ flex: 1, height: "0.5px", background: C.brd }} />
               <span style={{ fontSize: 11, color: C.tx4, flexShrink: 0 }}>
-                {entries.length} {entries.length === 1 ? "atividade" : "atividades"} · +{totalXp} XP
+                {entries.length} {entries.length === 1 ? "atividade" : "atividades"} · +{totalXp} ⚡
               </span>
             </div>
             {/* Activity rows */}
@@ -252,7 +252,7 @@ function HistoryTab({ profile, projects, routines, tasks, recoverStreak, openChe
                       {label}{e.projectName ? " · " + e.projectName : ""}
                     </div>
                   </div>
-                  <div style={{ fontSize: 11, color: C.gold, flexShrink: 0 }}>+{getXp(e.difficulty)} XP</div>
+                  <div style={{ fontSize: 11, color: C.gold, flexShrink: 0 }}>+{getEnergia(e.difficulty)} ⚡</div>
                 </div>
               );
             })}
@@ -266,7 +266,7 @@ function HistoryTab({ profile, projects, routines, tasks, recoverStreak, openChe
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ fontSize: 13 }}>🔥</span>
             <span style={{ fontSize: 12, fontWeight: 600, color: C.tx }}>Streak: {profile.streak} dias</span>
-            {mult > 0 && <span style={{ fontSize: 11, color: C.orange }}>+{Math.round(mult * 100)}% XP</span>}
+            {mult > 0 && <span style={{ fontSize: 11, color: C.orange }}>+{Math.round(mult * 100)}% CULTIVO</span>}
           </div>
           <Chevron open={streakOpen} />
         </button>

@@ -260,7 +260,7 @@ const SHOP_BORDERS = [
 ];
 const SHOP_CONSUMABLES = [
   { id: "c_escudo", name: "Escudo de Streak", price: 80, desc: "Protege 1 dia de perda de streak. Preventivo." },
-  { id: "c_boost", name: "Boost Moedas +25%", price: 60, desc: "+25% moedas por 24h. Não afeta XP." },
+  { id: "c_boost", name: "Boost Moedas +25%", price: 60, desc: "+25% moedas por 24h. Não afeta ENERGIA ⚡." },
   { id: "c_bau_comum", name: "Baú Extra Comum", price: 80, desc: "15-50 moedas + rara chance de Escudo ou Boost." },
   { id: "c_bau_raro", name: "Baú Extra Raro", price: 200, desc: "50-140 moedas + chance de Escudo ou Boost." },
 ];

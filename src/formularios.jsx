@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { C } from './temas.js';
-import { uid, td, getLevelInfo, getMastery, getXp, getCoins, fmtFreq, fmtD, isRoutineDueToday, calcObjectiveXp, wouldCreateCycle, checkProjectCompletion, removeObjectiveLinksFromActivities, similarName, migrateFreq } from './utilidades.js';
+import { uid, td, getLevelInfo, getMastery, getXp, getCoins, getEnergia, getMoedas, fmtFreq, fmtD, isRoutineDueToday, calcObjectiveXp, wouldCreateCycle, checkProjectCompletion, removeObjectiveLinksFromActivities, similarName, migrateFreq } from './utilidades.js';
 import { CATEGORIES, PRIORITIES, COLORS, FREQUENCIES, WEEK_DAYS, UNITS, DEFAULT_PRESETS, MASTERY_LEVELS } from './constantes.js';
 import { Field, Input, SelBtns, ColorPick, DiffPick, Toggle, SLabel, Btn, Card, TopBar, Modal, Badge } from './componentes-base.jsx';
 
@@ -167,7 +167,7 @@ function ProjectForm({ item, onSave, onCancel, objectives, routines: allRoutines
               <div style={{ display: "flex", gap: 4, alignItems: "center", marginBottom: 2 }}>
                 <Input value={t.name} onChange={v => updPhTask(i, ti, { name: v })} placeholder="Tarefa..." style={{ flex: 1, fontSize: 11, padding: "5px 8px" }} />
                 <select value={t.difficulty} onChange={e => updPhTask(i, ti, { difficulty: Number(e.target.value) })} style={{ background: C.card, color: C.gold, border: "0.5px solid " + C.brd, borderRadius: 4, fontSize: 11, padding: "2px 4px" }}>
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(d => <option key={d} value={d}>{d}</option>)}
+                  {Array.from({length:20},(_,i)=>i+1).map(d => <option key={d} value={d}>{d}</option>)}
                 </select>
                 <span onClick={() => rmPhTask(i, ti)} style={{ color: C.red, cursor: "pointer", display: "flex", alignItems: "center" }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>
               </div>
@@ -263,7 +263,7 @@ function RoutineForm({ item, onSave, onCancel, presets, objectives }) {
       <TopBar title={item ? "Editar Rotina" : "Nova Rotina"} onBack={onCancel} />
       <Field label="Nome" req><Input value={name} onChange={setName} placeholder="Ex: Treino físico" /></Field>
       <Field label="Dificuldade" req><DiffPick value={diff} onChange={setDiff} /></Field>
-      <div style={{ fontSize: 11, color: C.gold, marginBottom: 8 }}>+{getXp(diff)} XP / +{getCoins(diff)} moedas</div>
+      <div style={{ fontSize: 11, color: C.gold, marginBottom: 8 }}>+{getEnergia(diff)} ⚡ / +{getMoedas(diff)} moedas</div>
       <Field label="Frequência" req>
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
           {FREQUENCIES.map(f => {
@@ -354,7 +354,7 @@ function TaskForm({ item, onSave, onCancel, presets, objectives }) {
       <TopBar title={item ? "Editar Tarefa" : "Nova Tarefa"} onBack={onCancel} />
       <Field label="Nome" req><Input value={name} onChange={setName} placeholder="O que precisa ser feito?" /></Field>
       <Field label="Dificuldade" req><DiffPick value={diff} onChange={setDiff} /></Field>
-      <div style={{ fontSize: 11, color: C.gold, marginBottom: 8 }}>+{getXp(diff)} XP / +{getCoins(diff)} moedas</div>
+      <div style={{ fontSize: 11, color: C.gold, marginBottom: 8 }}>+{getEnergia(diff)} ⚡ / +{getMoedas(diff)} moedas</div>
       <Field label="Cor"><ColorPick value={color} onChange={setColor} /></Field>
 
       {/* Avançado — seção colapsável */}

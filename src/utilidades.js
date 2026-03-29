@@ -1,4 +1,4 @@
-import { XP_TABLE, COIN_TABLE, BANDS, MASTERY_LEVELS, MISSION_POOL, STREAK_MULT, CHEST_TYPES } from './constantes.js';
+import { ENERGIA_TABLE, COINS_TABLE, RANKS, MASTERY_LEVELS, MISSION_POOL, STREAK_MULT, CHEST_TYPES, DIFF_MIGRATION_MAP } from './constantes.js';
 
 function pickDailyMission(date, context) {
   const hash = date.split("-").join("").split("").reduce((a, c) => a + c.charCodeAt(0), 0);
@@ -112,21 +112,112 @@ export function isRoutineDueToday(routine) {
   return isRoutineDueOn(routine, td());
 }
 
-export function getLevelInfo(totalXp) {
-  let xp = totalXp;
-  let level = 0;
-  for (const b of BANDS) {
-    const count = b.max - b.min + 1;
-    const bandXp = count * b.xpPer;
-    if (xp >= bandXp) {
-      xp -= bandXp;
-      level = b.max;
-    } else {
-      level = b.min + Math.floor(xp / b.xpPer);
-      return { level, band: b.name, xpInLevel: xp % b.xpPer, xpForLevel: b.xpPer, totalXp };
+/* ═══ SISTEMA DE PODER / RANKS ═══ */
+
+/**
+ * Calcula o nível de PODER a partir da ENERGIA total acumulada.
+ * 1 PODER = 100 ENERGIA. Retorna dados para as barras de progresso.
+ */
+export function getPoderInfo(totalEnergia) {
+  const e = Math.max(0, totalEnergia || 0);
+  const poder = Math.floor(e / 100);
+  const energiaInPoder = e % 100;
+  return { poder, totalEnergia: e, energiaInPoder, energiaForPoder: 100 };
+}
+
+/**
+ * Retorna as informações completas do rank para um dado nível de PODER.
+ * Inclui dados para as barras primária (sub-rank) e secundária (notificação).
+ */
+export function getRankInfo(poder) {
+  const p = Math.max(0, poder || 0);
+
+  // Estado Humano (antes do primeiro rank)
+  if (p < 5) {
+    return {
+      rankMain: null, subRank: null, modifier: null,
+      label: "Humano", cultivo: 0, notifInterval: 1,
+      color: "#888888", colorSecondary: "#555555",
+      // Barra primária: progresso até rank F- (PODER 5)
+      subRankMinPoder: 0, subRankMaxPoder: 4,
+      rankMinPoder: 0, rankMaxPoder: 4,
+      nextSubRankId: "F-", nextSubRankMinPoder: 5,
+      // Barra secundária: a cada 1 nível de poder
+      lastNotifPoder: p, nextNotifPoder: p + 1,
+    };
+  }
+
+  // Percorre os ranks para encontrar o atual
+  for (let ri = 0; ri < RANKS.length; ri++) {
+    const rank = RANKS[ri];
+    if (p < rank.minPoder || p > rank.maxPoder) continue;
+
+    for (let si = 0; si < rank.subs.length; si++) {
+      const sub = rank.subs[si];
+      if (p < sub.minPoder || p > sub.maxPoder) continue;
+
+      // Sub-rank seguinte (pode ser do mesmo rank ou do próximo)
+      let nextSub = rank.subs[si + 1] || (RANKS[ri + 1] ? RANKS[ri + 1].subs[0] : null);
+
+      // Cálculo da barra secundária (notificação de PODER)
+      const interval = rank.notifInterval;
+      const lastNotifPoder = Math.floor(p / interval) * interval;
+      const nextNotifPoder = lastNotifPoder + interval;
+
+      return {
+        rankMain: rank.id,
+        subRank: sub.id,
+        modifier: sub.modifier,
+        label: sub.id,
+        cultivo: rank.cultivo,
+        notifInterval: interval,
+        color: rank.color,
+        colorSecondary: rank.colorSecondary,
+        // Barra primária
+        subRankMinPoder: sub.minPoder,
+        subRankMaxPoder: sub.maxPoder,
+        rankMinPoder: rank.minPoder,
+        rankMaxPoder: rank.maxPoder,
+        nextSubRankId: nextSub ? nextSub.id : null,
+        nextSubRankMinPoder: nextSub ? nextSub.minPoder : null,
+        // Barra secundária
+        lastNotifPoder,
+        nextNotifPoder,
+      };
     }
   }
-  return { level: 500, band: "Imortal", xpInLevel: 0, xpForLevel: 500, totalXp };
+
+  // MAX (PODER >= 1.000.000)
+  const interval = 10000;
+  const lastNotifPoder = Math.floor(p / interval) * interval;
+  return {
+    rankMain: "MAX", subRank: "MAX", modifier: "", label: "MAX",
+    cultivo: 10000, notifInterval: interval,
+    color: "#c0c0c0", colorSecondary: "#888888",
+    subRankMinPoder: 1000000, subRankMaxPoder: Infinity,
+    rankMinPoder: 1000000, rankMaxPoder: Infinity,
+    nextSubRankId: null, nextSubRankMinPoder: null,
+    lastNotifPoder, nextNotifPoder: lastNotifPoder + interval,
+  };
+}
+
+/**
+ * Retrocompatibilidade: getLevelInfo retorna objeto no formato antigo + campos novos.
+ * Permite que componentes não atualizados ainda funcionem.
+ */
+export function getLevelInfo(totalXp) {
+  const pi = getPoderInfo(totalXp);
+  const ri = getRankInfo(pi.poder);
+  return {
+    level: pi.poder,
+    band: ri.label,
+    xpInLevel: pi.energiaInPoder,
+    xpForLevel: pi.energiaForPoder,
+    totalXp,
+    // Campos novos
+    poder: pi.poder,
+    rankInfo: ri,
+  };
 }
 
 export function getMastery(xp) {
@@ -143,8 +234,18 @@ export function getMasteryBonus(oldXp, newXp) {
   return bonus;
 }
 
-export function getXp(d) { return XP_TABLE[clamp(d, 1, 10)] || 0; }
-export function getCoins(d) { return COIN_TABLE[clamp(d, 1, 10)] || 0; }
+/** Retorna a ENERGIA base de uma dificuldade (1-20). */
+export function getEnergia(d) { return ENERGIA_TABLE[clamp(d, 1, 20)] || 0; }
+
+/** Retorna as moedas de uma dificuldade (1-20). */
+export function getMoedas(d) { return COINS_TABLE[clamp(d, 1, 20)] || 0; }
+
+/** Migra dificuldade antiga (1-10) para nova (1-20). */
+export function migrateDifficulty(d) { return DIFF_MIGRATION_MAP[d] || d; }
+
+/* Retrocompatibilidade */
+export function getXp(d) { return getEnergia(d); }
+export function getCoins(d) { return getMoedas(d); }
 
 /* ═══ V2: Objective utility functions ═══ */
 export function calcObjectiveXp(objectiveId, projects, routines, tasks, objectives, _visited = new Set()) {
@@ -221,30 +322,30 @@ export function similarName(a, b) {
 
 export { pickDailyMission, getMissionProgress, scoreNextAction, getMultiplier, openChest };
 
-/* ═══ ACHIEVEMENTS (aqui pois depende de getLevelInfo) ═══ */
+/* ═══ ACHIEVEMENTS (depende de getPoderInfo) ═══ */
 export const ACHIEVEMENTS = [
-  { id:"vol10", cat:"Volume", text:"10 tarefas", check:(p)=>p.tasksCompleted>=10, coins:10 },
-  { id:"vol50", cat:"Volume", text:"50 tarefas", check:(p)=>p.tasksCompleted>=50, coins:25 },
-  { id:"vol100", cat:"Volume", text:"100 tarefas", check:(p)=>p.tasksCompleted>=100, coins:50 },
-  { id:"vol500", cat:"Volume", text:"500 tarefas", check:(p)=>p.tasksCompleted>=500, coins:100 },
-  { id:"vol1000", cat:"Volume", text:"1000 tarefas", check:(p)=>p.tasksCompleted>=1000, coins:200 },
-  { id:"con7", cat:"Consistência", text:"Streak 7 dias", check:(p)=>p.bestStreak>=7, coins:15 },
-  { id:"con30", cat:"Consistência", text:"Streak 30 dias", check:(p)=>p.bestStreak>=30, coins:50 },
-  { id:"con90", cat:"Consistência", text:"Streak 90 dias", check:(p)=>p.bestStreak>=90, coins:100 },
-  { id:"con180", cat:"Consistência", text:"Streak 180 dias", check:(p)=>p.bestStreak>=180, coins:200 },
-  { id:"con365", cat:"Consistência", text:"Streak 365 dias", check:(p)=>p.bestStreak>=365, coins:500 },
-  { id:"int_d10", cat:"Intensidade", text:"Tarefa dif. 10", check:(p)=>p.maxTaskEver, coins:20 },
-  { id:"int_200xp", cat:"Intensidade", text:"200 XP em 1 dia", check:(p)=>p.bestXpDay>=200, coins:30 },
-  { id:"int_1000xp", cat:"Intensidade", text:"1000 XP semana", check:(p)=>p.bestXpWeek>=1000, coins:75 },
-  { id:"lv10", cat:"Marcos", text:"Nível 10", check:(p)=>getLevelInfo(p.totalXp).level>=10, coins:10 },
-  { id:"lv25", cat:"Marcos", text:"Nível 25", check:(p)=>getLevelInfo(p.totalXp).level>=25, coins:25 },
-  { id:"lv50", cat:"Marcos", text:"Nível 50", check:(p)=>getLevelInfo(p.totalXp).level>=50, coins:50 },
-  { id:"lv100", cat:"Marcos", text:"Nível 100", check:(p)=>getLevelInfo(p.totalXp).level>=100, coins:100 },
-  { id:"lv200", cat:"Marcos", text:"Nível 200", check:(p)=>getLevelInfo(p.totalXp).level>=200, coins:200 },
-  { id:"lv300", cat:"Marcos", text:"Nível 300", check:(p)=>getLevelInfo(p.totalXp).level>=300, coins:300 },
-  { id:"lv500", cat:"Marcos", text:"Nível 500", check:(p)=>getLevelInfo(p.totalXp).level>=500, coins:500 },
-  { id:"coins1k", cat:"Marcos", text:"1.000 moedas ganhas", check:(p)=>(p.totalCoinsEarned||0)>=1000, coins:30 },
-  { id:"coins10k", cat:"Marcos", text:"10.000 moedas ganhas", check:(p)=>(p.totalCoinsEarned||0)>=10000, coins:100 },
-  { id:"proj5", cat:"Volume", text:"5 projetos concluídos", check:(p)=>(p.projectsCompleted||0)>=5, coins:50 },
-  { id:"mast_ouro", cat:"Maestria", text:"Maestria Ouro", check:(p)=>(p.masteryGoldCount||0)>=1, coins:40 },
+  { id:"vol10",      cat:"Volume",       text:"10 tarefas",                   check:(p)=>p.tasksCompleted>=10,                                   coins:10  },
+  { id:"vol50",      cat:"Volume",       text:"50 tarefas",                   check:(p)=>p.tasksCompleted>=50,                                   coins:25  },
+  { id:"vol100",     cat:"Volume",       text:"100 tarefas",                  check:(p)=>p.tasksCompleted>=100,                                  coins:50  },
+  { id:"vol500",     cat:"Volume",       text:"500 tarefas",                  check:(p)=>p.tasksCompleted>=500,                                  coins:100 },
+  { id:"vol1000",    cat:"Volume",       text:"1000 tarefas",                 check:(p)=>p.tasksCompleted>=1000,                                 coins:200 },
+  { id:"con7",       cat:"Consistência", text:"Streak 7 dias",                check:(p)=>p.bestStreak>=7,                                        coins:15  },
+  { id:"con30",      cat:"Consistência", text:"Streak 30 dias",               check:(p)=>p.bestStreak>=30,                                       coins:50  },
+  { id:"con90",      cat:"Consistência", text:"Streak 90 dias",               check:(p)=>p.bestStreak>=90,                                       coins:100 },
+  { id:"con180",     cat:"Consistência", text:"Streak 180 dias",              check:(p)=>p.bestStreak>=180,                                      coins:200 },
+  { id:"con365",     cat:"Consistência", text:"Streak 365 dias",              check:(p)=>p.bestStreak>=365,                                      coins:500 },
+  { id:"int_dmax",   cat:"Intensidade",  text:"Tarefa IMPOSSÍVEL (MAX)",      check:(p)=>p.maxTaskEver,                                          coins:20  },
+  { id:"int_200e",   cat:"Intensidade",  text:"200 ⚡ ENERGIA em 1 dia",      check:(p)=>(p.bestXpDay||0)>=200,                                  coins:30  },
+  { id:"int_1000e",  cat:"Intensidade",  text:"1000 ⚡ ENERGIA na semana",    check:(p)=>(p.bestXpWeek||0)>=1000,                                coins:75  },
+  { id:"lv10",       cat:"Marcos",       text:"PODER 10 (Rank F)",            check:(p)=>getPoderInfo(p.totalXp).poder>=10,                      coins:10  },
+  { id:"lv25",       cat:"Marcos",       text:"PODER 25 (Rank E)",            check:(p)=>getPoderInfo(p.totalXp).poder>=25,                      coins:25  },
+  { id:"lv50",       cat:"Marcos",       text:"PODER 50 (Rank D)",            check:(p)=>getPoderInfo(p.totalXp).poder>=50,                      coins:50  },
+  { id:"lv100",      cat:"Marcos",       text:"PODER 100 (Rank C)",           check:(p)=>getPoderInfo(p.totalXp).poder>=100,                     coins:100 },
+  { id:"lv300",      cat:"Marcos",       text:"PODER 300 (Rank B)",           check:(p)=>getPoderInfo(p.totalXp).poder>=300,                     coins:200 },
+  { id:"lv1500",     cat:"Marcos",       text:"PODER 1.500 (Rank A)",         check:(p)=>getPoderInfo(p.totalXp).poder>=1500,                    coins:300 },
+  { id:"lv25000",    cat:"Marcos",       text:"PODER 25.000 (Rank S)",        check:(p)=>getPoderInfo(p.totalXp).poder>=25000,                   coins:500 },
+  { id:"coins1k",    cat:"Marcos",       text:"1.000 moedas ganhas",          check:(p)=>(p.totalCoinsEarned||0)>=1000,                          coins:30  },
+  { id:"coins10k",   cat:"Marcos",       text:"10.000 moedas ganhas",         check:(p)=>(p.totalCoinsEarned||0)>=10000,                         coins:100 },
+  { id:"proj5",      cat:"Volume",       text:"5 projetos concluídos",        check:(p)=>(p.projectsCompleted||0)>=5,                            coins:50  },
+  { id:"mast_ouro",  cat:"Maestria",     text:"Maestria Ouro",                check:(p)=>(p.masteryGoldCount||0)>=1,                             coins:40  },
 ];
