@@ -53,13 +53,14 @@ function InlineDiffPick({ value, onChange }) {
             return (
               <div
                 key={c.id}
-                onClick={() => { onChange(mid); setOpen(false); }}
+                onMouseDown={e => { e.preventDefault(); e.stopPropagation(); onChange(mid); setOpen(false); }}
                 style={{
                   padding: "6px 4px", borderRadius: 7, cursor: "pointer",
                   textAlign: "center",
                   background: isCur ? c.color + "2e" : c.color + "10",
                   border: "1px solid " + (isCur ? c.color + "88" : c.color + "28"),
                   transition: "background .1s",
+                  userSelect: "none",
                 }}
               >
                 <div style={{ fontSize: 12, fontWeight: 700, color: c.color, lineHeight: 1.2 }}>{c.id}</div>
@@ -112,6 +113,14 @@ function ProjectForm({ item, onSave, onCancel, objectives, routines: allRoutines
   const addPhTask = (pi) => setPhases(p => p.map((ph, i) => i === pi ? { ...ph, tasks: [...(ph.tasks || []), { id: uid(), name: "", difficulty: 5, type: "Unica", status: "Pendente" }] } : ph));
   const updPhTask = (pi, ti, data) => setPhases(p => p.map((ph, i) => i === pi ? { ...ph, tasks: ph.tasks.map((t, j) => j === ti ? { ...t, ...data } : t) } : ph));
   const rmPhTask = (pi, ti) => setPhases(p => p.map((ph, i) => i === pi ? { ...ph, tasks: ph.tasks.filter((_, j) => j !== ti) } : ph));
+  const movePhTask = (pi, ti, dir) => setPhases(p => p.map((ph, i) => {
+    if (i !== pi) return ph;
+    const arr = [...(ph.tasks || [])];
+    const ni = ti + dir;
+    if (ni < 0 || ni >= arr.length) return ph;
+    [arr[ti], arr[ni]] = [arr[ni], arr[ti]];
+    return { ...ph, tasks: arr };
+  }));
   const [taskNoteOpen, setTaskNoteOpen] = useState({});
   const toggleTaskNote = (id) => setTaskNoteOpen(n => ({ ...n, [id]: !n[id] }));
 
@@ -243,7 +252,6 @@ function ProjectForm({ item, onSave, onCancel, objectives, routines: allRoutines
           marginBottom: 10, borderRadius: 10,
           border: "1px solid " + C.brd,
           background: C.card,
-          overflow: "hidden",
         }}>
           {/* Phase header */}
           <div style={{
@@ -251,6 +259,7 @@ function ProjectForm({ item, onSave, onCancel, objectives, routines: allRoutines
             padding: "8px 12px",
             borderBottom: (ph.tasks || []).length > 0 || ph.description ? "1px solid " + C.brd : "none",
             background: color + "12",
+            borderRadius: "10px 10px 0 0",
           }}>
             {/* Number badge */}
             <div style={{
@@ -316,6 +325,23 @@ function ProjectForm({ item, onSave, onCancel, objectives, routines: allRoutines
                   borderLeft: "2px solid " + tCat.color + "55",
                 }}>
                   <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    {/* Reorder arrows */}
+                    {(ph.tasks || []).length > 1 && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 1, flexShrink: 0 }}>
+                        <span
+                          onClick={() => movePhTask(i, ti, -1)}
+                          style={{ cursor: "pointer", display: "flex", opacity: ti > 0 ? 0.6 : 0.15, transition: "opacity .1s" }}
+                        >
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={C.tx2} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+                        </span>
+                        <span
+                          onClick={() => movePhTask(i, ti, 1)}
+                          style={{ cursor: "pointer", display: "flex", opacity: ti < (ph.tasks || []).length - 1 ? 0.6 : 0.15, transition: "opacity .1s" }}
+                        >
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={C.tx2} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                        </span>
+                      </div>
+                    )}
                     {/* Task name */}
                     <Input
                       value={t.name}
