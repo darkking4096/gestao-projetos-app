@@ -129,7 +129,8 @@ export const FREQUENCIES = ["Diário", "Semanal", "Mensal", "Livre", "Personaliz
 export const WEEK_DAYS   = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 export const UNITS       = ["R$", "kg", "lições", "horas", "unidades", "%", "custom"];
 
-export const DEFAULT_PRESETS = { "Trabalho": 5, "Saúde": 6, "Estudo": 4, "Pessoal": 3 };
+// Valores padrão na escala 1-20: D-=5(Fácil), D=6, C-=8(Médio), E+=4(Muito Fácil)
+export const DEFAULT_PRESETS = { "Trabalho": 8, "Saúde": 6, "Estudo": 8, "Pessoal": 5 };
 
 export const MISSION_POOL = [
   { id: "m1",  text: "Concluir 5 tarefas",                    coins: 20, check: (p) => p.tasksToday >= 5,          pct: (p) => Math.min(100, Math.round(p.tasksToday / 5 * 100)) },

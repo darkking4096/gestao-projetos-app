@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { C } from '../temas.js';
-import { uid, td, getLevelInfo, getPoderInfo, getRankInfo, clamp } from '../utilidades.js';
+import { uid, td, getLevelInfo, getPoderInfo, getRankInfo, getEnergia, clamp } from '../utilidades.js';
 import { THEMES } from '../temas.js';
-import { DEFAULT_PRESETS, CATEGORIES, COLORS } from '../constantes.js';
+import { DEFAULT_PRESETS, CATEGORIES, COLORS, DIFF_CATEGORIES } from '../constantes.js';
 import { Btn, Card, Badge, TopBar, Modal, ConfirmModal, DeleteModal, EnergiaBarDupla, SLabel, getDiffColor } from '../componentes-base.jsx';
 import { IconSVG, SHOP_THEMES_LIST, BorderSVG, TitleBanner, SHOP_BORDERS, SHOP_TITLES, getTitleTargetColor, getTitleStyle, getUpgradeCost, getBorderStyle, UPGRADE_LABELS, RARITY_LABELS, RARITY_COLORS } from '../icones.jsx';
 import { Social } from '../armazenamento.js';
@@ -403,18 +403,44 @@ function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects
       <div style={{ background: C.card, borderRadius: 10, marginBottom: 10, border: "1px solid " + C.brd, padding: "10px 12px" }}>
         <SectionHeader label="Presets de dificuldade" skey="presets" />
         {openSections.presets && <>
-          <div style={{ fontSize: 11, color: C.tx3, marginBottom: 6 }}>Dificuldade padrão ao selecionar categoria</div>
-          {CATEGORIES.map(cat => (
-            <div key={cat} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
-              <span style={{ fontSize: 11, color: C.tx2, width: 65 }}>{cat}</span>
-              <div style={{ display: "flex", gap: 2, flex: 1 }}>
-                {[1,2,3,4,5,6,7,8,9,10].map(d => {
-                  const dc = getDiffColor(d); const sel = presets[cat] === d;
-                  return <div key={d} onClick={() => setPreset(cat, d)} style={{ flex: 1, height: 26, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, cursor: "pointer", background: sel ? dc + "2e" : dc + "12", color: sel ? dc : dc + "99", border: "0.5px solid " + (sel ? dc + "99" : dc + "38"), fontWeight: sel ? 700 : 500, transition: "background .12s, color .12s, border-color .12s" }}>{d}</div>;
-                })}
+          <div style={{ fontSize: 11, color: C.tx3, marginBottom: 8 }}>Dificuldade padrão ao criar atividade por categoria</div>
+          {CATEGORIES.map(cat => {
+            const curCat = DIFF_CATEGORIES.find(c => c.levels.includes(presets[cat])) || DIFF_CATEGORIES[2];
+            return (
+              <div key={cat} style={{ marginBottom: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
+                  <span style={{ fontSize: 11, color: C.tx2, width: 65 }}>{cat}</span>
+                  <span style={{ fontSize: 11, color: curCat.color, fontWeight: 600 }}>
+                    {curCat.id} · {getEnergia(presets[cat])} ⚡
+                  </span>
+                </div>
+                <div style={{ display: "flex", gap: 3 }}>
+                  {DIFF_CATEGORIES.map(c => {
+                    const mid = c.levels[Math.floor(c.levels.length / 2)];
+                    const isSel = curCat.id === c.id;
+                    return (
+                      <div
+                        key={c.id}
+                        onClick={() => setPreset(cat, mid)}
+                        style={{
+                          flex: 1, paddingTop: 5, paddingBottom: 5,
+                          borderRadius: 6, display: "flex", flexDirection: "column",
+                          alignItems: "center", justifyContent: "center", gap: 1,
+                          cursor: "pointer",
+                          background: isSel ? c.color + "2e" : c.color + "0e",
+                          border: "1px solid " + (isSel ? c.color + "88" : c.color + "28"),
+                          transition: "background .1s, border-color .1s",
+                        }}
+                      >
+                        <span style={{ fontSize: 11, fontWeight: 700, color: isSel ? c.color : c.color + "77", lineHeight: 1 }}>{c.id}</span>
+                        <span style={{ fontSize: 9, color: isSel ? c.color + "cc" : c.color + "44", lineHeight: 1 }}>{getEnergia(mid)}⚡</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </>}
       </div>
       <div style={{ background: C.card, borderRadius: 10, marginBottom: 10, border: "1px solid " + C.brd, padding: "10px 12px" }}>
