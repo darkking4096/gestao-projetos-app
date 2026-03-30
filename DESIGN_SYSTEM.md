@@ -153,6 +153,8 @@ Cada rank tem um frame SVG único com decorações progressivas:
 | S | A + centro base + 6 esporas | #ff6b00 |
 | MAX | S + anel externo + asas laterais | #c0c0c0 |
 
+**Implementação:** `_rankDeco(rank, c, cs)` em `componentes-base.jsx` retorna os path/polygon SVG de cada rank, tintados dinamicamente com `color` e `colorSecondary`. ViewBox: `"100 70 312 330"` para F–S; `"65 65 382 345"` para MAX.
+
 ---
 
 ## 7. Cores dos Ranks
@@ -170,7 +172,41 @@ Cada rank tem um frame SVG único com decorações progressivas:
 
 ---
 
-## 8. Categorias de Dificuldade (`DIFF_CATEGORIES`)
+## 8. Sub-Ranks e Ranges de PODER
+
+Total: 38 sub-ranks + estado Humano = **39 estados visuais**.
+
+| Rank | Sub-Ranks | Range de PODER | CULTIVO% | Notificação a cada N PODER |
+|---|---|---|---|---|
+| Humano | — | 0 – 4 | 0% | — |
+| F | F- · F · F+ | 5 – 14 | 0% | 1 |
+| E | E- · E · E+ | 15 – 49 | 70% | 2 |
+| D | D-- · D- · D · D+ · D++ | 50 – 99 | 150% | 3 |
+| C | C-- · C- · C · C+ · C++ | 100 – 299 | 500% | 5 |
+| B | B--- · B-- · B- · B · B+ · B++ · B+++ | 300 – 1.499 | 1.200% | 12 |
+| A | A--- · A-- · A- · A · A+ · A++ · A+++ | 1.500 – 24.999 | 5.000% | 50 |
+| S | S--- · S-- · S- · S · S+ · S++ · S+++ | 25.000 – 999.999 | 100.000% | 1.000 |
+| MAX | MAX | 1.000.000+ | 10.000% | 10.000 |
+
+**Nota CULTIVO:** ENERGIA final = ENERGIA base × (1 + CULTIVO% + Streak%). Exemplo: rank C (500%) + streak 60% → multiplicador 6,6×. MAX tem CULTIVO menor que S intencionalmente (progressão infinita não precisa de aceleração).
+
+**Notificações:** Subir de sub-rank (ex: F- → F) usa notificação regular de PODER. Entrar em um novo rank principal (ex: F → E) usa notificação especial com visual distinto.
+
+### Ranges detalhados por sub-rank
+
+| Sub-Rank | Range de PODER |
+|---|---|
+| F- | 5–7 | F | 8–10 | F+ | 11–14 |
+| E- | 15–25 | E | 26–37 | E+ | 38–49 |
+| D-- | 50–59 | D- | 60–69 | D | 70–79 | D+ | 80–89 | D++ | 90–99 |
+| C-- | 100–139 | C- | 140–179 | C | 180–219 | C+ | 220–259 | C++ | 260–299 |
+| B--- | 300–470 | B-- | 471–641 | B- | 642–812 | B | 813–983 | B+ | 984–1.155 | B++ | 1.156–1.327 | B+++ | 1.328–1.499 |
+| A--- | 1.500–4.856 | A-- | 4.857–8.213 | A- | 8.214–11.570 | A | 11.571–14.927 | A+ | 14.928–18.284 | A++ | 18.285–21.641 | A+++ | 21.642–24.999 |
+| S--- | 25.000–164.284 | S-- | 164.285–303.569 | S- | 303.570–442.855 | S | 442.856–582.141 | S+ | 582.142–721.427 | S++ | 721.428–860.713 | S+++ | 860.714–999.999 |
+
+---
+
+## 8b. Categorias de Dificuldade e Tabela de ENERGIA
 
 | ID | Label | Dificuldades | Cor |
 |---|---|---|---|
@@ -182,6 +218,31 @@ Cada rank tem um frame SVG único com decorações progressivas:
 | A | Muito Difícil | 14–16 | #e74c3c |
 | S | Extremamente Difícil | 17–19 | #ff6b00 |
 | MAX | IMPOSSÍVEL | 20 | #c0c0c0 |
+
+### Tabela Completa de ENERGIA por Dificuldade (`ENERGIA_TABLE`)
+
+| Dif. | Sub-rank | Categoria | ENERGIA base |
+|---|---|---|---|
+| 1 | F | Extremamente Fácil | 1 ⚡ |
+| 2 | E- | Muito Fácil | 3 ⚡ |
+| 3 | E | Muito Fácil | 5 ⚡ |
+| 4 | E+ | Muito Fácil | 7 ⚡ |
+| 5 | D- | Fácil | 10 ⚡ |
+| 6 | D | Fácil | 12 ⚡ |
+| 7 | D+ | Fácil | 15 ⚡ |
+| 8 | C- | Médio | 18 ⚡ |
+| 9 | C | Médio | 21 ⚡ |
+| 10 | C+ | Médio | 24 ⚡ |
+| 11 | B- | Difícil | 28 ⚡ |
+| 12 | B | Difícil | 31 ⚡ |
+| 13 | B+ | Difícil | 34 ⚡ |
+| 14 | A- | Muito Difícil | 38 ⚡ |
+| 15 | A | Muito Difícil | 42 ⚡ |
+| 16 | A+ | Muito Difícil | 44 ⚡ |
+| 17 | S- | Extremamente Difícil | 50 ⚡ |
+| 18 | S | Extremamente Difícil | 60 ⚡ |
+| 19 | S+ | Extremamente Difícil | 70 ⚡ |
+| 20 | MAX | IMPOSSÍVEL | 100 ⚡ |
 
 ---
 

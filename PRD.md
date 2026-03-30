@@ -203,12 +203,41 @@ Usuário conclui tarefa
 
 ---
 
-## 7. Roadmap Futuro (ideias)
+## 7. Regras de Comportamento Automático
 
-- [ ] Notificações push para rotinas do dia
-- [ ] Modo multiplayer / guilds
-- [ ] Exportação de dados (CSV/PDF)
+### Virada de dia
+Executada na abertura do app quando a data mudou desde a última sessão: reset de `xpToday`/`coinsToday`, verificação de streak (ganho ou perda), geração de nova missão diária, desativação de rotinas com 5+ faltas consecutivas (exceto frequência "Livre"), auto-arquivamento de tarefas vencidas há 3+ dias.
+
+### Tarefas (auto-arquivamento)
+Tarefas com prazo vencido há 3+ dias são movidas automaticamente para a lixeira na virada de dia. Na lixeira, permanecem por 30 dias antes da remoção permanente.
+
+### Rotinas (desativação automática)
+Rotinas com frequência diferente de "Livre" são desativadas automaticamente após 5 dias consecutivos em que estavam devidas e não foram cumpridas. Podem ser reativadas manualmente. Rotinas com frequência "Livre" não acumulam streak, não aparecem como atrasadas no Dashboard e nunca são desativadas automaticamente.
+
+### Projetos (conclusão)
+A conclusão de projeto **nunca é automática** — sempre requer confirmação do usuário. O aviso de "pronto para concluir" aparece quando: todas as tarefas estão concluídas E a meta numérica foi atingida (se houver). A conclusão de projeto **não gera ENERGIA/moedas** — o XP vem exclusivamente das tarefas individuais.
+
+### Fases (auto-conclusão)
+Uma fase é concluída automaticamente quando 100% das suas tarefas estão concluídas. Pode ser reaberta a qualquer momento sem penalidade.
+
+### Objetivos (XP espelhado)
+O XP de um objetivo é **espelhado** — reflete a soma de XP de todas as atividades vinculadas. Se uma rotina está vinculada a 3 objetivos, cada objetivo mostra o XP integral dela. O XP real do personagem é calculado independentemente, sem duplicação.
+
+### Lixeira
+Itens na lixeira com 30+ dias são removidos permanentemente na virada de dia.
+
+---
+
+## 8. Roadmap Futuro (ideias)
+
+- [ ] Notificações push para rotinas do dia e streak em risco
+- [ ] Modo offline com localStorage como fallback (sync no retorno da conexão)
+- [ ] IA para sugestão de "próxima ação" baseada em deadline, energia e histórico (campo `groqApiKey` já existe no perfil)
+- [ ] Exportação de dados (JSON, CSV, PDF)
 - [ ] App mobile (PWA aprimorado ou React Native)
 - [ ] Integração com calendário
 - [ ] Sistema de conquistas (achievements) expandido
 - [ ] Perfil público visitável
+- [ ] Histórico de ENERGIA por atividade ("linha do tempo de progresso")
+- [ ] Atributos RPG integrados às categorias de atividade (ex: tarefas de "Saúde" aumentam "Vitalidade")
+- [ ] Modo multiplayer / guilds

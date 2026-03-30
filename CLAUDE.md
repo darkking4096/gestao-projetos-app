@@ -183,6 +183,36 @@ Seletor inline de dificuldade para tarefas dentro de fases de projeto.
 
 ---
 
+## Bugs Conhecidos e Débitos Técnicos
+
+### 🔴 Crítico
+
+**Variável global mutável para temas (`temas.js`)** — `export let C = THEMES.obsidiana` é mutado diretamente via `setCurrentTheme(tema)`. React não detecta essa mudança. Funciona porque `setCurrentTheme` é chamado no render do App pai, mas é frágil. Solução correta: React Context para tema.
+
+**`setCurrentTheme` no corpo do render (`App.jsx`)** — chamado diretamente fora de `useEffect`, executa a cada render. Em StrictMode (ativo em `main.jsx`) executa duas vezes, podendo causar cores inconsistentes em filhos que importam `C` diretamente.
+
+**Proteção anti-ciclo em `calcObjectiveXp` (`utilidades.js`)** — a função é recursiva, mas sem Set de IDs visitados. Dados corrompidos com ciclo circular travam o browser. Solução: adicionar parâmetro `_visited = new Set()` com guard `if (_visited.has(id)) return 0`.
+
+### 🟠 Alto
+
+**Stale closure no reset diário (`App.jsx`)** — o `useEffect` de reset tem dependência `[loaded]`, capturando `tasks` do momento da montagem (array vazio). A funcionalidade de auto-arquivamento de tarefas vencidas há 3+ dias provavelmente não funciona por isso.
+
+**Race condition em `earn()` (`App.jsx`)** — dentro do updater funcional de `setProfile`, variáveis externas (`popupXp`, `levelUpData`) são mutadas. Em StrictMode, o React executa updaters duas vezes, podendo sobrescrever com valores de estados diferentes. Popup pode mostrar XP incorreto e notificações de rank-up podem sumir.
+
+**Carregamento sequencial (`App.jsx`)** — 9 chamadas `await S.get()` em sequência (~1800ms de latência total). Solução: `Promise.all` ou `S.getAll()` já implementado.
+
+**`deleteObjective` com deleção permanente silenciosa** — quando o usuário escolhe "deletar tudo", projetos/rotinas/tarefas vinculados são removidos diretamente sem passar pela lixeira, contornando o sistema de recuperação.
+
+### 🟡 Médio
+
+**Swipe com variáveis globais em `window`** — `window._swipeX` e `window._swipeY` poluem o namespace global. Solução: usar `useRef`.
+
+**Streak com gaps múltiplos** — o reset de streak executa uma única vez ao abrir o app. Se o usuário ficar ausente 15 dias, o streak só cai 5 (não 75). O reset não é executado uma vez por dia ausente.
+
+**Mensagem de erro de storage enganosa** — o toast exibe "Verifique o armazenamento do dispositivo" quando o erro é na rede/Supabase.
+
+---
+
 ## Painel Dev (DEV_PASSWORD = "darkking")
 
 Disponível na aba Configurações. Clicar em "v2.0" no rodapé abre campo de senha. Senha correta → painel para editar todas as variáveis de perfil (totalXp, moedas, streak, etc.) e atalhos de rank para testes.
