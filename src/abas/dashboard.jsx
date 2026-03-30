@@ -119,16 +119,14 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {/* 1. Ícone + borda */}
           <div style={{ position: "relative" }}>
             <BorderSVG level={(profile.upgradeLevels || {})[profile.equippedBorder] || 0} color={C.gold} accentColor={(SHOP_BORDERS.find(b => b.id === profile.equippedBorder) || SHOP_BORDERS[0]).color} size={54}><IconSVG id={profile.equippedIcon || "i_estrela"} size={20} color={C.gold} /></BorderSVG>
           </div>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <RankEmblemSVG rank={_rankInfo.rankMain} modifier={_rankInfo.modifier || ""} size={28} color={_rankInfo.color} colorSecondary={_rankInfo.colorSecondary} />
-              <span style={{ fontSize: 12, fontWeight: 600, color: _rankInfo.color || C.tx }}>{_rankInfo.label}</span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 3 }}><TitleBanner level={(profile.upgradeLevels || {})[(profile.equippedTitle)] || 0} color={C.gold} accentColor={getTitleTargetColor((SHOP_TITLES.find(t => t.id === profile.equippedTitle) || SHOP_TITLES[0]).price) || C.gold}><span style={{ fontSize: 11, fontStyle: "italic", fontWeight: 600, color: C.gold }}>{(SHOP_TITLES.find(t => t.id === profile.equippedTitle) || SHOP_TITLES[0]).name}</span></TitleBanner></div>
-          </div>
+          {/* 2. Emblema de rank (sem modificador, sem label) */}
+          <RankEmblemSVG rank={_rankInfo.rankMain} modifier="" size={24} color={_rankInfo.color} colorSecondary={_rankInfo.colorSecondary} />
+          {/* 3. Título */}
+          <TitleBanner level={(profile.upgradeLevels || {})[(profile.equippedTitle)] || 0} color={C.gold} accentColor={getTitleTargetColor((SHOP_TITLES.find(t => t.id === profile.equippedTitle) || SHOP_TITLES[0]).price) || C.gold}><span style={{ fontSize: 11, fontStyle: "italic", fontWeight: 600, color: C.gold }}>{(SHOP_TITLES.find(t => t.id === profile.equippedTitle) || SHOP_TITLES[0]).name}</span></TitleBanner>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 4, background: C.card, borderRadius: 6, padding: "4px 10px" }}>
           <div style={{ width: 18, height: 18, background: C.gold, borderRadius: 9, fontSize: 11, color: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>$</div>

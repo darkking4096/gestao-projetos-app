@@ -440,42 +440,37 @@ function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects
 
       {/* ── Profile card ── */}
       <div style={{ background: C.card, borderRadius: 14, marginBottom: 14, border: "1px solid " + C.brd, boxShadow: C.goldShadow ? "0 4px 20px " + C.goldShadow : "none", padding: 16 }}>
-        <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
+          {/* 1. Ícone + borda */}
           <BorderSVG level={(profile.upgradeLevels || {})[profile.equippedBorder] || 0} color={C.gold} accentColor={(SHOP_BORDERS.find(b => b.id === profile.equippedBorder) || SHOP_BORDERS[0]).color} size={68}>
             <IconSVG id={profile.equippedIcon || "i_estrela"} size={28} color={C.gold} />
           </BorderSVG>
-          <div style={{ flex: 1 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <RankEmblemSVG rank={_rankInfo.rankMain} modifier={_rankInfo.modifier || ""} size={28} color={_rankInfo.color} colorSecondary={_rankInfo.colorSecondary} />
-                  <span style={{ fontSize: 14, fontWeight: 700, color: _rankInfo.color || C.gold }}>{_rankInfo.label}</span>
-                </div>
-                {profile.username ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 3 }}>
-                    <span style={{ fontSize: 13, color: C.gold, fontWeight: 700 }}>@{profile.username}</span>
-                    <span onClick={openUsernameEdit} style={{ cursor: "pointer", lineHeight: 1, opacity: 0.55, flexShrink: 0 }}>
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                    </span>
-                  </div>
-                ) : (
-                  <div onClick={openUsernameEdit} style={{ fontSize: 11, color: C.gold, cursor: "pointer", marginTop: 3, opacity: 0.7, display: "flex", alignItems: "center", gap: 4 }}>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                    <span style={{ textDecoration: "underline dotted" }}>Definir @username</span>
-                  </div>
-                )}
+          {/* 2. Emblema de rank (sem modificador, sem label) */}
+          <RankEmblemSVG rank={_rankInfo.rankMain} modifier="" size={28} color={_rankInfo.color} colorSecondary={_rankInfo.colorSecondary} />
+          {/* 3. @username + título empilhados */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {profile.username ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4 }}>
+                <span style={{ fontSize: 13, color: C.gold, fontWeight: 700 }}>@{profile.username}</span>
+                <span onClick={openUsernameEdit} style={{ cursor: "pointer", lineHeight: 1, opacity: 0.55, flexShrink: 0 }}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                </span>
               </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 16, fontWeight: 700, color: C.gold }}>{(profile.totalXp || 0).toLocaleString()}</div>
-                <div style={{ fontSize: 11, color: C.tx3 }}>⚡ ENERGIA total</div>
+            ) : (
+              <div onClick={openUsernameEdit} style={{ fontSize: 11, color: C.gold, cursor: "pointer", marginBottom: 4, opacity: 0.7, display: "flex", alignItems: "center", gap: 4 }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                <span style={{ textDecoration: "underline dotted" }}>Definir @username</span>
               </div>
-            </div>
+            )}
+            <TitleBanner level={(profile.upgradeLevels || {})[(profile.equippedTitle)] || 0} color={C.gold} accentColor={getTitleTargetColor((SHOP_TITLES.find(t => t.id === profile.equippedTitle) || SHOP_TITLES[0]).price) || C.gold}>
+              <span style={{ fontSize: 11, fontStyle: "italic", fontWeight: 600, color: C.gold }}>{(SHOP_TITLES.find(t => t.id === profile.equippedTitle) || SHOP_TITLES[0]).name}</span>
+            </TitleBanner>
           </div>
-        </div>
-        <div style={{ marginBottom: 10 }}>
-          <TitleBanner level={(profile.upgradeLevels || {})[(profile.equippedTitle)] || 0} color={C.gold} accentColor={getTitleTargetColor((SHOP_TITLES.find(t => t.id === profile.equippedTitle) || SHOP_TITLES[0]).price) || C.gold}>
-            <span style={{ fontSize: 12, fontStyle: "italic", fontWeight: 600, color: C.gold }}>{(SHOP_TITLES.find(t => t.id === profile.equippedTitle) || SHOP_TITLES[0]).name}</span>
-          </TitleBanner>
+          {/* ENERGIA total à direita */}
+          <div style={{ textAlign: "right", flexShrink: 0 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: C.gold }}>{(profile.totalXp || 0).toLocaleString()}</div>
+            <div style={{ fontSize: 11, color: C.tx3 }}>⚡ ENERGIA total</div>
+          </div>
         </div>
         <div style={{ marginBottom: 10 }}>
           <EnergiaBarDupla poderInfo={_poderInfo} rankInfo={_rankInfo} />

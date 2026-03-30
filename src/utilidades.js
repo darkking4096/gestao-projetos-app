@@ -248,25 +248,80 @@ export function getXp(d) { return getEnergia(d); }
 export function getCoins(d) { return getMoedas(d); }
 
 /**
+ * Estima o rank de dificuldade com base em um valor total de ⚡ ENERGIA.
+ * Usado tanto para projetos quanto para objetivos.
+ *
+ * Thresholds:
+ *  < 10       → null (em desenvolvimento / pré-F)
+ *  10–19      → F-
+ *  20–29      → F
+ *  30–39      → F+
+ *  40–59      → E-
+ *  60–79      → E
+ *  80–99      → E+
+ *  100–129    → D-
+ *  130–159    → D
+ *  160–189    → D+
+ *  190–239    → C-
+ *  240–279    → C
+ *  280–319    → C+
+ *  320–379    → B-
+ *  380–439    → B
+ *  440–499    → B+
+ *  500–649    → A-
+ *  650–799    → A
+ *  800–999    → A+
+ *  1000–2999  → S-
+ *  3000–4999  → S
+ *  5000–9999  → S+
+ *  ≥ 10000    → MAX
+ */
+export function getEnergyRankEstimate(totalEnergia) {
+  let rank, modifier;
+  if      (totalEnergia < 10)    { rank = null;  modifier = ""; }
+  else if (totalEnergia < 20)    { rank = "F";   modifier = "-"; }
+  else if (totalEnergia < 30)    { rank = "F";   modifier = ""; }
+  else if (totalEnergia < 40)    { rank = "F";   modifier = "+"; }
+  else if (totalEnergia < 60)    { rank = "E";   modifier = "-"; }
+  else if (totalEnergia < 80)    { rank = "E";   modifier = ""; }
+  else if (totalEnergia < 100)   { rank = "E";   modifier = "+"; }
+  else if (totalEnergia < 130)   { rank = "D";   modifier = "-"; }
+  else if (totalEnergia < 160)   { rank = "D";   modifier = ""; }
+  else if (totalEnergia < 190)   { rank = "D";   modifier = "+"; }
+  else if (totalEnergia < 240)   { rank = "C";   modifier = "-"; }
+  else if (totalEnergia < 280)   { rank = "C";   modifier = ""; }
+  else if (totalEnergia < 320)   { rank = "C";   modifier = "+"; }
+  else if (totalEnergia < 380)   { rank = "B";   modifier = "-"; }
+  else if (totalEnergia < 440)   { rank = "B";   modifier = ""; }
+  else if (totalEnergia < 500)   { rank = "B";   modifier = "+"; }
+  else if (totalEnergia < 650)   { rank = "A";   modifier = "-"; }
+  else if (totalEnergia < 800)   { rank = "A";   modifier = ""; }
+  else if (totalEnergia < 1000)  { rank = "A";   modifier = "+"; }
+  else if (totalEnergia < 3000)  { rank = "S";   modifier = "-"; }
+  else if (totalEnergia < 5000)  { rank = "S";   modifier = ""; }
+  else if (totalEnergia < 10000) { rank = "S";   modifier = "+"; }
+  else                           { rank = "MAX"; modifier = ""; }
+
+  const found = rank ? (RANKS.find(r => r.id === rank) || RANKS[0]) : null;
+  const label = rank ? `${rank}${modifier}` : "—";
+  return {
+    rank,
+    modifier,
+    label,
+    color: found ? found.color : "#555",
+    colorSecondary: found ? found.colorSecondary : "#333",
+    totalEnergia,
+  };
+}
+
+/**
  * Estima o rank de dificuldade de um projeto com base na soma total de ENERGIA
- * de todas as suas tarefas (pendentes ou não).
- * Retorna { rank, label, color, colorSecondary, totalEnergia }
+ * de todas as suas tarefas.
  */
 export function getProjectRankEstimate(project) {
   const allTasks = (project.phases || []).flatMap(ph => ph.tasks || []);
   const totalEnergia = allTasks.reduce((sum, t) => sum + (getEnergia(t.difficulty || 5)), 0);
-  // Thresholds baseados nos ranges de PODER dos ranks
-  let rankId;
-  if      (totalEnergia < 30)    rankId = "F";
-  else if (totalEnergia < 100)   rankId = "E";
-  else if (totalEnergia < 300)   rankId = "D";
-  else if (totalEnergia < 800)   rankId = "C";
-  else if (totalEnergia < 2000)  rankId = "B";
-  else if (totalEnergia < 5000)  rankId = "A";
-  else if (totalEnergia < 20000) rankId = "S";
-  else                           rankId = "MAX";
-  const found = RANKS.find(r => r.id === rankId) || RANKS[0];
-  return { rank: rankId, label: rankId, color: found.color, colorSecondary: found.colorSecondary, totalEnergia };
+  return getEnergyRankEstimate(totalEnergia);
 }
 
 /* ═══ V2: Objective utility functions ═══ */

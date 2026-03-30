@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { C } from '../temas.js';
-import { td, uid, fmtD, fmtFreq, getXp, getCoins, getEnergia, getMoedas, getLevelInfo, getMastery, isRoutineDueToday, calcObjectiveXp, checkProjectCompletion, wouldCreateCycle, removeObjectiveLinksFromActivities, migrateFreq, getProjectRankEstimate } from '../utilidades.js';
+import { td, uid, fmtD, fmtFreq, getXp, getCoins, getEnergia, getMoedas, getLevelInfo, getMastery, isRoutineDueToday, calcObjectiveXp, checkProjectCompletion, wouldCreateCycle, removeObjectiveLinksFromActivities, migrateFreq, getProjectRankEstimate, getEnergyRankEstimate } from '../utilidades.js';
 import { PRIORITIES, CATEGORIES, MASTERY_LEVELS, STREAK_MULT } from '../constantes.js';
 import { Btn, Card, Badge, PBar, TopBar, Modal, ConfirmModal, DeleteModal, NotesLog, SLabel, Input, Chk } from '../componentes-base.jsx';
 import { IconSVG, ConsumableSVG, MaestriaSVG } from '../icones.jsx';
@@ -73,12 +73,12 @@ function ProjectDetail({ item, onUpdate, onDelete, onComplete, nav, navBack, obj
 
       {(() => { const est = getProjectRankEstimate(item); return (
         <div style={{ background: C.card, borderRadius: 8, padding: "7px 10px", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ width: 28, height: 28, borderRadius: 14, background: est.color + "22", border: "1.5px solid " + est.color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <span style={{ fontSize: 12, fontWeight: 800, color: est.color }}>{est.rank}</span>
+          <div style={{ width: 32, height: 32, borderRadius: 16, background: est.rank ? est.color + "22" : C.card, border: "1.5px solid " + (est.rank ? est.color : C.tx4), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <span style={{ fontSize: est.label === "—" ? 16 : 11, fontWeight: 800, color: est.rank ? est.color : C.tx4 }}>{est.label}</span>
           </div>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: est.color }}>Rank estimado: {est.rank}</div>
-            <div style={{ fontSize: 10, color: C.tx3 }}>{est.totalEnergia.toLocaleString()} ⚡ no total ({allTasks.length} tarefas)</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: est.rank ? est.color : C.tx3 }}>{est.rank ? `Rank ${est.label}` : "Em desenvolvimento"}</div>
+            <div style={{ fontSize: 10, color: C.tx3 }}>{est.totalEnergia.toLocaleString()} ⚡ projetados · {allTasks.length} tarefa{allTasks.length !== 1 ? "s" : ""}</div>
           </div>
         </div>
       ); })()}
@@ -329,8 +329,19 @@ function ObjectiveDetail({ item, onUpdate, onDelete, objectives, projects, routi
       </div>
       {item.purpose && <div style={{ fontSize: 11, color: C.tx2, fontStyle: "italic", marginBottom: 8, lineHeight: 1.5 }}>{item.purpose}</div>}
 
+      {(() => { const est = getEnergyRankEstimate(xp); return (
+        <div style={{ background: C.card, borderRadius: 8, padding: "7px 10px", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ width: 32, height: 32, borderRadius: 16, background: est.rank ? est.color + "22" : C.card, border: "1.5px solid " + (est.rank ? est.color : C.tx4), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <span style={{ fontSize: est.label === "—" ? 16 : 11, fontWeight: 800, color: est.rank ? est.color : C.tx4 }}>{est.label}</span>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: est.rank ? est.color : C.tx3 }}>{est.rank ? `Rank ${est.label}` : "Em desenvolvimento"}</div>
+            <div style={{ fontSize: 10, color: C.tx3 }}>{xp.toLocaleString()} ⚡ ENERGIA espelhada</div>
+          </div>
+        </div>
+      ); })()}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5, marginBottom: 12 }}>
-        <div style={{ background: C.card, borderRadius: 6, padding: 8, textAlign: "center" }}><div style={{ fontSize: 14, fontWeight: 600, color: C.gold }}>{xp.toLocaleString()}</div><div style={{ fontSize: 11, color: C.tx3 }}>⚡ ENERGIA espelhada</div></div>
+        <div style={{ background: C.card, borderRadius: 6, padding: 8, textAlign: "center" }}><div style={{ fontSize: 14, fontWeight: 600, color: C.gold }}>{xp.toLocaleString()}</div><div style={{ fontSize: 11, color: C.tx3 }}>⚡ ENERGIA</div></div>
         <div style={{ background: C.card, borderRadius: 6, padding: 8, textAlign: "center" }}><div style={{ fontSize: 14, fontWeight: 600, color: C.tx }}>{(item.linkedActivities || []).length}</div><div style={{ fontSize: 11, color: C.tx3 }}>Atividades</div></div>
         <div style={{ background: C.card, borderRadius: 6, padding: 8, textAlign: "center" }}><div style={{ fontSize: 14, fontWeight: 600, color: C.tx }}>{subObjs.length}</div><div style={{ fontSize: 11, color: C.tx3 }}>Sub-obj.</div></div>
       </div>
