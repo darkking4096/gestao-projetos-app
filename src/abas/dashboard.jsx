@@ -121,7 +121,6 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ position: "relative" }}>
             <BorderSVG level={(profile.upgradeLevels || {})[profile.equippedBorder] || 0} color={C.gold} accentColor={(SHOP_BORDERS.find(b => b.id === profile.equippedBorder) || SHOP_BORDERS[0]).color} size={54}><IconSVG id={profile.equippedIcon || "i_estrela"} size={20} color={C.gold} /></BorderSVG>
-            <div style={{ position: "absolute", bottom: -2, right: -2, background: _rankInfo.color || C.gold, borderRadius: 4, padding: "0 4px", fontSize: 11, fontWeight: 700, color: C.bg, lineHeight: "14px" }}>{_poderInfo.poder}</div>
           </div>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>

@@ -247,6 +247,28 @@ export function migrateDifficulty(d) { return DIFF_MIGRATION_MAP[d] || d; }
 export function getXp(d) { return getEnergia(d); }
 export function getCoins(d) { return getMoedas(d); }
 
+/**
+ * Estima o rank de dificuldade de um projeto com base na soma total de ENERGIA
+ * de todas as suas tarefas (pendentes ou não).
+ * Retorna { rank, label, color, colorSecondary, totalEnergia }
+ */
+export function getProjectRankEstimate(project) {
+  const allTasks = (project.phases || []).flatMap(ph => ph.tasks || []);
+  const totalEnergia = allTasks.reduce((sum, t) => sum + (getEnergia(t.difficulty || 5)), 0);
+  // Thresholds baseados nos ranges de PODER dos ranks
+  let rankId;
+  if      (totalEnergia < 30)    rankId = "F";
+  else if (totalEnergia < 100)   rankId = "E";
+  else if (totalEnergia < 300)   rankId = "D";
+  else if (totalEnergia < 800)   rankId = "C";
+  else if (totalEnergia < 2000)  rankId = "B";
+  else if (totalEnergia < 5000)  rankId = "A";
+  else if (totalEnergia < 20000) rankId = "S";
+  else                           rankId = "MAX";
+  const found = RANKS.find(r => r.id === rankId) || RANKS[0];
+  return { rank: rankId, label: rankId, color: found.color, colorSecondary: found.colorSecondary, totalEnergia };
+}
+
 /* ═══ V2: Objective utility functions ═══ */
 export function calcObjectiveXp(objectiveId, projects, routines, tasks, objectives, _visited = new Set()) {
   // Proteção anti-ciclo: se já visitamos este nó na recursão atual, retorna 0

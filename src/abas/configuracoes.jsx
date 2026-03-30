@@ -3,7 +3,7 @@ import { C } from '../temas.js';
 import { uid, td, getLevelInfo, getPoderInfo, getRankInfo, getEnergia, clamp } from '../utilidades.js';
 import { THEMES } from '../temas.js';
 import { DEFAULT_PRESETS, CATEGORIES, COLORS, DIFF_CATEGORIES } from '../constantes.js';
-import { Btn, Card, Badge, TopBar, Modal, ConfirmModal, DeleteModal, EnergiaBarDupla, SLabel, getDiffColor } from '../componentes-base.jsx';
+import { Btn, Card, Badge, TopBar, Modal, ConfirmModal, DeleteModal, EnergiaBarDupla, RankEmblemSVG, SLabel, getDiffColor } from '../componentes-base.jsx';
 import { IconSVG, SHOP_THEMES_LIST, BorderSVG, TitleBanner, SHOP_BORDERS, SHOP_TITLES, getTitleTargetColor, getTitleStyle, getUpgradeCost, getBorderStyle, UPGRADE_LABELS, RARITY_LABELS, RARITY_COLORS } from '../icones.jsx';
 import { Social } from '../armazenamento.js';
 
@@ -51,7 +51,7 @@ function DevField({ label, value, onChange, type = "number", min, max, step = 1 
   );
 }
 
-const DEV_PASSWORD = "darkking";
+const DEV_PASSWORD = "333tesla";
 
 function DevPanel({ open, onOpen, onClose, profile, setProfile, poderInfo, rankInfo }) {
   const [showPrompt, setShowPrompt] = useState(false);
@@ -447,7 +447,10 @@ function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects
           <div style={{ flex: 1 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
-                <div style={{ fontSize: 15, fontWeight: 600, color: _rankInfo.color || C.gold }}>{"PODER "}{_poderInfo.poder}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <RankEmblemSVG rank={_rankInfo.rankMain} modifier={_rankInfo.modifier || ""} size={28} color={_rankInfo.color} colorSecondary={_rankInfo.colorSecondary} />
+                  <span style={{ fontSize: 14, fontWeight: 700, color: _rankInfo.color || C.gold }}>{_rankInfo.label}</span>
+                </div>
                 {profile.username ? (
                   <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 3 }}>
                     <span style={{ fontSize: 13, color: C.gold, fontWeight: 700 }}>@{profile.username}</span>

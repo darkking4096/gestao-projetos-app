@@ -385,6 +385,117 @@ function getDiffColor(d) {
  * rank: "F","E","D","C","B","A","S","MAX" ou null (Humano)
  * modifier: "","−","−−","−−−","+","++","+++"
  * size: tamanho em px
+ *
+ * Usa os frames SVG reais (rank_X_frame.svg) tintados com a cor do rank.
+ * ViewBox recortado em ~"100 70 312 330" para enquadrar o emblema.
+ */
+function _rankDeco(rank, c, cs) {
+  const S = { stroke: "#15171B", strokeWidth: "4", strokeLinejoin: "round" };
+  switch (rank) {
+    case "F": return null;
+    case "E": return <>
+      <polygon points="256,86 269,96 256,106 243,96" fill={c} {...S}/>
+      <polygon points="256,330 266,338 256,346 246,338" fill={c} {...S}/>
+    </>;
+    case "D": return <>
+      <path d="M236,104 C240.8,84 263.1,82.4 271.6,81.7 C267.3,89.1 256.1,108.4 236,104 Z" fill={c} {...S}/>
+      <path d="M276,104 C255.9,108.4 244.7,89.1 240.4,81.7 C248.9,82.4 271.2,84 276,104 Z" fill={c} {...S}/>
+      <polygon points="256,81 269,92 256,103 243,92" fill={c} {...S}/>
+      <polygon points="256,332 266,340 256,348 246,340" fill={c} {...S}/>
+    </>;
+    case "C": return <>
+      <path d="M236,104 C240.8,84 263.1,82.4 271.6,81.7 C267.3,89.1 256.1,108.4 236,104 Z" fill={c} {...S}/>
+      <path d="M276,104 C255.9,108.4 244.7,89.1 240.4,81.7 C248.9,82.4 271.2,84 276,104 Z" fill={c} {...S}/>
+      <polygon points="256,81 269,92 256,103 243,92" fill={c} {...S}/>
+      <polygon points="256,338.64 263.92,348 256,357.36 248.08,348" fill={c} {...S}/>
+      <path d="M222,348 C208.3,372.3 177.1,369.7 165.2,368.7 C173.7,360.2 195.9,338.2 222,348 Z" fill={c} {...S}/>
+      <path d="M290,348 C316.1,338.2 338.3,360.2 346.8,368.7 C334.9,369.7 303.7,372.3 290,348 Z" fill={c} {...S}/>
+    </>;
+    case "B": return <>
+      <path d="M236,104 C240.8,84 263.1,82.4 271.6,81.7 C267.3,89.1 256.1,108.4 236,104 Z" fill={c} {...S}/>
+      <path d="M276,104 C255.9,108.4 244.7,89.1 240.4,81.7 C248.9,82.4 271.2,84 276,104 Z" fill={c} {...S}/>
+      <polygon points="256,81 269,92 256,103 243,92" fill={c} {...S}/>
+      <polygon points="256,337.08 265.24,348 256,358.92 246.76,348" fill={c} {...S}/>
+      <path d="M222,348 C206,376.3 169.6,373.3 155.7,372.1 C165.6,362.3 191.6,336.6 222,348 Z" fill={c} {...S}/>
+      <path d="M290,348 C320.4,336.6 346.4,362.3 356.3,372.1 C342.4,373.3 306,376.3 290,348 Z" fill={c} {...S}/>
+      <path d="M234,348 C226,371.8 198.1,374 187.4,374.9 C193.5,366 209.4,343 234,348 Z" fill={c} {...S}/>
+      <path d="M278,348 C302.6,343 318.5,366 324.6,374.9 C313.9,374 286,371.8 278,348 Z" fill={c} {...S}/>
+      <path d="M155.5,276 C151.8,290.6 135.7,290.9 129.6,291 C132.7,285.7 141,271.9 155.5,276 Z" fill={c} {...S}/>
+      <path d="M356.5,276 C371,271.9 379.3,285.7 382.4,291 C376.3,290.9 360.2,290.6 356.5,276 Z" fill={c} {...S}/>
+    </>;
+    case "A": return <>
+      <path d="M230,106 C239.1,82.8 267,81.2 277.7,80.6 C271.2,89.2 254.3,111.4 230,106 Z" fill={c} {...S}/>
+      <path d="M282,106 C257.7,111.4 240.8,89.2 234.3,80.6 C245,81.2 272.9,82.8 282,106 Z" fill={c} {...S}/>
+      <polygon points="256,77 271,90 256,103 241,90" fill={c} {...S}/>
+      <polygon points="256,335.26 266.78,348 256,360.74 245.22,348" fill={c} {...S}/>
+      <path d="M222,348 C203.4,381.1 160.9,377.5 144.6,376.2 C156.2,364.6 186.5,334.6 222,348 Z" fill={c} {...S}/>
+      <path d="M290,348 C325.5,334.6 355.8,364.6 367.4,376.2 C351.1,377.5 308.6,381.1 290,348 Z" fill={c} {...S}/>
+      <path d="M234,348 C224.7,375.8 192.2,378.4 179.7,379.4 C186.8,369 205.3,342.2 234,348 Z" fill={c} {...S}/>
+      <path d="M278,348 C306.7,342.2 325.2,369 332.3,379.4 C319.8,378.4 287.3,375.8 278,348 Z" fill={c} {...S}/>
+      <path d="M208,348 C179.6,382.9 129.5,372.7 110.2,368.8 C126.2,357.4 167.9,327.7 208,348 Z" fill={c} {...S}/>
+      <path d="M304,348 C344.1,327.7 385.8,357.4 401.8,368.8 C382.5,372.7 332.4,382.9 304,348 Z" fill={c} {...S}/>
+      <path d="M145.7,253.8 C138.3,269.5 120.2,265.8 113.3,264.4 C118.1,259.1 130.5,245.5 145.7,253.8 Z" fill={c} {...S}/>
+      <path d="M169.8,295.6 C169.4,312.9 151.4,316.9 144.5,318.4 C146.7,311.7 152.5,294.2 169.8,295.6 Z" fill={c} {...S}/>
+      <path d="M342.2,295.6 C359.5,294.2 365.3,311.7 367.5,318.4 C360.6,316.9 342.6,312.9 342.2,295.6 Z" fill={c} {...S}/>
+      <path d="M366.3,253.8 C381.5,245.5 393.9,259.1 398.7,264.4 C391.8,265.8 373.7,269.5 366.3,253.8 Z" fill={c} {...S}/>
+    </>;
+    case "S": return <>
+      <path d="M230,106 C239.1,82.8 267,81.2 277.7,80.6 C271.2,89.2 254.3,111.4 230,106 Z" fill={c} {...S}/>
+      <path d="M282,106 C257.7,111.4 240.8,89.2 234.3,80.6 C245,81.2 272.9,82.8 282,106 Z" fill={c} {...S}/>
+      <polygon points="256,77 271,90 256,103 241,90" fill={c} {...S}/>
+      <polygon points="256,334.22 267.66,348 256,361.78 244.34,348" fill={c} {...S}/>
+      <path d="M222,348 C201.9,383.8 155.9,379.9 138.3,378.5 C150.9,366 183.6,333.6 222,348 Z" fill={c} {...S}/>
+      <path d="M290,348 C328.4,333.6 361.1,366 373.7,378.5 C356.1,379.9 310.1,383.8 290,348 Z" fill={c} {...S}/>
+      <path d="M234,348 C223.9,378 188.7,380.9 175.2,381.9 C182.9,370.8 202.9,341.7 234,348 Z" fill={c} {...S}/>
+      <path d="M278,348 C309.1,341.7 329.1,370.8 336.8,381.9 C323.3,380.9 288.1,378 278,348 Z" fill={c} {...S}/>
+      <path d="M208,348 C177.3,385.7 123,374.7 102.2,370.5 C119.5,358.1 164.6,326 208,348 Z" fill={c} {...S}/>
+      <path d="M304,348 C347.4,326 392.5,358.1 409.8,370.5 C389,374.7 334.7,385.7 304,348 Z" fill={c} {...S}/>
+      <path d="M248,348 C245.2,373.7 217.6,381.8 207,384.9 C211.2,374.7 222.2,348.1 248,348 Z" fill={c} {...S}/>
+      <path d="M264,348 C289.8,348.1 300.8,374.7 305,384.9 C294.4,381.8 266.8,373.7 264,348 Z" fill={c} {...S}/>
+      <path d="M141.8,238.1 C132.2,252.6 114.9,246.4 108.3,244 C113.7,239.5 127.9,227.8 141.8,238.1 Z" fill={c} {...S}/>
+      <path d="M161,284.5 C158.5,301.7 140.1,303.4 133.1,304 C136.1,297.7 144,281 161,284.5 Z" fill={c} {...S}/>
+      <path d="M198,318.5 C203,335.1 187.1,344.4 181,347.9 C181,340.9 181.1,322.5 198,318.5 Z" fill={c} {...S}/>
+      <path d="M314,318.5 C330.9,322.5 331,340.9 331,347.9 C324.9,344.4 309,335.1 314,318.5 Z" fill={c} {...S}/>
+      <path d="M351,284.5 C368,281 375.9,297.7 378.9,304 C371.9,303.4 353.5,301.7 351,284.5 Z" fill={c} {...S}/>
+      <path d="M370.2,238.1 C384.1,227.8 398.3,239.5 403.7,244 C397.1,246.4 379.8,252.6 370.2,238.1 Z" fill={c} {...S}/>
+      <polygon points="256,360 265,370 256,380 247,370" fill={cs} stroke="#15171B" strokeWidth="4"/>
+    </>;
+    case "MAX": return <>
+      <circle cx="256" cy="218" r="136" fill="none" stroke={cs} strokeWidth="6"/>
+      <path d="M230,106 C239.1,82.8 267,81.2 277.7,80.6 C271.2,89.2 254.3,111.4 230,106 Z" fill={c} {...S}/>
+      <path d="M282,106 C257.7,111.4 240.8,89.2 234.3,80.6 C245,81.2 272.9,82.8 282,106 Z" fill={c} {...S}/>
+      <polygon points="256,77 271,90 256,103 241,90" fill={c} {...S}/>
+      <polygon points="256,106 263,112 256,118 249,112" fill={cs} stroke="#15171B" strokeWidth="4"/>
+      <polygon points="256,333.44 268.32,348 256,362.56 243.68,348" fill={c} {...S}/>
+      <path d="M222,348 C200.7,385.8 152.2,381.8 133.6,380.2 C146.8,367 181.4,332.7 222,348 Z" fill={c} {...S}/>
+      <path d="M290,348 C330.6,332.7 365.2,367 378.4,380.2 C359.8,381.8 311.3,385.8 290,348 Z" fill={c} {...S}/>
+      <path d="M234,348 C223.4,379.7 186.2,382.7 171.9,383.8 C180,372.1 201.2,341.3 234,348 Z" fill={c} {...S}/>
+      <path d="M278,348 C310.8,341.3 332,372.1 340.1,383.8 C325.8,382.7 288.6,379.7 278,348 Z" fill={c} {...S}/>
+      <path d="M208,348 C175.6,387.9 118.2,376.2 96.3,371.8 C114.5,358.7 162.2,324.8 208,348 Z" fill={c} {...S}/>
+      <path d="M304,348 C349.8,324.8 397.5,358.7 415.7,371.8 C393.8,376.2 336.4,387.9 304,348 Z" fill={c} {...S}/>
+      <path d="M248,348 C245,375.1 215.9,383.7 204.7,387 C209.1,376.2 220.7,348.2 248,348 Z" fill={c} {...S}/>
+      <path d="M264,348 C291.3,348.2 302.9,376.2 307.3,387 C296.1,383.7 267,375.1 264,348 Z" fill={c} {...S}/>
+      <path d="M140.3,226.1 C129.3,239.5 112.7,231.5 106.4,228.5 C112.2,224.5 127.5,214.4 140.3,226.1 Z" fill={c} {...S}/>
+      <path d="M153.6,272.5 C149,289.2 130.6,288.6 123.6,288.4 C127.3,282.5 137.2,266.9 153.6,272.5 Z" fill={c} {...S}/>
+      <path d="M184.6,309.4 C187.2,326.5 170.2,333.5 163.7,336.2 C164.7,329.2 167.3,311 184.6,309.4 Z" fill={c} {...S}/>
+      <path d="M227.9,330.6 C237.3,345.1 224.6,358.5 219.7,363.5 C217.8,356.8 212.8,339.1 227.9,330.6 Z" fill={c} {...S}/>
+      <path d="M284.1,330.6 C299.2,339.1 294.2,356.8 292.3,363.5 C287.4,358.5 274.7,345.1 284.1,330.6 Z" fill={c} {...S}/>
+      <path d="M327.4,309.4 C344.7,311 347.3,329.2 348.3,336.2 C341.8,333.5 324.8,326.5 327.4,309.4 Z" fill={c} {...S}/>
+      <path d="M358.4,272.5 C374.8,266.9 384.7,282.5 388.4,288.4 C381.4,288.6 363,289.2 358.4,272.5 Z" fill={c} {...S}/>
+      <path d="M371.7,226.1 C384.5,214.4 399.8,224.5 405.6,228.5 C399.3,231.5 382.7,239.5 371.7,226.1 Z" fill={c} {...S}/>
+      <polygon points="102,200 76,228 76,244 102,272 112,236" fill={c} stroke="#15171B" strokeWidth="4"/>
+      <polygon points="410,200 436,228 436,244 410,272 400,236" fill={c} stroke="#15171B" strokeWidth="4"/>
+      <polygon points="256,361 266,372 256,383 246,372" fill={cs} stroke="#15171B" strokeWidth="4"/>
+    </>;
+    default: return null;
+  }
+}
+
+/**
+ * Emblema do rank atual do jogador.
+ * rank: "F","E","D","C","B","A","S","MAX" ou null (Humano)
+ * modifier: "","−","−−","−−−","+","++","+++"
+ * size: tamanho em px
  */
 function RankEmblemSVG({ rank, modifier, size = 32, color, colorSecondary }) {
   if (!rank) {
@@ -399,71 +510,33 @@ function RankEmblemSVG({ rank, modifier, size = 32, color, colorSecondary }) {
     );
   }
 
-  if (rank === "MAX") {
-    // MAX — emblema cromático/especial
-    return (
-      <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
-        <defs>
-          <linearGradient id="maxGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%"   stopColor="#ff6b00" />
-            <stop offset="25%"  stopColor="#e74c3c" />
-            <stop offset="50%"  stopColor="#9b59b6" />
-            <stop offset="75%"  stopColor="#3498db" />
-            <stop offset="100%" stopColor="#2ecc71" />
-          </linearGradient>
-        </defs>
-        <polygon points="16,2 20,12 30,12 22,19 25,29 16,23 7,29 10,19 2,12 12,12" stroke="url(#maxGrad)" strokeWidth="1.5" fill="url(#maxGrad)" fillOpacity="0.25" />
-        <text x="16" y="20" textAnchor="middle" fontSize="8" fontWeight="900" fill="url(#maxGrad)" fontFamily="sans-serif" letterSpacing="-0.5">MAX</text>
-      </svg>
-    );
-  }
-
   const c = color || "#a0a0a0";
   const cs = colorSecondary || c + "80";
-  // Determina complexidade visual pelo modificador
-  const modLevel = modifier === "+++" || modifier === "++" ? 3
-                 : modifier === "+"                        ? 2
-                 : modifier === ""                         ? 1
-                 : modifier === "-"                        ? 0
-                 : modifier === "--"                       ? -1
-                 : -2; // "---"
-
-  const fillOpacity = 0.12 + Math.max(0, modLevel + 2) * 0.05;
-  const strokeW = modLevel >= 1 ? 2 : 1.5;
+  // viewBox crops to the emblem area (works for F through MAX)
+  const vb = rank === "MAX" ? "65 65 382 345" : "110 68 292 332";
 
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
-      {/* Glow para modificadores positivos */}
-      {modLevel >= 2 && <circle cx="16" cy="16" r="15" fill={c} fillOpacity="0.08" />}
-      {/* Forma do emblema: escudo para ranks principais */}
-      <path
-        d="M16 2 L26 6 L26 17 C26 23 21 27.5 16 30 C11 27.5 6 23 6 17 L6 6 Z"
-        stroke={c} strokeWidth={strokeW} fill={c} fillOpacity={fillOpacity}
-      />
-      {/* Borda interna para modificadores negativos */}
-      {modLevel <= -1 && (
-        <path d="M16 5 L24 8.5 L24 17 C24 21.5 20.5 25.5 16 28 C11.5 25.5 8 21.5 8 17 L8 8.5 Z"
-          stroke={cs} strokeWidth="0.5" fill="none" />
-      )}
-      {/* Estrelas/detalhes para modificadores positivos */}
-      {modLevel >= 3 && <>
-        <circle cx="10" cy="6" r="1.2" fill={c} />
-        <circle cx="22" cy="6" r="1.2" fill={c} />
-        <circle cx="16" cy="3"  r="1.2" fill={c} />
-      </>}
-      {modLevel === 2 && <>
-        <circle cx="10" cy="7"  r="1" fill={c} />
-        <circle cx="22" cy="7"  r="1" fill={c} />
-      </>}
-      {/* Letra do rank */}
-      <text x="16" y="20" textAnchor="middle" fontSize={rank.length > 1 ? "9" : "11"} fontWeight="800"
-        fill={modLevel >= 1 ? c : cs} fontFamily="sans-serif" letterSpacing="-0.5">
+    <svg width={size} height={size} viewBox={vb}>
+      {/* Base circles */}
+      <circle cx="256" cy="218" r="118" fill="#1a1c20" stroke="#15171B" strokeWidth="6"/>
+      <circle cx="256" cy="218" r="106" fill="none" stroke={c} strokeWidth="20"/>
+      <circle cx="256" cy="218" r="94"  fill="none" stroke={cs + "99"} strokeWidth="10"/>
+      <circle cx="256" cy="218" r="76"  fill="none" stroke="#15171B" strokeWidth="3"/>
+      {/* Rank-specific frame decorations */}
+      {_rankDeco(rank, c, cs)}
+      {/* Rank letter */}
+      <text x="256" y="218" textAnchor="middle" dominantBaseline="central"
+        fontSize={rank === "MAX" ? "62" : "84"} fontWeight="900"
+        fill={c} fontFamily="sans-serif" letterSpacing="-3"
+        style={{ userSelect: "none" }}>
         {rank}
       </text>
-      {/* Modificador abaixo da letra */}
+      {/* Modifier */}
       {modifier && (
-        <text x="16" y="27" textAnchor="middle" fontSize="5.5" fontWeight="600"
-          fill={c + "bb"} fontFamily="sans-serif" letterSpacing="0.5">
+        <text x="256" y="292" textAnchor="middle"
+          fontSize="38" fontWeight="700"
+          fill={c + "cc"} fontFamily="sans-serif" letterSpacing="3"
+          style={{ userSelect: "none" }}>
           {modifier.replace(/-/g, "−")}
         </text>
       )}

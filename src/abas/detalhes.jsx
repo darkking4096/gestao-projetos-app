@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { C } from '../temas.js';
-import { td, uid, fmtD, fmtFreq, getXp, getCoins, getEnergia, getMoedas, getLevelInfo, getMastery, isRoutineDueToday, calcObjectiveXp, checkProjectCompletion, wouldCreateCycle, removeObjectiveLinksFromActivities, migrateFreq } from '../utilidades.js';
+import { td, uid, fmtD, fmtFreq, getXp, getCoins, getEnergia, getMoedas, getLevelInfo, getMastery, isRoutineDueToday, calcObjectiveXp, checkProjectCompletion, wouldCreateCycle, removeObjectiveLinksFromActivities, migrateFreq, getProjectRankEstimate } from '../utilidades.js';
 import { PRIORITIES, CATEGORIES, MASTERY_LEVELS, STREAK_MULT } from '../constantes.js';
 import { Btn, Card, Badge, PBar, TopBar, Modal, ConfirmModal, DeleteModal, NotesLog, SLabel, Input, Chk } from '../componentes-base.jsx';
 import { IconSVG, ConsumableSVG, MaestriaSVG } from '../icones.jsx';
@@ -71,6 +71,17 @@ function ProjectDetail({ item, onUpdate, onDelete, onComplete, nav, navBack, obj
         </div>
       )}
 
+      {(() => { const est = getProjectRankEstimate(item); return (
+        <div style={{ background: C.card, borderRadius: 8, padding: "7px 10px", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 14, background: est.color + "22", border: "1.5px solid " + est.color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <span style={{ fontSize: 12, fontWeight: 800, color: est.color }}>{est.rank}</span>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: est.color }}>Rank estimado: {est.rank}</div>
+            <div style={{ fontSize: 10, color: C.tx3 }}>{est.totalEnergia.toLocaleString()} ⚡ no total ({allTasks.length} tarefas)</div>
+          </div>
+        </div>
+      ); })()}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5, marginBottom: 10 }}>
         <div style={{ background: C.card, borderRadius: 6, padding: 6, textAlign: "center" }}><div style={{ fontSize: 13, fontWeight: 600, color: C.tx }}>{item.progress || 0}%</div><div style={{ fontSize: 11, color: C.tx3 }}>Progresso</div></div>
         <div style={{ background: C.card, borderRadius: 6, padding: 6, textAlign: "center" }}><div style={{ fontSize: 13, fontWeight: 600, color: C.tx }}>{doneTasks}/{allTasks.length}</div><div style={{ fontSize: 11, color: C.tx3 }}>Tarefas</div></div>

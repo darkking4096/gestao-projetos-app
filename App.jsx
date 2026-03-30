@@ -273,7 +273,7 @@ export default function App({ user, onSignOut }) {
     const totalMult = streakMult + cultivoPct;
 
     let finalXp = xp + Math.round(xp * totalMult);
-    let finalCoins = coins + Math.round(coins * (streakMult + cultivoPct));
+    let finalCoins = coins; // streak e cultivo só multiplicam ENERGIA, não moedas
     const boostActive = p.boostExpiry && p.boostExpiry > Date.now();
     if (boostActive) finalCoins += Math.round(finalCoins * 0.25);
 
