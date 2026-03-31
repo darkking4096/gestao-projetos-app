@@ -1,56 +1,54 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { C } from '../temas.js';
-import { uid, td, fmtFreq, migrateFreq } from '../utilidades.js';
+import { uid, td, fmtFreq } from '../utilidades.js';
 
 /* ══════════════════════════════════════════════════
-   PROMPT DO SISTEMA — define o comportamento da IA
+   PROMPT DO SISTEMA
 ══════════════════════════════════════════════════ */
-const SYSTEM_PROMPT = `Você é o Assistente de Produtividade do app "Atividades" — um sistema gamificado de gestão pessoal com ENERGIA ⚡, moedas e ranks (de F- a MAX).
+const SYSTEM_PROMPT = `Você é o Assistente de Produtividade do app "Atividades" — um sistema gamificado de gestão pessoal.
 
-SEU ÚNICO PROPÓSITO: Sugerir atividades (tarefas, rotinas ou projetos) altamente relevantes e personalizadas para o usuário, baseadas no histórico e perfil fornecidos.
+SEU ÚNICO PROPÓSITO: Sugerir atividades NOVAS e personalizadas, identificando oportunidades que o usuário ainda não explorou.
 
-═══ REGRAS INVIOLÁVEIS ═══
-1. Responda SEMPRE em português brasileiro, de forma direta e motivadora
-2. Analise o contexto para detectar padrões: tarefas correlatas (→ projeto), ações repetitivas (→ rotina), áreas de crescimento
-3. Sugira SEMPRE entre 2 e 5 atividades — nem mais, nem menos
-4. Se o usuário não tiver histórico, conduza o QUESTIONÁRIO antes de sugerir
-5. NÃO responda perguntas ou pedidos fora do escopo de sugestão de atividades
-6. Se fora do escopo, responda no formato fora_escopo e redirecione gentilmente
-7. Nunca repita sugestões já recusadas na mesma sessão
-8. Calibre dificuldades com precisão:
-   - 1-2: trivial (2-5 min) · 3-4: fácil (15-30 min) · 5-7: moderado (30-90 min)
-   - 8-10: desafiador (2-4h) · 11-14: difícil (dia) · 15-19: épico (semana) · 20: máximo
+REGRAS INVIOLÁVEIS:
+1. Responda SEMPRE em português brasileiro
+2. Sem emojis em nenhuma parte da resposta — nenhum, em lugar algum
+3. NUNCA sugira atividades que já existem — verifique a lista completa de projetos, rotinas e tarefas no contexto e não as replique, mesmo que parcialmente
+4. Tarefas listadas como "vinculadas a projetos" pertencem a projetos que já existem — NÃO recrie esses projetos
+5. Suas sugestões devem ser ideias NOVAS: complementares, adjacentes, coerentes com o perfil do usuário, mas nunca repetições do que já existe
+6. Formato OBRIGATÓRIO de sugestões: SEMPRE exatamente 2 projetos + 1 rotina + 1 tarefa (nessa ordem, 4 itens no total)
+7. NÃO responda perguntas ou pedidos fora do escopo de sugestão de atividades
+8. Se fora do escopo, responda no formato fora_escopo e redirecione
+9. Nunca repita sugestões já recusadas nesta sessão
+10. Calibre dificuldades: 1-2 trivial (2-5 min) | 3-4 fácil (15-30 min) | 5-7 moderado (30-90 min) | 8-10 desafiador (2-4h) | 11-14 difícil (dia) | 15-19 épico (semana) | 20 máximo
 
-═══ FORMATO OBRIGATÓRIO — retorne SOMENTE JSON puro ═══
+INSTRUÇÕES DE ANÁLISE DO CONTEXTO:
+- Projetos existentes: deduza o perfil do usuário pelos temas, sugira projetos em áreas DIFERENTES ou ângulos ainda não cobertos
+- Rotinas existentes: sugira rotinas que potencializem o que existe mas ainda não sejam feitas
+- Áreas da vida sem cobertura (saúde, finanças, relações pessoais, hobby): priorize these gaps
+- Progresso e streaks: calibre dificuldade pelo nível de disciplina demonstrado
+- Tarefas avulsas pendentes: são ações já planejadas, não as repita
 
-Para SUGESTÕES:
-{"tipo":"sugestoes","mensagem":"Frase breve e motivadora","sugestoes":[{"tipo":"task","nome":"Nome claro e objetivo","descricao":"O que fazer e por que vale a pena","dificuldade":5,"categoria":"Trabalho"},{"tipo":"routine","nome":"Nome do hábito","descricao":"Por que criar esse hábito agora","dificuldade":3,"categoria":"Saúde"},{"tipo":"project","nome":"Nome do projeto","descricao":"Visão do projeto e suas etapas principais","dificuldade":8,"categoria":"Estudos"}]}
+FORMATO OBRIGATÓRIO — retorne SOMENTE JSON puro, sem markdown, sem texto fora do JSON:
 
-Para QUESTIONÁRIO (usuário novo):
-{"tipo":"questionario","mensagem":"Texto introdutório ou bridge entre perguntas","pergunta":"Pergunta clara e direta","opcoes":["Opção A","Opção B","Opção C","Outra"]}
+Para SUGESTOES (obrigatório: 2 projetos + 1 rotina + 1 tarefa, nessa ordem):
+{"tipo":"sugestoes","mensagem":"Frase breve motivadora sem emojis","sugestoes":[{"tipo":"project","nome":"Nome do projeto","descricao":"O que e por que e relevante agora","dificuldade":8,"categoria":"Trabalho"},{"tipo":"project","nome":"Nome do segundo projeto","descricao":"O que e por que e relevante agora","dificuldade":7,"categoria":"Estudos"},{"tipo":"routine","nome":"Nome da rotina","descricao":"Habito e por que potencializa o que existe","dificuldade":3,"categoria":"Saude"},{"tipo":"task","nome":"Nome da tarefa","descricao":"Acao concreta e resultado esperado","dificuldade":5,"categoria":"Pessoal"}]}
+
+Para QUESTIONARIO (usuario novo — uma pergunta por vez):
+{"tipo":"questionario","mensagem":"Texto introdutorio ou transicao entre perguntas","pergunta":"Pergunta direta","opcoes":["Opcao A","Opcao B","Opcao C","Outra"]}
 
 Para RESPOSTA FORA DO ESCOPO:
-{"tipo":"fora_escopo","mensagem":"Mensagem redirecionando ao propósito do chat"}
+{"tipo":"fora_escopo","mensagem":"Mensagem de redirecionamento sem emojis"}
 
-Tipos: "task" (única, pontual) | "routine" (hábito recorrente) | "project" (conjunto de etapas)
-Categorias: "Saúde" | "Trabalho" | "Estudos" | "Pessoal" | "Finanças" | "Hobby" | "Social" | "Casa" | "Esportes" | "Outros"
+Tipos validos: "task" | "routine" | "project"
+Categorias validas: "Saude" | "Trabalho" | "Estudos" | "Pessoal" | "Financas" | "Hobby" | "Social" | "Casa" | "Esportes" | "Outros"
 
-═══ QUESTIONÁRIO PARA USUÁRIOS SEM HISTÓRICO (5 perguntas) ═══
-Conduza uma pergunta por vez nesta ordem:
-P1: Qual área da sua vida você mais quer desenvolver agora? (Saúde, Carreira, Estudos, Finanças, Relacionamentos, Outro)
-P2: Qual é o seu principal objetivo nos próximos 3 meses?
-P3: Quantas horas por dia você tem disponíveis para atividades pessoais?
-P4: Você prefere tarefas pontuais, hábitos diários ou projetos maiores?
-P5: O que costuma impedir você de ser mais produtivo hoje?
-Após as 5 respostas, analise tudo e retorne sugestões altamente personalizadas.
-
-═══ ANÁLISE DE PADRÕES (para usuários com histórico) ═══
-Busque ativamente:
-- 3+ tarefas com tema similar → sugira transformar em PROJETO
-- Ações concluídas semanalmente → sugira criar ROTINA
-- Áreas sem nenhuma atividade nos últimos 7 dias → sugira exploração
-- Projetos parados (baixo progresso) → sugira tarefa de desbloqueio
-- Alta taxa de conclusão → sugira aumentar desafio (dificuldade maior)`;
+QUESTIONARIO PARA USUARIOS SEM HISTORICO (5 perguntas, uma por vez):
+P1: Qual area da sua vida voce mais quer desenvolver agora?
+P2: Qual e o seu principal objetivo nos proximos 3 meses?
+P3: Quantas horas por dia voce tem disponiveis para atividades pessoais?
+P4: Voce prefere projetos estruturados, habitos diarios ou tarefas pontuais?
+P5: O que costuma impedir voce de ser mais produtivo?
+Apos 5 respostas: retorne EXATAMENTE 2 projetos + 1 rotina + 1 tarefa, altamente personalizados.`;
 
 /* ══════════════════════════════════════════════════
    CHAMADA À API GROQ
@@ -91,6 +89,7 @@ function parseAIResponse(raw) {
 
 /* ══════════════════════════════════════════════════
    CONSTRUÇÃO DO CONTEXTO DO USUÁRIO
+   Lista tudo que existe para a IA NÃO repetir
 ══════════════════════════════════════════════════ */
 function buildUserContext(projects, routines, tasks, profile) {
   const today = new Date();
@@ -109,36 +108,49 @@ function buildUserContext(projects, routines, tasks, profile) {
   const doneTasks = tasks.filter(t => t.status === "Concluída" && (t.completedAt || "") >= weekAgoStr);
 
   const routineCompletions = activeRoutines.flatMap(r =>
-    (r.completionLog || []).filter(l => l.date >= weekAgoStr).map(l => r.name)
+    (r.completionLog || []).filter(l => l.date >= weekAgoStr).map(() => r.name)
+  );
+
+  // Tarefas dentro das fases dos projetos (importante: mostrar que o projeto já existe)
+  const projectTasks = activeProjects.flatMap(p =>
+    (p.phases || []).flatMap(ph =>
+      (ph.tasks || []).map(t => ({ name: t.name || t.title || "", projectName: p.name }))
+    )
   );
 
   const lines = [
-    "PERFIL:",
-    `- ENERGIA acumulada: ${(profile.totalXp || 0).toLocaleString()} ⚡  |  PODER: ${Math.floor((profile.totalXp || 0) / 100)}`,
-    `- Streak atual: ${profile.streak || 0} dias  |  Total de tarefas concluídas: ${profile.tasksCompleted || 0}`,
+    "=== PERFIL DO USUARIO ===",
+    `Energia acumulada: ${(profile.totalXp || 0).toLocaleString()} XP | Streak: ${profile.streak || 0} dias | Total de tarefas concluidas: ${profile.tasksCompleted || 0}`,
+    `Semana atual: ${weekXp} XP | ${activeDays}/7 dias ativos | ${routineCompletions.length} conclusoes de rotinas | ${doneTasks.length} tarefas avulsas concluidas`,
     "",
-    "ÚLTIMA SEMANA:",
-    `- ENERGIA ganha: ${weekXp} ⚡  |  Dias ativos: ${activeDays}/7`,
-    `- Rotinas completadas: ${routineCompletions.length}x  |  Tarefas concluídas: ${doneTasks.length}`,
-    "",
-    `PROJETOS ATIVOS (${activeProjects.length}):`,
-    ...activeProjects.slice(0, 6).map(p =>
-      `- "${p.name}" — ${p.progress || 0}% concluído${p.objective ? ` | Objetivo: ${p.objective.slice(0, 60)}` : ""}`
+    "=== PROJETOS JA EXISTENTES — NAO SUGIRA ESTES NEM SIMILARES ===",
+    ...activeProjects.map(p =>
+      `- "${p.name}" | ${p.progress || 0}% concluido${p.objective ? ` | objetivo: ${p.objective.slice(0, 80)}` : ""}`
     ),
-    activeProjects.length === 0 ? "- Nenhum" : "",
+    activeProjects.length === 0 ? "- Nenhum projeto ativo" : "",
     "",
-    `ROTINAS ATIVAS (${activeRoutines.length}):`,
-    ...activeRoutines.slice(0, 8).map(r => {
+    "=== ROTINAS JA EXISTENTES — NAO SUGIRA ESTAS NEM SIMILARES ===",
+    ...activeRoutines.map(r => {
       const compThisWeek = routineCompletions.filter(n => n === r.name).length;
-      return `- "${r.name}" — streak ${r.streak || 0}d | ${fmtFreq(r)} | completou ${compThisWeek}x esta semana | dif ${r.difficulty || 1}`;
+      return `- "${r.name}" | ${fmtFreq(r)} | streak ${r.streak || 0}d | concluiu ${compThisWeek}x esta semana`;
     }),
-    activeRoutines.length === 0 ? "- Nenhuma" : "",
+    activeRoutines.length === 0 ? "- Nenhuma rotina ativa" : "",
     "",
-    `TAREFAS PENDENTES (${pendingTasks.length}):`,
-    ...pendingTasks.slice(0, 10).map(t =>
-      `- "${t.name}" | dif ${t.difficulty || 1}${t.category ? ` | ${t.category}` : ""}${t.deadline ? ` | prazo ${t.deadline}` : ""}`
+    "=== TAREFAS AVULSAS PENDENTES — NAO SUGIRA ESTAS ===",
+    ...pendingTasks.slice(0, 12).map(t =>
+      `- "${t.name}"${t.category ? ` [${t.category}]` : ""}${t.difficulty ? ` | dif ${t.difficulty}` : ""}`
     ),
     pendingTasks.length === 0 ? "- Nenhuma" : "",
+    "",
+    "=== TAREFAS VINCULADAS A PROJETOS (os projetos ja existem — nao recrie) ===",
+    ...projectTasks.slice(0, 15).map(t => `- "${t.name}" (pertence ao projeto: "${t.projectName}")`),
+    projectTasks.length === 0 ? "- Nenhuma" : "",
+    "",
+    "=== INSTRUCAO FINAL ===",
+    "Sugira exatamente 2 projetos NOVOS, 1 rotina NOVA e 1 tarefa NOVA.",
+    "As sugestoes devem ser ideias que este usuario ainda nao tem.",
+    "Identifique gaps: areas da vida nao cobertas, proximos passos logicos, oportunidades adjacentes ao que ja existe.",
+    "Baseie-se no perfil deducido pelos projetos existentes para garantir coerencia."
   ];
 
   return lines.filter(l => l !== "").join("\n");
@@ -231,13 +243,12 @@ export default function ChatIA({
   const [started, setStarted] = useState(false);
   const [qaCount, setQaCount] = useState(0);
   const [qaAnswers, setQaAnswers] = useState([]);
-  const [currentQa, setCurrentQa] = useState(null); // { pergunta, opcoes }
+  const [currentQa, setCurrentQa] = useState(null);
   const [rejectedNames, setRejectedNames] = useState(new Set());
-  const [acceptedKeys, setAcceptedKeys] = useState(new Set());
-  const [cardStates, setCardStates] = useState({}); // key -> "pending"|"accepted"|"rejected"
+  const [cardStates, setCardStates] = useState({});
   const messagesEndRef = useRef(null);
-  const conversationRef = useRef([]); // histórico para enviar à API
-  const currentQaRef = useRef(null); // ref anti-stale para closures
+  const conversationRef = useRef([]);
+  const currentQaRef = useRef(null);
   const qaCountRef = useRef(0);
   const qaAnswersRef = useRef([]);
 
@@ -245,7 +256,6 @@ export default function ChatIA({
     return tasks.length > 0 || routines.length > 0 || projects.length > 0;
   }, [tasks, routines, projects]);
 
-  // Sincroniza refs
   useEffect(() => { currentQaRef.current = currentQa; }, [currentQa]);
   useEffect(() => { qaCountRef.current = qaCount; }, [qaCount]);
   useEffect(() => { qaAnswersRef.current = qaAnswers; }, [qaAnswers]);
@@ -260,21 +270,16 @@ export default function ChatIA({
     return id;
   };
 
-  /* Envia mensagem à Groq e processa resposta */
   const sendToGroq = async (userText, autoPrompt = null) => {
     setLoading(true);
     try {
-      // Monta histórico de conversa para enviar
       const history = conversationRef.current;
       const userContent = autoPrompt || userText;
-
       const apiMessages = [
         { role: "system", content: SYSTEM_PROMPT },
         ...history,
         { role: "user", content: userContent }
       ];
-
-      // Adiciona ao histórico local
       conversationRef.current = [...history, { role: "user", content: userContent }];
 
       const raw = await callGroq(groqApiKey, apiMessages);
@@ -284,7 +289,6 @@ export default function ChatIA({
 
       if (parsed.tipo === "sugestoes") {
         const valid = (parsed.sugestoes || []).filter(s => !rejectedNames.has(s.nome));
-        // Gera key única por sugestão para controle individual
         const msgId = uid();
         const initialStates = {};
         valid.forEach(s => { initialStates[msgId + "_" + s.nome] = "pending"; });
@@ -295,34 +299,32 @@ export default function ChatIA({
         setCurrentQa(qa);
         addMsg("assistant", (parsed.mensagem ? parsed.mensagem + "\n\n" : "") + parsed.pergunta, { tipo: "questionario", opcoes: parsed.opcoes || [] });
       } else if (parsed.tipo === "fora_escopo") {
-        addMsg("assistant", parsed.mensagem || "Este chat é focado em sugestão de atividades.");
+        addMsg("assistant", parsed.mensagem || "Este chat e focado em sugestao de atividades.");
       } else {
         addMsg("assistant", parsed.mensagem || raw);
       }
     } catch (e) {
-      addMsg("assistant", "❌ " + (e.message || "Erro ao conectar com a IA. Verifique sua chave Groq em Configurações."));
+      addMsg("assistant", "Erro ao conectar com a IA. Verifique sua chave Groq em Configuracoes. " + (e.message || ""));
     }
     setLoading(false);
   };
 
-  /* Inicia o chat — com ou sem histórico */
   const handleStart = async () => {
     setStarted(true);
     if (!groqApiKey) {
-      addMsg("assistant", "⚠️ Chave da API Groq não configurada. Vá em Perfil → Configurações e insira sua chave Groq gratuita para usar este assistente.");
+      addMsg("assistant", "Chave da API Groq nao configurada. Va em Perfil > Configuracoes e insira sua chave Groq gratuita para usar este assistente.");
       return;
     }
     if (hasHistory) {
       const ctx = buildUserContext(projects, routines, tasks, profile);
-      const prompt = `Analise o perfil e histórico do usuário abaixo e sugira entre 3 e 4 atividades personalizadas. Busque padrões para recomendar projetos ou rotinas quando fizer sentido.\n\n${ctx}`;
-      addMsg("user", "Quero sugestões baseadas no meu histórico");
+      const prompt = `Analise o contexto abaixo e sugira exatamente 2 projetos novos, 1 rotina nova e 1 tarefa nova. Foque em oportunidades que este usuario ainda nao explorou, coerentes com seu perfil.\n\n${ctx}`;
+      addMsg("user", "Quero sugestoes baseadas no meu historico");
       await sendToGroq(null, prompt);
     } else {
-      await sendToGroq(null, "O usuário é completamente novo e não tem nenhuma atividade ainda. Inicie o questionário com a pergunta 1.");
+      await sendToGroq(null, "O usuario e novo e nao tem nenhuma atividade ainda. Inicie o questionario com a pergunta 1.");
     }
   };
 
-  /* Envia mensagem manual ou resposta de opção */
   const handleSend = async (textOverride = null) => {
     const text = textOverride ?? input.trim();
     if (!text || loading) return;
@@ -330,7 +332,6 @@ export default function ChatIA({
 
     addMsg("user", text);
 
-    // Verifica se é resposta ao questionário
     const qa = currentQaRef.current;
     const count = qaCountRef.current + 1;
     const answers = [...qaAnswersRef.current, { pergunta: qa?.pergunta || "", resposta: text }];
@@ -342,7 +343,7 @@ export default function ChatIA({
 
       if (count >= 5) {
         const ctx = answers.map((a, i) => `P${i + 1}: ${a.pergunta}\nR: ${a.resposta}`).join("\n\n");
-        await sendToGroq(null, `${text}\n\n=== RESUMO DO QUESTIONÁRIO ===\n${ctx}\n\nAgora, com base em todas as respostas, sugira entre 3 e 4 atividades iniciais altamente personalizadas para este usuário.`);
+        await sendToGroq(null, `${text}\n\n=== RESPOSTAS DO QUESTIONARIO ===\n${ctx}\n\nCom base em todas as respostas, sugira exatamente 2 projetos novos, 1 rotina nova e 1 tarefa nova, altamente personalizados.`);
       } else {
         await sendToGroq(text);
       }
@@ -351,10 +352,8 @@ export default function ChatIA({
     }
   };
 
-  /* Aceitar sugestão — cria a atividade diretamente */
   const handleAccept = (key, suggestion) => {
     setCardStates(prev => ({ ...prev, [key]: "accepted" }));
-
     const newId = uid();
     const now = td();
 
@@ -383,20 +382,25 @@ export default function ChatIA({
         objective: suggestion.descricao || "",
         difficulty: suggestion.dificuldade || 5,
         category: suggestion.categoria || "",
-        color: "#534AB7", phases: [],
+        color: C.gold, phases: [],
         createdAt: now, status: "Ativo",
         xpAccum: 0, progress: 0
       }]);
     }
   };
 
-  /* Recusar sugestão */
   const handleReject = (key, suggestion) => {
     setCardStates(prev => ({ ...prev, [key]: "rejected" }));
     setRejectedNames(prev => new Set([...prev, suggestion.nome]));
   };
 
-  /* Layout responsivo */
+  /* Ícone SVG do assistente (estrela/sparkle) */
+  const SparkleIcon = ({ size = 16, color = C.gold }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+    </svg>
+  );
+
   const panelStyle = isDesktop ? {
     position: "fixed", right: 0, top: 0, bottom: 0,
     width: 420, zIndex: 300,
@@ -410,7 +414,6 @@ export default function ChatIA({
 
   return (
     <>
-      {/* Backdrop */}
       {isDesktop && (
         <div onClick={onClose} style={{
           position: "fixed", inset: 0, zIndex: 299,
@@ -421,7 +424,7 @@ export default function ChatIA({
         @keyframes iaTyping{0%,80%,100%{transform:scale(0.5);opacity:0.3}40%{transform:scale(1);opacity:1}}
         @keyframes iaSlide{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
         .ia-msg{animation:iaSlide .2s ease}
-        .ia-opt-btn:hover{filter:brightness(1.1)}
+        .ia-opt-btn:hover{background:${C.card}!important}
         .ia-opt-btn:active{opacity:.75}
       `}</style>
 
@@ -434,55 +437,68 @@ export default function ChatIA({
         }}>
           <div style={{
             width: 34, height: 34, borderRadius: 17, flexShrink: 0,
-            background: "linear-gradient(135deg,#534AB722,#9b59b622)",
-            border: "1px solid #534AB760",
+            background: C.goldDim, border: "1px solid " + C.goldBrd,
             display: "flex", alignItems: "center", justifyContent: "center"
           }}>
-            <span style={{ fontSize: 17, lineHeight: 1 }}>✨</span>
+            <SparkleIcon size={16} color={C.gold} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: C.tx }}>Assistente IA</div>
-            <div style={{ fontSize: 10, color: C.tx4 }}>Sugestões personalizadas de atividades</div>
+            <div style={{ fontSize: 10, color: C.tx4 }}>Sugestoes personalizadas de atividades</div>
           </div>
-          <span
-            onClick={onClose}
-            style={{ cursor: "pointer", padding: "4px", color: C.tx3, display: "flex", alignItems: "center", flexShrink: 0 }}>
+          <span onClick={onClose} style={{ cursor: "pointer", padding: "4px", color: C.tx3, display: "flex", alignItems: "center", flexShrink: 0 }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
           </span>
         </div>
 
-        {/* ── Tela de boas-vindas (antes de iniciar) ── */}
+        {/* ── Tela de boas-vindas ── */}
         {!started && (
           <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: 16, overflowY: "auto" }}>
             <div style={{
-              background: "linear-gradient(135deg,#534AB712,#9b59b610)",
-              border: "1px solid #534AB740", borderRadius: 12, padding: 16, marginBottom: 14
+              background: C.card, border: "1px solid " + C.brd,
+              borderRadius: 12, padding: 16, marginBottom: 14
             }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: C.tx, marginBottom: 8 }}>🤖 O que este chat faz:</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.tx, marginBottom: 8 }}>O que este chat faz</div>
               <div style={{ fontSize: 11, color: C.tx3, lineHeight: 1.7, marginBottom: 4 }}>
-                Analisa seu histórico e sugere <strong style={{ color: C.tx2 }}>tarefas, rotinas e projetos</strong> personalizados para você evoluir no que importa.
+                Analisa seu historico e sugere <strong style={{ color: C.tx2 }}>tarefas, rotinas e projetos</strong> personalizados para voce evoluir no que importa.
               </div>
               <div style={{ fontSize: 11, color: C.tx4, lineHeight: 1.6 }}>
-                Cada sugestão aparece como um convite — você escolhe aceitar ou recusar.
+                Cada sugestao aparece como um convite — voce escolhe aceitar ou recusar.
               </div>
             </div>
 
-            {/* Exemplos visuais */}
+            {/* Tipos de sugestão — com SVG */}
             {[
-              { icon: "📋", label: "TAREFA", desc: "Ação pontual e imediata", color: C.orange },
-              { icon: "🔄", label: "ROTINA", desc: "Hábito recorrente que você repete", color: C.purple },
-              { icon: "🗂️", label: "PROJETO", desc: "Meta maior com várias etapas", color: C.gold },
-            ].map(({ icon, label, desc, color }) => (
+              {
+                svg: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>,
+                label: "TAREFA", desc: "Acao pontual e imediata", color: C.orange
+              },
+              {
+                svg: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>,
+                label: "ROTINA", desc: "Habito recorrente que voce repete", color: C.purple
+              },
+              {
+                svg: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>,
+                label: "PROJETO", desc: "Meta maior com varias etapas", color: C.gold
+              },
+            ].map(({ svg, label, desc, color }) => (
               <div key={label} style={{
                 display: "flex", alignItems: "center", gap: 10,
                 padding: "8px 10px", background: C.card, borderRadius: 8,
                 border: "0.5px solid " + C.brd, marginBottom: 6
               }}>
-                <span style={{ fontSize: 18 }}>{icon}</span>
+                <div style={{
+                  width: 28, height: 28, borderRadius: 7, flexShrink: 0,
+                  background: color + "18", border: "0.5px solid " + color + "40",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  color
+                }}>
+                  {svg}
+                </div>
                 <div>
-                  <span style={{ fontSize: 10, fontWeight: 700, color, letterSpacing: 0.8 }}>{label}</span>
+                  <div style={{ fontSize: 10, fontWeight: 700, color, letterSpacing: 0.8 }}>{label}</div>
                   <div style={{ fontSize: 11, color: C.tx3 }}>{desc}</div>
                 </div>
               </div>
@@ -493,7 +509,7 @@ export default function ChatIA({
               border: "0.5px solid " + C.brd2, borderRadius: 8,
               fontSize: 10, color: C.tx4, lineHeight: 1.6
             }}>
-              ⚠️ Este chat <em>não responde perguntas gerais</em>. É focado exclusivamente em sugerir atividades para o seu crescimento.
+              Este chat nao responde perguntas gerais — e focado exclusivamente em sugerir atividades novas para o seu crescimento.
             </div>
 
             <div style={{ flex: 1 }} />
@@ -504,7 +520,7 @@ export default function ChatIA({
                 border: "1px solid " + C.orange + "50", borderRadius: 10,
                 fontSize: 11, color: C.orange, lineHeight: 1.6, textAlign: "center"
               }}>
-                ⚠️ Configure sua chave da API Groq em <strong>Perfil → Configurações</strong> para usar este assistente.
+                Configure sua chave da API Groq em <strong>Perfil &gt; Configuracoes</strong> para usar este assistente.
               </div>
             ) : (
               <button
@@ -512,11 +528,11 @@ export default function ChatIA({
                 style={{
                   width: "100%", padding: "12px 0", borderRadius: 10,
                   fontSize: 13, fontWeight: 700, cursor: "pointer",
-                  background: "linear-gradient(135deg," + C.goldDim + "," + C.gold + "18)",
-                  color: C.gold, border: "1px solid " + C.goldBrd,
+                  background: C.goldDim, color: C.gold,
+                  border: "1px solid " + C.goldBrd,
                   transition: "filter .12s", letterSpacing: 0.3
                 }}>
-                {hasHistory ? "🔍 Analisar meu histórico →" : "📝 Responder questionário →"}
+                {hasHistory ? "Analisar meu historico" : "Responder questionario"}
               </button>
             )}
           </div>
@@ -528,7 +544,6 @@ export default function ChatIA({
             <div style={{ flex: 1, overflowY: "auto", padding: "14px 14px 8px" }}>
               {messages.map(msg => (
                 <div key={msg.id} className="ia-msg">
-                  {/* Mensagem do usuário */}
                   {msg.role === "user" && (
                     <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
                       <div style={{
@@ -542,7 +557,6 @@ export default function ChatIA({
                     </div>
                   )}
 
-                  {/* Mensagem da IA */}
                   {msg.role === "assistant" && (
                     <div style={{ marginBottom: 10 }}>
                       {msg.content && (
@@ -570,7 +584,7 @@ export default function ChatIA({
                                 padding: "7px 12px", borderRadius: 7, fontSize: 11,
                                 textAlign: "left", background: C.bg, color: C.tx3,
                                 border: "0.5px solid " + C.brd, cursor: "pointer",
-                                transition: "filter .12s"
+                                transition: "background .12s"
                               }}>
                               {opt}
                             </button>
@@ -598,7 +612,6 @@ export default function ChatIA({
                 </div>
               ))}
 
-              {/* Loading dots */}
               {loading && (
                 <div style={{ display: "flex", gap: 5, padding: "6px 0", marginBottom: 8 }}>
                   {[0, 1, 2].map(i => (
@@ -625,7 +638,7 @@ export default function ChatIA({
                 onKeyDown={e => {
                   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
                 }}
-                placeholder={currentQa ? "Digite sua resposta ou escolha uma opção acima..." : "Peça mais sugestões ou refine..."}
+                placeholder={currentQa ? "Digite sua resposta ou escolha acima..." : "Peca mais sugestoes ou refine..."}
                 rows={1}
                 style={{
                   flex: 1, padding: "8px 10px",

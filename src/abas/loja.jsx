@@ -22,7 +22,7 @@ function ShopTab({ profile, buyItem, equipItem, buyConsumable, upgradeItem, setP
         </svg>
       ),
       categoria: "Títulos",
-      titulo: "🏷️ Títulos",
+      titulo: "Títulos",
       descricao: "Títulos são tags decorativas exibidas no seu perfil. Cada um tem um estilo único e pode ser evoluído até 5 vezes para ganhar efeitos visuais especiais. Demonstre sua dedicação!",
       cor: "#f0a500",
     },
@@ -35,7 +35,7 @@ function ShopTab({ profile, buyItem, equipItem, buyConsumable, upgradeItem, setP
         </svg>
       ),
       categoria: "Ícones",
-      titulo: "🎭 Ícones",
+      titulo: "Ícones",
       descricao: "Ícones personalizam o avatar exibido no seu perfil e no ranking social. Escolha um símbolo que represente sua identidade dentro do app!",
       cor: "#22c55e",
     },
@@ -48,7 +48,7 @@ function ShopTab({ profile, buyItem, equipItem, buyConsumable, upgradeItem, setP
         </svg>
       ),
       categoria: "Temas",
-      titulo: "🎨 Temas",
+      titulo: "Temas",
       descricao: "Temas mudam completamente a paleta de cores do app. Cada tema tem raridade única — dos comuns aos lendários com efeitos especiais. Evolua um tema para intensificar suas cores!",
       cor: "#a78bfa",
     },
@@ -60,7 +60,7 @@ function ShopTab({ profile, buyItem, equipItem, buyConsumable, upgradeItem, setP
         </svg>
       ),
       categoria: "Bordas",
-      titulo: "🖼️ Bordas",
+      titulo: "Bordas",
       descricao: "Bordas decoram o quadro do seu avatar tornando-o único. Evoluindo uma borda até o nível máximo você desbloqueia animações e efeitos de brilho exclusivos!",
       cor: "#38bdf8",
     },
@@ -71,7 +71,7 @@ function ShopTab({ profile, buyItem, equipItem, buyConsumable, upgradeItem, setP
         </svg>
       ),
       categoria: "Itens",
-      titulo: "⚡ Itens Consumíveis",
+      titulo: "Itens Consumíveis",
       descricao: "Itens são consumíveis poderosos! O Escudo protege seu streak por um dia de ausência. O Boost multiplica suas moedas em +25% por 24h. Os Baús concedem moedas e surpresas aleatórias!",
       cor: "#f87171",
     },

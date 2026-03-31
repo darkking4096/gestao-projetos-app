@@ -31,20 +31,21 @@ function ActivitiesTab({ subTab, setSubTab, projects, routines, tasks, objective
           bottom: isDesktop ? 28 : 70,
           right: isDesktop ? 32 : 16,
           zIndex: 200,
-          display: "flex", alignItems: "center", gap: 8,
-          padding: "10px 18px",
-          background: "linear-gradient(135deg,#534AB7,#7b52d4)",
-          borderRadius: 24,
-          boxShadow: "0 4px 20px #534AB760",
+          width: 46, height: 46, borderRadius: 23,
+          background: C.goldDim,
+          border: "1.5px solid " + C.goldBrd,
+          boxShadow: "0 4px 16px " + C.gold + "30",
           cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
           transition: "transform .14s, box-shadow .14s",
           userSelect: "none"
         }}
-        onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.05)"; e.currentTarget.style.boxShadow = "0 6px 28px #534AB780"; }}
-        onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 20px #534AB760"; }}
+        onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.08)"; e.currentTarget.style.boxShadow = "0 6px 22px " + C.gold + "50"; }}
+        onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 16px " + C.gold + "30"; }}
       >
-        <span style={{ fontSize: 16, lineHeight: 1 }}>✨</span>
-        <span style={{ fontSize: 12, fontWeight: 700, color: "#fff", letterSpacing: 0.3 }}>Sugestões IA</span>
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+        </svg>
       </div>
 
       {/* Chat IA */}

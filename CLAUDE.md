@@ -244,6 +244,73 @@ Escritas com debounce de 900ms. Auth por email/senha via Supabase Auth.
 
 ---
 
+## Princípios de Design Visual
+
+### Sem emojis — jamais
+
+**Emojis são proibidos em toda a interface do app.** Isso inclui botões, títulos, mensagens do sistema, labels, placeholders, cards e qualquer outro elemento visível pelo usuário. O app tem estética minimalista e dark — emojis quebram completamente o padrão visual.
+
+### Ícones: sempre SVG inline
+
+Use únicamente SVG inline (`<svg>`) para representar ações e conceitos visuais. Referência de ícones existentes em `icones.jsx` (`IconSVG`, `BorderSVG`, `TitleSVG`, `ConsumableSVG`). Para novos ícones, use traço fino (strokeWidth 1.5–1.8), stroke=currentColor ou C.{token}, fill=none — estilo Lucide/Feather.
+
+```jsx
+// Correto
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+  <polyline points="20 6 9 17 4 12"/>
+</svg>
+
+// Errado
+<span>✅</span>
+<span>🔄</span>
+```
+
+### Cores: sempre via objeto `C` do tema
+
+**Nunca use cores hexadecimais hardcoded** para elementos de interface. Toda cor deve vir de `C.{token}` importado de `temas.js`. O tema muda conforme configuração do usuário, então cores fixas criam inconsistências visuais graves.
+
+| Uso | Token |
+|---|---|
+| Fundo principal | `C.bg` |
+| Cards / superfícies | `C.card`, `C.card2` |
+| Ação primária (dourado) | `C.gold` |
+| Background de ação primária | `C.goldDim` |
+| Borda de ação primária | `C.goldBrd` |
+| Texto principal | `C.tx` |
+| Texto secundário | `C.tx2`, `C.tx3`, `C.tx4` |
+| Bordas | `C.brd`, `C.brd2` |
+| Sucesso | `C.green` |
+| Alerta | `C.orange` |
+| Destaque roxo | `C.purple` |
+
+### Botões flutuantes (FAB)
+
+Botões de ação flutuante devem ser **circulares**, com ícone SVG centralizado, usando cores do tema:
+
+```jsx
+<div style={{
+  position: "fixed", bottom: 28, right: 28, zIndex: 200,
+  width: 46, height: 46, borderRadius: 23,
+  background: C.goldDim, border: "1.5px solid " + C.goldBrd,
+  boxShadow: "0 4px 16px " + C.gold + "30",
+  cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center"
+}}>
+  <svg ...stroke={C.gold}... />
+</div>
+```
+
+### Consistência de tamanhos de texto
+
+| Uso | fontSize |
+|---|---|
+| Label de seção / uppercase | 9–10px |
+| Texto secundário / desc | 11px |
+| Texto padrão | 12px |
+| Título de card | 13px |
+| Cabeçalho de tela | 14–15px |
+
+---
+
 ## Como Rodar
 
 ```bash
