@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import ChatIA from './chat-ia.jsx';
 import { C } from '../temas.js';
-import { uid, td, fmtD, fmtFreq, getEnergia, getMoedas, getXp, getMastery, isRoutineDueToday, calcObjectiveXp, checkProjectCompletion, scoreNextAction, migrateFreq } from '../utilidades.js';
+import { uid, td, fmtD, fmtFreq, getEnergia, getMoedas, getXp, getMastery, isRoutineDueToday, calcObjectiveXp, checkProjectCompletion, migrateFreq } from '../utilidades.js';
 import { PRIORITIES, CATEGORIES, PRI_ORDER } from '../constantes.js';
 import { Btn, Card, Badge, TopBar, Modal, ConfirmModal, DeleteModal, FilterModal, FilterBtn, NotesLog, PBar, Chk, SLabel, Input, getDiffColor } from '../componentes-base.jsx';
 import { IconSVG, ConsumableSVG } from '../icones.jsx';

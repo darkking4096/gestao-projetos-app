@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from "react";
 import { THEMES, setCurrentTheme, generateThemeTones, C } from './src/temas.js';
-import { uid, td, getLevelInfo, getPoderInfo, getRankInfo, getMastery, getMasteryBonus, getEnergia, getMoedas, getXp, getCoins, migrateDifficulty, getMultiplier, openChest, pickDailyMission, getMissionProgress, calcObjectiveXp, ACHIEVEMENTS, checkProjectCompletion, removeObjectiveLinksFromActivities, similarName, migrateFreq, isRoutineDueOn } from './src/utilidades.js';
+import { uid, td, getLevelInfo, getPoderInfo, getRankInfo, getMastery, getMasteryBonus, getEnergia, getMoedas, getXp, getCoins, migrateDifficulty, getMultiplier, openChest, rollMissionRank, calcObjectiveXp, ACHIEVEMENTS, checkProjectCompletion, removeObjectiveLinksFromActivities, similarName, migrateFreq, isRoutineDueOn } from './src/utilidades.js';
 import { CATEGORIES, FREQUENCIES, WEEK_DAYS, UNITS, DEFAULT_PRESETS, STREAK_RECOVER, CHEST_TYPES, COLORS } from './src/constantes.js';
 import { S, Social } from './src/armazenamento.js';
 import { SHOP_THEMES_LIST, getUpgradeCost, UPGRADE_LABELS } from './src/icones.jsx';
@@ -175,8 +175,6 @@ export default function App({ user, onSignOut }) {
         logEntries.push({ date: gapDate.toISOString().split("T")[0], xp: 0, coins: 0 });
       }
       const log = logEntries.slice(-90);
-      const _mCtx = { hasRoutines: routines.some(r => r.status === "Ativa"), hasProjects: projects.some(p => p.status === "Ativo"), hasNumericProjects: projects.some(p => p.status === "Ativo" && p.target !== undefined), hasTasks: tasks.some(t => t.status === "Pendente") };
-      const mission = pickDailyMission(d, _mCtx);
       const wasActive = (profile.xpToday || 0) > 0;
       let newStreak = profile.streak || 0;
       let streakLostDays = 0;
@@ -247,11 +245,7 @@ export default function App({ user, onSignOut }) {
       else if (newStreak >= 7 && lv >= 100) chest = "epic";
       else if (wasActive && (profile.tasksToday || 0) >= 5 && lv >= 50) chest = "rare";
       else if ((profile.tasksToday || 0) >= 3 && lv >= 25) chest = "common";
-      setProfile(p => ({ ...p, xpToday: 0, coinsToday: 0, lastActiveDate: d, dailyLog: log, tasksToday: 0, projTasksToday: 0, hardTaskToday: false, maxTaskToday: false, goalUpdatedToday: false, streak: newStreak, bestStreak: newBest, streakLostDays: streakLostDays, bestXpWeek: Math.max(p.bestXpWeek || 0, weekXp), pendingChest: chest || p.pendingChest, shieldActive: shieldUsed ? false : p.shieldActive, dailyMission: { id: mission.id, text: mission.text, coins: mission.coins, completed: false, claimedAt: null } }));
-    } else if (!profile.dailyMission) {
-      const _mCtx = { hasRoutines: routines.some(r => r.status === "Ativa"), hasProjects: projects.some(p => p.status === "Ativo"), hasNumericProjects: projects.some(p => p.status === "Ativo" && p.target !== undefined), hasTasks: tasks.some(t => t.status === "Pendente") };
-      const mission = pickDailyMission(d, _mCtx);
-      setProfile(p => ({ ...p, dailyMission: { id: mission.id, text: mission.text, coins: mission.coins, completed: false, claimedAt: null } }));
+      setProfile(p => ({ ...p, xpToday: 0, coinsToday: 0, lastActiveDate: d, dailyLog: log, tasksToday: 0, projTasksToday: 0, hardTaskToday: false, maxTaskToday: false, goalUpdatedToday: false, streak: newStreak, bestStreak: newBest, streakLostDays: streakLostDays, bestXpWeek: Math.max(p.bestXpWeek || 0, weekXp), pendingChest: chest || p.pendingChest, shieldActive: shieldUsed ? false : p.shieldActive, dailyMission: null }));
     }
   }, [loaded]);
 
@@ -778,12 +772,25 @@ export default function App({ user, onSignOut }) {
     });
   }, []);
 
-  const claimMission = useCallback(() => {
-    if (!profile.dailyMission || profile.dailyMission.completed) return;
-    const coins = profile.dailyMission.coins || 20;
-    setProfile(p => ({ ...p, coins: p.coins + coins, coinsToday: p.coinsToday + coins, totalCoinsEarned: (p.totalCoinsEarned || 0) + coins, dailyMission: { ...p.dailyMission, completed: true, claimedAt: td() } }));
-    setRewardPopup({ xp: 0, coins, msg: "Missão do dia!" });
-  }, [profile.dailyMission]);
+  const setDailyMission = useCallback((mission) => {
+    setProfile(p => ({ ...p, dailyMission: mission }));
+  }, []);
+
+  const claimMissionRpg = useCallback(() => {
+    const m = profile.dailyMission;
+    if (!m || m.completed) return;
+    const energia = m.energia || 0;
+    const coins = m.coins || 0;
+    if (energia > 0) {
+      earn(energia, 0, "Missão " + (m.rankId || m.rankMain || "") + " concluida!");
+    }
+    if (coins > 0) {
+      setProfile(p => ({ ...p, coins: p.coins + coins, coinsToday: (p.coinsToday || 0) + coins, totalCoinsEarned: (p.totalCoinsEarned || 0) + coins, dailyMission: { ...p.dailyMission, completed: true, claimedAt: td() } }));
+    } else {
+      setProfile(p => ({ ...p, dailyMission: { ...p.dailyMission, completed: true, claimedAt: td() } }));
+    }
+    setRewardPopup({ xp: energia, coins, msg: "Missao " + (m.rankId || m.rankMain || "") + " concluida!" });
+  }, [profile.dailyMission, earn]);
 
   const recoverStreak = useCallback((opt) => {
     if (profile.coins < opt.cost) return;
@@ -907,7 +914,7 @@ export default function App({ user, onSignOut }) {
         } : undefined}
       >
         <div key={tab} style={isDesktop ? { ...(tab !== "reports" ? { maxWidth: 780, margin: "0 auto" } : {}), animation: "tabFadeIn 0.22s ease" } : { animation: "tabFadeIn 0.22s ease" }}>
-        {tab === "dashboard" && <DashboardTab profile={profile} levelInfo={levelInfo} poderInfo={poderInfo} rankInfo={rankInfo} projects={projects} routines={routines} tasks={tasks} objectives={objectives} nav={nav} completeTask={completeTask} completeRoutine={completeRoutine} earn={earn} claimMission={claimMission} atributos={atributos} setAtributos={setAtributos} groqApiKey={profile.groqApiKey || ""} />}
+        {tab === "dashboard" && <DashboardTab profile={profile} levelInfo={levelInfo} poderInfo={poderInfo} rankInfo={rankInfo} projects={projects} routines={routines} tasks={tasks} objectives={objectives} nav={nav} completeTask={completeTask} completeRoutine={completeRoutine} earn={earn} setDailyMission={setDailyMission} claimMissionRpg={claimMissionRpg} atributos={atributos} setAtributos={setAtributos} groqApiKey={profile.groqApiKey || ""} />}
         {tab === "activities" && view === "list" && <ActivitiesTab subTab={subTab} setSubTab={setSubTab} projects={projects} routines={routines} tasks={tasks} objectives={objectives} nav={nav} completeTask={completeTask} completeRoutine={completeRoutine} updProject={updProject} setProfile={setProfile} setCompletionConfirm={setCompletionConfirm} addTask={addTask} addRoutine={addRoutine} addProject={addProject} setTasks={setTasks} setRoutines={setRoutines} setProjects={setProjects} groqApiKey={profile.groqApiKey || ""} profile={profile} isDesktop={isDesktop} />}
         {tab === "activities" && view === "detail" && sel && selType === "project" && <ProjectDetail item={sel} onUpdate={updProject} onDelete={(i, p) => { deleteItem(i, "project", p); nav("activities", "projects", "list"); }} onComplete={completeTask} nav={nav} navBack={navBack} objectives={objectives} routines={routines} setCompletionConfirm={setCompletionConfirm} onValueUpdate={() => setProfile(p => ({ ...p, goalUpdatedToday: true }))} />}
         {tab === "activities" && view === "detail" && sel && selType === "routine" && <RoutineDetail item={sel} onUpdate={updRoutine} onDelete={(i, p) => { deleteItem(i, "routine", p); nav("activities", "routines", "list"); }} onComplete={completeRoutine} nav={nav} navBack={navBack} objectives={objectives} projects={projects} />}

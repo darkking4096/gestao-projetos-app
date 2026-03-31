@@ -132,18 +132,6 @@ export const UNITS       = ["R$", "kg", "lições", "horas", "unidades", "%", "c
 // Valores padrão na escala 1-20: D-=5(Fácil), D=6, C-=8(Médio), E+=4(Muito Fácil)
 export const DEFAULT_PRESETS = { "Trabalho": 8, "Saúde": 6, "Estudo": 8, "Pessoal": 5 };
 
-export const MISSION_POOL = [
-  { id: "m1",  text: "Concluir 5 tarefas",                    coins: 20, check: (p) => p.tasksToday >= 5,          pct: (p) => Math.min(100, Math.round(p.tasksToday / 5 * 100)) },
-  { id: "m2",  text: "Concluir 1 tarefa dificuldade B ou +",  coins: 25, check: (p) => p.hardTaskToday,             pct: (p) => p.hardTaskToday ? 100 : 0 },
-  { id: "m3",  text: "Concluir 3 rotinas",                    coins: 20, check: (p) => p.routinesToday >= 3,        pct: (p) => Math.min(100, Math.round(p.routinesToday / 3 * 100)) },
-  { id: "m4",  text: "Ganhar 50+ ⚡ ENERGIA hoje",            coins: 15, check: (p) => p.xpToday >= 50,             pct: (p) => Math.min(100, Math.round(p.xpToday / 50 * 100)) },
-  { id: "m5",  text: "Ganhar 100+ ⚡ ENERGIA hoje",           coins: 30, check: (p) => p.xpToday >= 100,            pct: (p) => Math.min(100, Math.round(p.xpToday / 100 * 100)) },
-  { id: "m6",  text: "Atualizar valor de um projeto",         coins: 15, check: (p) => p.goalUpdatedToday,          pct: (p) => p.goalUpdatedToday ? 100 : 0 },
-  { id: "m7",  text: "Concluir 2 tarefas de projetos",        coins: 20, check: (p) => p.projTasksToday >= 2,       pct: (p) => Math.min(100, Math.round(p.projTasksToday / 2 * 100)) },
-  { id: "m8",  text: "Concluir todas as rotinas do dia",      coins: 25, check: (p) => p.allRoutinesDone,           pct: (p) => p.allRoutinesDone ? 100 : 0 },
-  { id: "m9",  text: "Concluir 1 tarefa IMPOSSÍVEL",          coins: 30, check: (p) => p.maxTaskToday,              pct: (p) => p.maxTaskToday ? 100 : 0 },
-  { id: "m10", text: "Ganhar 20+ moedas hoje",                coins: 20, check: (p) => p.coinsToday >= 20,          pct: (p) => Math.min(100, Math.round(p.coinsToday / 20 * 100)) },
-];
 
 /* ── Streaks ── */
 export const STREAK_MULT = [

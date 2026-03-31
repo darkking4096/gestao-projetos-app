@@ -1,53 +1,62 @@
-import { ENERGIA_TABLE, COINS_TABLE, RANKS, MASTERY_LEVELS, MISSION_POOL, STREAK_MULT, CHEST_TYPES, DIFF_MIGRATION_MAP } from './constantes.js';
+import { ENERGIA_TABLE, COINS_TABLE, RANKS, MASTERY_LEVELS, STREAK_MULT, CHEST_TYPES, DIFF_MIGRATION_MAP } from './constantes.js';
 
-function pickDailyMission(date, context) {
-  const hash = date.split("-").join("").split("").reduce((a, c) => a + c.charCodeAt(0), 0);
-  // Filter to missions that are achievable given current data
-  let pool = MISSION_POOL;
-  if (context) {
-    const { hasRoutines, hasProjects, hasNumericProjects, hasTasks } = context;
-    pool = MISSION_POOL.filter(m => {
-      if ((m.id === "m3" || m.id === "m8") && !hasRoutines) return false;
-      if ((m.id === "m6") && !hasNumericProjects) return false;
-      if ((m.id === "m7") && !hasProjects) return false;
-      if ((m.id === "m2" || m.id === "m9") && !hasTasks && !hasProjects) return false;
-      return true;
-    });
-    if (pool.length === 0) pool = MISSION_POOL;
+/* ── Recompensas de missão por rank principal ── */
+export const MISSION_REWARDS = {
+  F:   { energia: 8,    coins: 5    },
+  E:   { energia: 20,   coins: 12   },
+  D:   { energia: 45,   coins: 22   },
+  C:   { energia: 90,   coins: 45   },
+  B:   { energia: 180,  coins: 90   },
+  A:   { energia: 400,  coins: 200  },
+  S:   { energia: 1000, coins: 500  },
+  MAX: { energia: 2500, coins: 1200 },
+};
+
+/* ── Tabela de pesos de raridade por rank do jogador (índices: F=0,E=1,D=2,C=3,B=4,A=5,S=6,MAX=7) ── */
+const RARITY_TABLE = [
+  //                F    E   D   C   B   A   S  MAX
+  /* Humano/F- */ [55,  35,  8,  2,  0,  0,  0,  0],
+  /* E        */ [15,  50, 25,  8,  2,  0,  0,  0],
+  /* D        */ [ 5,  20, 45, 22,  7,  1,  0,  0],
+  /* C        */ [ 2,   8, 20, 42, 22,  5,  1,  0],
+  /* B        */ [ 1,   3, 10, 20, 42, 20,  4,  0],
+  /* A        */ [ 0,   1,  3, 10, 22, 42, 20,  2],
+  /* S        */ [ 0,   0,  1,  3, 10, 22, 55,  9],
+  /* MAX      */ [ 0,   0,  0,  1,  5, 12, 30, 52],
+];
+const RANK_ORDER = ["F", "E", "D", "C", "B", "A", "S", "MAX"];
+
+/* Sorteia o rank+sub-rank de uma missão baseado no rank atual do jogador */
+export function rollMissionRank(rankInfo) {
+  const playerRankMain = rankInfo?.rankMain || null;
+  let playerIdx = playerRankMain ? RANK_ORDER.indexOf(playerRankMain) : 0;
+  if (playerIdx < 0) playerIdx = 0;
+
+  const weights = RARITY_TABLE[Math.min(playerIdx, RARITY_TABLE.length - 1)];
+  const total = weights.reduce((s, w) => s + w, 0);
+  let rand = Math.random() * total;
+  let missionRankIdx = 0;
+  for (let i = 0; i < weights.length; i++) {
+    rand -= weights[i];
+    if (rand <= 0) { missionRankIdx = i; break; }
   }
-  return pool[hash % pool.length];
-}
 
-function getMissionProgress(mission, profile, projects, routines, tasks) {
-  const today = td();
-  const tasksToday = (profile.tasksToday || 0);
-  const dueRoutines = routines.filter(r => r.status === "Ativa" && isRoutineDueToday(r));
-  const routinesToday = dueRoutines.filter(r => (r.completionLog || []).some(l => l.date === today)).length;
-  const projTasksToday = (profile.projTasksToday || 0);
+  const rankDef = RANKS.find(r => r.id === RANK_ORDER[missionRankIdx]);
+  if (!rankDef) return { rankMain: "F", rankId: "F", modifier: "", color: "#a0a0a0", colorSecondary: "#6a6a6a", ...MISSION_REWARDS.F };
+
+  const subs = rankDef.subs || [{ id: rankDef.id, modifier: "" }];
+  const sub = subs[Math.floor(Math.random() * subs.length)];
+  const rewards = MISSION_REWARDS[rankDef.id] || MISSION_REWARDS.F;
+
   return {
-    tasksToday,
-    hardTaskToday: !!(profile.hardTaskToday),
-    routinesToday,
-    xpToday: profile.xpToday || 0,
-    coinsToday: profile.coinsToday || 0,
-    goalUpdatedToday: !!(profile.goalUpdatedToday),
-    projTasksToday,
-    allRoutinesDone: dueRoutines.length > 0 && routinesToday >= dueRoutines.length,
-    maxTaskToday: !!(profile.maxTaskToday),
+    rankMain: rankDef.id,
+    rankId: sub.id,
+    modifier: sub.modifier || "",
+    color: rankDef.color,
+    colorSecondary: rankDef.colorSecondary,
+    energia: rewards.energia,
+    coins: rewards.coins,
   };
-}
-
-function scoreNextAction(item, weights) {
-  const w = weights || { priority: 3, deadline: 2, difficulty: 1 };
-  let score = 0;
-  const priScores = { "Crítica": 4, "Alta": 3, "Média": 2, "Baixa": 1 };
-  score += (priScores[item._pri] || 0) * w.priority;
-  if (item._deadline) {
-    const days = Math.max(0, (new Date(item._deadline) - new Date()) / 86400000);
-    score += Math.max(0, 10 - days) * w.deadline;
-  }
-  score += (item._diff || 0) * w.difficulty * 0.3;
-  return score;
 }
 
 function getMultiplier(streak) {
@@ -397,7 +406,7 @@ export function similarName(a, b) {
   return na.includes(nb) || nb.includes(na);
 }
 
-export { pickDailyMission, getMissionProgress, scoreNextAction, getMultiplier, openChest };
+export { getMultiplier, openChest };
 
 /* ═══ ACHIEVEMENTS (depende de getPoderInfo) ═══ */
 export const ACHIEVEMENTS = [

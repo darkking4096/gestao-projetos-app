@@ -1,13 +1,65 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { C } from '../temas.js';
-import { td, getMastery, getEnergia, getMoedas, getXp, fmtD, fmtFreq, getMasteryBonus, getMultiplier, isRoutineDueToday, calcObjectiveXp, pickDailyMission, getMissionProgress, scoreNextAction, migrateFreq } from '../utilidades.js';
-import { MISSION_POOL, MASTERY_LEVELS, PRI_ORDER, COLORS } from '../constantes.js';
+import { td, getMastery, getEnergia, getMoedas, getXp, fmtD, fmtFreq, getMasteryBonus, getMultiplier, isRoutineDueToday, calcObjectiveXp, rollMissionRank, migrateFreq } from '../utilidades.js';
+import { MASTERY_LEVELS, PRI_ORDER, COLORS } from '../constantes.js';
 import { ACHIEVEMENTS } from '../utilidades.js';
 import { Btn, Card, Badge, PBar, EnergiaBarDupla, Chk, TopBar, FilterBtn, FilterModal, RankEmblemSVG } from '../componentes-base.jsx';
 import { IconSVG, ConsumableSVG, BorderSVG, TitleBanner, MaestriaSVG, SHOP_BORDERS, SHOP_TITLES, getTitleTargetColor, getTitleBannerColor, getTitleStyle, getUpgradeCost, getBorderStyle, UPGRADE_LABELS, RARITY_LABELS, RARITY_COLORS } from '../icones.jsx';
 import { AtributosSection } from './atributos.jsx';
 
-function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routines, tasks, objectives, nav, completeTask, completeRoutine, earn, claimMission, atributos, setAtributos, groqApiKey }) {
+/* ═══ GROQ helper para geração de missão ═══ */
+async function gerarMissaoGroq(apiKey, rankId, rankMain, context, textAnterior) {
+  const { projetos, rotinas, tarefas, streak, rankAtual } = context;
+  const projetosStr = projetos.length > 0 ? projetos.slice(0, 4).join(", ") : "nenhum projeto ativo";
+  const rotinasStr = rotinas.length > 0 ? rotinas.slice(0, 4).join(", ") : "nenhuma rotina ativa";
+  const tarefasStr = tarefas.length > 0 ? tarefas.slice(0, 4).join(", ") : "nenhuma tarefa pendente";
+  const antiRepeat = textAnterior ? `\nNao repita esta missao anterior: "${textAnterior}"\n` : "";
+  const prompt = `Voce e o gerador de missoes de um app de produtividade gamificado estilo RPG.
+Gere UMA missao de rank ${rankId} para o usuario, baseada nos dados dele.
+Seja especifico e mencione projetos, rotinas ou tarefas reais do usuario quando possiivel.
+A missao deve ser alcancavel em ate 6 horas. Seja direto e objetivo.
+${antiRepeat}
+Responda APENAS com o texto da missao, sem explicacoes, sem formatacao, sem emojis. Maximo 90 caracteres.
+
+Dados do usuario:
+- Rank atual: ${rankAtual}
+- Projetos ativos: ${projetosStr}
+- Rotinas ativas: ${rotinasStr}
+- Tarefas pendentes: ${tarefasStr}
+- Streak: ${streak} dias`;
+
+  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: "llama-3.3-70b-versatile",
+      messages: [{ role: "user", content: prompt }],
+      max_tokens: 120,
+      temperature: 0.9,
+    }),
+  });
+  if (!response.ok) throw new Error("groq_error");
+  const data = await response.json();
+  return (data.choices?.[0]?.message?.content || "").trim().slice(0, 90);
+}
+
+/* Fallback de texto por rank quando não há chave Groq */
+const FALLBACK_TEXTS = {
+  F:   ["Conclua ao menos 1 tarefa pendente hoje", "Registre seu progresso em qualquer atividade"],
+  E:   ["Finalize 2 tarefas do dia", "Avance em uma rotina ativa hoje"],
+  D:   ["Conclua 3 tarefas antes de encerrar o dia", "Complete todas as rotinas previstas para hoje"],
+  C:   ["Conclua uma fase inteira de um projeto ativo", "Finalize 4 tarefas e mantenha seu streak"],
+  B:   ["Avance de forma significativa em seu projeto principal hoje", "Conclua 5 tarefas e pelo menos 2 rotinas"],
+  A:   ["Entregue um resultado expressivo no seu projeto de maior prioridade", "Complete 6 tarefas incluindo pelo menos uma de alta dificuldade"],
+  S:   ["Conclua uma etapa critica do seu projeto mais importante", "Alcance 200+ ENERGIA em um unico dia de trabalho intenso"],
+  MAX: ["Supere seus proprios limites: conclua o maximo possivel hoje", "Entregue resultados de nivel MAX no seu projeto principal"],
+};
+function getFallbackText(rankMain) {
+  const pool = FALLBACK_TEXTS[rankMain] || FALLBACK_TEXTS.F;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routines, tasks, objectives, nav, completeTask, completeRoutine, earn, setDailyMission, claimMissionRpg, atributos, setAtributos, groqApiKey }) {
   const [dashSubTab, setDashSubTab] = useState("overview");
   const [showFilter, setShowFilter] = useState(false);
   const [filter, setFilter] = useState({ key: null, mode: null });
@@ -15,7 +67,73 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [nextActionSkip, setNextActionSkip] = useState(0);
+  const [gerandoMissao, setGerandoMissao] = useState(false);
+  const gerandoRef = useRef(false);
+
+  /* ── Geração de missão ── */
+  const buildContext = () => ({
+    projetos: projects.filter(p => p.status === "Ativo").map(p => p.name),
+    rotinas: routines.filter(r => r.status === "Ativa").map(r => r.name),
+    tarefas: tasks.filter(t => t.status === "Pendente").map(t => t.name),
+    streak: profile.streak || 0,
+    rankAtual: rankInfo?.label || "Humano",
+  });
+
+  const gerarMissao = async (options = {}) => {
+    const { variacao = false } = options;
+    if (gerandoRef.current) return;
+    gerandoRef.current = true;
+    setGerandoMissao(true);
+    try {
+      const rolled = variacao && profile.dailyMission
+        ? { rankMain: profile.dailyMission.rankMain, rankId: profile.dailyMission.rankId, modifier: profile.dailyMission.modifier, color: profile.dailyMission.color, colorSecondary: profile.dailyMission.colorSecondary, energia: profile.dailyMission.energia, coins: profile.dailyMission.coins }
+        : rollMissionRank(rankInfo);
+
+      let text = "";
+      const ctx = buildContext();
+      if (groqApiKey) {
+        try {
+          text = await gerarMissaoGroq(groqApiKey, rolled.rankId, rolled.rankMain, ctx, variacao ? (profile.dailyMission?.text || "") : "");
+        } catch (e) {
+          text = getFallbackText(rolled.rankMain);
+        }
+      } else {
+        text = getFallbackText(rolled.rankMain);
+      }
+      if (!text) text = getFallbackText(rolled.rankMain);
+
+      const agora = Date.now();
+      const novaMissao = {
+        rankMain: rolled.rankMain,
+        rankId: rolled.rankId,
+        modifier: rolled.modifier,
+        color: rolled.color,
+        colorSecondary: rolled.colorSecondary,
+        text,
+        energia: rolled.energia,
+        coins: rolled.coins,
+        generatedAt: agora,
+        expiresAt: agora + 6 * 60 * 60 * 1000,
+        completed: false,
+        claimedAt: null,
+        variacaoCount: variacao ? ((profile.dailyMission?.variacaoCount || 0) + 1) : 0,
+      };
+      setDailyMission(novaMissao);
+    } finally {
+      gerandoRef.current = false;
+      setGerandoMissao(false);
+    }
+  };
+
+  /* Auto-gera missão se inexistente ou expirada */
+  useEffect(() => {
+    const m = profile.dailyMission;
+    const expirada = m && !m.completed && m.expiresAt && Date.now() > m.expiresAt;
+    const inexistente = !m;
+    if ((inexistente || expirada) && !gerandoRef.current) {
+      gerarMissao();
+    }
+  }, [profile.dailyMission, rankInfo]);
 
   const allItems = useMemo(() => {
     const items = [
@@ -91,28 +209,6 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
     [objectives, projects, routines, tasks]
   );
 
-  // Próxima Ação — lista ordenada memoizada (evita reordenar a cada render)
-  const sortedActionItems = useMemo(() => {
-    const today = td();
-    const items = [
-      ...projects.filter(p => p.status === "Ativo").flatMap(p =>
-        (p.phases || []).flatMap(ph => (ph.tasks || []).filter(t => t.status !== "Concluída").map(t => ({
-          id: t.id, name: t.name, _pri: p.priority || t.priority, _diff: t.difficulty || 1, _deadline: p.deadline,
-          _label: p.name, _t: "projTask", _pId: p.id, _phId: ph.id, color: p.color
-        })))
-      ),
-      ...tasks.filter(t => t.status === "Pendente").map(t => ({
-        id: t.id, name: t.name, _pri: t.priority, _diff: t.difficulty || 1, _deadline: t.deadline,
-        _label: "Tarefa avulsa", _t: "task", color: C.orange
-      })),
-      ...routines.filter(r => r.status === "Ativa" && isRoutineDueToday(r) && !(r.completionLog || []).some(l => l.date === today) && migrateFreq(r).freq !== "Livre").map(r => ({
-        id: r.id, name: r.name, _pri: r.priority, _diff: r.difficulty || 1, _deadline: null,
-        _label: fmtFreq(r), _t: "routine", color: r.color || C.purple
-      })),
-    ];
-    items.sort((a, b) => scoreNextAction(b, profile.nextActionWeights) - scoreNextAction(a, profile.nextActionWeights));
-    return items;
-  }, [projects, routines, tasks, profile.nextActionWeights]);
 
   return (
     <div style={{ padding: 14 }}>
@@ -243,70 +339,130 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
           })}
         </Card>
       )}
-      {/* Próxima Ação — usa sortedActionItems memoizado acima */}
-      {(() => {
-        const idx = nextActionSkip % Math.max(1, sortedActionItems.length);
-        const cur = sortedActionItems[idx];
-        if (!cur) return (
-          <div style={{ border: "1px dashed " + C.brd2, borderRadius: 10, padding: 20, marginBottom: 10, textAlign: "center" }}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={C.tx4} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: "block", margin: "0 auto 8px" }}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            <div style={{ fontSize: 11, color: C.tx3, marginBottom: 4 }}>Nenhuma ação pendente</div>
-            <div style={{ fontSize: 11, color: C.tx4 }}>Crie projetos, rotinas ou tarefas para começar a ganhar ENERGIA ⚡.</div>
-          </div>
-        );
-        return (
-          <div style={{ background: "linear-gradient(135deg,#1a1d2e,#1a1a1f)", border: "1px solid " + C.purple + "40", borderRadius: 10, padding: 12, marginBottom: 10 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-              <div style={{ fontSize: 11, color: C.purple, letterSpacing: 0.8, textTransform: "uppercase", fontWeight: 600 }}>Próxima ação</div>
-              <div style={{ display: "flex", gap: 6 }}>
-                <span style={{ fontSize: 11, color: C.tx4 }}>{idx + 1}/{sortedActionItems.length}</span>
-                <span onClick={() => setNextActionSkip(s => s + 1)} style={{ fontSize: 11, color: C.purple, cursor: "pointer", padding: "0 4px" }}>{"↻"}</span>
-              </div>
-            </div>
-            <div style={{ fontSize: 13, fontWeight: 500, color: C.tx, marginBottom: 3 }}>{cur.name}</div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 11, color: C.tx3, marginBottom: 8 }}>
-              <span style={{ color: cur.color || C.gold }}>{cur._label}</span>
-              {cur._pri && <span>{cur._pri}</span>}
-              <span style={{ color: C.gold }}>+{getEnergia(cur._diff)} ⚡</span>
-              {cur._deadline && <span>{fmtD(cur._deadline)}</span>}
-            </div>
-            <Btn small primary onClick={() => {
-              if (cur._t === "projTask") completeTask(cur.id, "project", cur._pId, cur._phId);
-              else if (cur._t === "task") completeTask(cur.id);
-              else if (cur._t === "routine") completeRoutine(cur.id);
-              setNextActionSkip(s => s + 1);
-            }} style={{ width: "100%" }}>Concluir agora</Btn>
-          </div>
-        );
-      })()}
-      {/* Missão do dia */}
+      {/* ═══ MISSAO RPG ═══ */}
       {(() => {
         const m = profile.dailyMission;
-        if (!m) return null;
-        const missionDef = MISSION_POOL.find(x => x.id === m.id);
-        const progress = getMissionProgress(missionDef || m, profile, projects, routines, tasks);
-        const isComplete = missionDef ? missionDef.check(progress) : false;
-        const claimed = m.completed;
-        const pct = missionDef?.pct ? missionDef.pct(progress) : (isComplete ? 100 : 0);
-        return (
-          <div style={{ background: claimed ? C.card : "linear-gradient(135deg,#1e1d12,#1a1a1f)", border: "1px solid " + (claimed ? C.brd : C.gold + "40"), borderRadius: 10, padding: 12, marginBottom: 10, opacity: claimed ? 0.5 : 1 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-              <div style={{ fontSize: 11, color: C.gold, letterSpacing: 0.8, textTransform: "uppercase", fontWeight: 600 }}>Missão do dia</div>
-              <div style={{ fontSize: 11, color: "#e0a030", fontWeight: 600 }}>+{m.coins} moedas</div>
+        const rankColor = m?.color || C.gold;
+        const rankColorSec = m?.colorSecondary || C.gold;
+
+        /* Estado: gerando */
+        if (gerandoMissao || (!m && !gerandoMissao)) {
+          return (
+            <div style={{
+              marginBottom: 12, borderRadius: 12, padding: "18px 16px",
+              background: C.card,
+              border: "1px solid " + C.brd,
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
+            }}>
+              <div style={{ fontSize: 9, color: C.tx4, letterSpacing: 1.2, textTransform: "uppercase", fontWeight: 600 }}>Missao Ativa</div>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.tx4} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ animation: "spin 1s linear infinite" }}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                <span style={{ fontSize: 11, color: C.tx3 }}>Gerando missao...</span>
+              </div>
+              <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
             </div>
-            <div style={{ fontSize: 12, color: C.tx, marginBottom: 8 }}>{m.text}</div>
-            {!claimed && !isComplete && (
-              <div style={{ marginBottom: 8 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.tx4, marginBottom: 3 }}>
-                  <span>Progresso</span>
-                  <span style={{ color: pct > 0 ? C.gold : C.tx4 }}>{pct}%</span>
+          );
+        }
+
+        /* Estado: concluída */
+        if (m.completed) {
+          return (
+            <div style={{
+              marginBottom: 12, borderRadius: 12, padding: "14px 16px",
+              background: C.card, border: "1px solid " + C.brd, opacity: 0.6,
+              display: "flex", alignItems: "center", gap: 10,
+            }}>
+              <RankEmblemSVG rank={m.rankMain} modifier={m.modifier} size={28} color={rankColor} colorSecondary={rankColorSec} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 9, color: C.tx4, letterSpacing: 1.2, textTransform: "uppercase", fontWeight: 600, marginBottom: 2 }}>Missao Concluida</div>
+                <div style={{ fontSize: 11, color: C.tx3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.text}</div>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+          );
+        }
+
+        /* Timer */
+        const agora = Date.now();
+        const restante = m.expiresAt ? Math.max(0, m.expiresAt - agora) : 0;
+        const horas = Math.floor(restante / 3600000);
+        const mins = Math.floor((restante % 3600000) / 60000);
+        const timerStr = restante > 0 ? (horas > 0 ? horas + "h " + mins + "m" : mins + "m") : "Expirando";
+
+        return (
+          <div style={{
+            marginBottom: 12, borderRadius: 12,
+            background: C.card,
+            border: "1.5px solid " + rankColor + "55",
+            boxShadow: "0 0 20px " + rankColor + "18",
+            overflow: "hidden",
+            position: "relative",
+          }}>
+            {/* Linha de destaque superior na cor do rank */}
+            <div style={{ height: 2, background: "linear-gradient(90deg," + rankColor + "cc, " + rankColorSec + "44)", width: "100%" }} />
+
+            <div style={{ padding: "12px 14px" }}>
+              {/* Cabeçalho */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <RankEmblemSVG rank={m.rankMain} modifier={m.modifier} size={32} color={rankColor} colorSecondary={rankColorSec} />
+                  <div>
+                    <div style={{ fontSize: 9, color: rankColor, letterSpacing: 1.4, textTransform: "uppercase", fontWeight: 700 }}>Missao Ativa</div>
+                    <div style={{ fontSize: 11, color: C.tx3, marginTop: 1 }}>Rank {m.rankId || m.rankMain}</div>
+                  </div>
                 </div>
-                <div style={{ height: 4, background: C.brd, borderRadius: 2, overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: pct + "%", background: pct === 100 ? C.green : C.gold, borderRadius: 2, transition: "width .4s" }} />
+                {/* Timer + botao refresh */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ fontSize: 10, color: C.tx4, textAlign: "right" }}>
+                    <div style={{ fontSize: 9, color: C.tx4, letterSpacing: 0.5 }}>Renova em</div>
+                    <div style={{ color: C.tx3, fontWeight: 500 }}>{timerStr}</div>
+                  </div>
                 </div>
               </div>
-            )}
-            {claimed ? <div style={{ fontSize: 11, color: C.green, fontWeight: 500, display: "flex", alignItems: "center", gap: 4 }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Concluída!</div> : isComplete ? <Btn small primary onClick={claimMission} style={{ width: "100%" }}>Resgatar recompensa!</Btn> : null}
+
+              {/* Linha ornamental */}
+              <div style={{ height: "1px", background: "linear-gradient(90deg,transparent," + rankColor + "30,transparent)", marginBottom: 10 }} />
+
+              {/* Texto da missão */}
+              <div style={{ fontSize: 13, fontWeight: 500, color: C.tx, lineHeight: 1.5, marginBottom: 12 }}>{m.text}</div>
+
+              {/* Recompensas */}
+              <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, background: rankColor + "15", border: "1px solid " + rankColor + "30", borderRadius: 6, padding: "4px 10px" }}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={rankColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                  <span style={{ fontSize: 11, color: rankColor, fontWeight: 600 }}>+{m.energia} ENERGIA</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, background: C.goldDim, border: "1px solid " + C.goldBrd, borderRadius: 6, padding: "4px 10px" }}>
+                  <div style={{ width: 10, height: 10, background: C.gold, borderRadius: 5, fontSize: 8, color: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>$</div>
+                  <span style={{ fontSize: 11, color: C.gold, fontWeight: 600 }}>+{m.coins} moedas</span>
+                </div>
+              </div>
+
+              {/* Acoes */}
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <Btn primary onClick={claimMissionRpg} style={{ flex: 1, minWidth: 120 }}>
+                  Missao Concluida
+                </Btn>
+                {/* Botao variar ideia */}
+                <div
+                  onClick={() => !gerandoMissao && gerarMissao({ variacao: true })}
+                  title="Muda a ideia da missao, mantendo o rank e as recompensas"
+                  style={{
+                    display: "flex", alignItems: "center", gap: 5, padding: "7px 12px",
+                    borderRadius: 8, border: "1px solid " + C.brd, background: C.bg,
+                    cursor: gerandoMissao ? "not-allowed" : "pointer",
+                    opacity: gerandoMissao ? 0.4 : 1, transition: "opacity .15s",
+                    flexShrink: 0,
+                  }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.tx3} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/>
+                    <polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/>
+                  </svg>
+                  <span style={{ fontSize: 11, color: C.tx3 }}>Variar ideia</span>
+                </div>
+              </div>
+            </div>
           </div>
         );
       })()}
