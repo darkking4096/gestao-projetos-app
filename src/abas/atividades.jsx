@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import ChatIA from './chat-ia.jsx';
 import { C } from '../temas.js';
 import { uid, td, fmtD, fmtFreq, getEnergia, getMoedas, getXp, getMastery, isRoutineDueToday, calcObjectiveXp, checkProjectCompletion, scoreNextAction, migrateFreq } from '../utilidades.js';
 import { PRIORITIES, CATEGORIES, PRI_ORDER } from '../constantes.js';
@@ -6,20 +7,61 @@ import { Btn, Card, Badge, TopBar, Modal, ConfirmModal, DeleteModal, FilterModal
 import { IconSVG, ConsumableSVG } from '../icones.jsx';
 import { ProjectForm, RoutineForm, TaskForm, ObjectiveForm, ActivitySearchModal, ObjectiveSearchModal } from '../formularios.jsx';
 
-function ActivitiesTab({ subTab, setSubTab, projects, routines, tasks, objectives, nav, completeTask, completeRoutine, updProject, setProfile: setProf, setCompletionConfirm }) {
+function ActivitiesTab({ subTab, setSubTab, projects, routines, tasks, objectives, nav, completeTask, completeRoutine, updProject, setProfile: setProf, setCompletionConfirm, addTask, addRoutine, addProject, setTasks, setRoutines, setProjects, groqApiKey, profile, isDesktop }) {
+  const [showChat, setShowChat] = useState(false);
   return (
-    <div>
+    <div style={{ position: "relative", minHeight: "100%" }}>
       <div style={{ display: "flex", background: C.card2, borderBottom: "0.5px solid " + C.brd }}>
         {[["projects", "Projetos"], ["routines", "Rotinas"], ["tasks", "Tarefas"], ["objectives", "Objetivos"]].map(([k, l]) => (
           <div key={k} onClick={() => setSubTab(k)} style={{ flex: 1, padding: "9px 2px", textAlign: "center", fontSize: 11, cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.4, color: subTab === k ? C.gold : C.tx4, borderBottom: subTab === k ? "2px solid " + C.gold : "2px solid transparent", transition: "color .12s, border-color .12s" }}>{l}</div>
         ))}
       </div>
-      <div style={{ padding: 14 }}>
+      <div style={{ padding: 14, paddingBottom: 80 }}>
         {subTab === "projects" && <ProjectsList projects={projects} nav={nav} completeTask={completeTask} updProject={updProject} setProfile={setProf} setCompletionConfirm={setCompletionConfirm} />}
         {subTab === "routines" && <RoutinesList routines={routines} projects={projects} nav={nav} completeRoutine={completeRoutine} />}
         {subTab === "tasks" && <TasksList tasks={tasks} nav={nav} completeTask={completeTask} />}
         {subTab === "objectives" && <ObjectivesList objectives={objectives} projects={projects} routines={routines} tasks={tasks} nav={nav} />}
       </div>
+
+      {/* Botão flutuante IA */}
+      <div
+        onClick={() => setShowChat(true)}
+        style={{
+          position: "fixed",
+          bottom: isDesktop ? 28 : 70,
+          right: isDesktop ? 32 : 16,
+          zIndex: 200,
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "10px 18px",
+          background: "linear-gradient(135deg,#534AB7,#7b52d4)",
+          borderRadius: 24,
+          boxShadow: "0 4px 20px #534AB760",
+          cursor: "pointer",
+          transition: "transform .14s, box-shadow .14s",
+          userSelect: "none"
+        }}
+        onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.05)"; e.currentTarget.style.boxShadow = "0 6px 28px #534AB780"; }}
+        onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 20px #534AB760"; }}
+      >
+        <span style={{ fontSize: 16, lineHeight: 1 }}>✨</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "#fff", letterSpacing: 0.3 }}>Sugestões IA</span>
+      </div>
+
+      {/* Chat IA */}
+      {showChat && (
+        <ChatIA
+          projects={projects}
+          routines={routines}
+          tasks={tasks}
+          profile={profile || {}}
+          groqApiKey={groqApiKey || ""}
+          setTasks={setTasks}
+          setRoutines={setRoutines}
+          setProjects={setProjects}
+          onClose={() => setShowChat(false)}
+          isDesktop={isDesktop}
+        />
+      )}
     </div>
   );
 }
