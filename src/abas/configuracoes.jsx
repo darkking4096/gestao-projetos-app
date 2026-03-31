@@ -285,6 +285,9 @@ function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects
   const [viewFriend, setViewFriend] = useState(null);
   const searchTimerRef = useRef(null);
 
+  /* Groq tutorial */
+  const [showGroqTutorial, setShowGroqTutorial] = useState(false);
+
   const SectionHeader = ({ label, skey }) => (
     <div onClick={() => toggleSection(skey)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", padding: "2px 0", marginBottom: openSections[skey] ? 8 : 0 }}>
       <span style={{ fontSize: 11, fontWeight: 600, color: C.tx3, letterSpacing: 0.5, textTransform: "uppercase" }}>{label}</span>
@@ -591,9 +594,27 @@ function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects
       {/* ── Integração IA (Groq) ── */}
       <SLabel>Integração com IA</SLabel>
       <div style={{ background: C.card, borderRadius: 10, marginBottom: 10, border: "1px solid " + C.brd, padding: "12px 14px" }}>
-        <div style={{ fontSize: 12, fontWeight: 500, color: C.tx, marginBottom: 4 }}>Chave da API Groq</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+          <div style={{ fontSize: 12, fontWeight: 500, color: C.tx }}>Chave da API Groq</div>
+          <div
+            onClick={() => setShowGroqTutorial(true)}
+            title="Como obter a chave"
+            style={{
+              width: 20, height: 20, borderRadius: 10,
+              background: C.goldDim, border: "1px solid " + C.goldBrd,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: "pointer", flexShrink: 0,
+            }}
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+          </div>
+        </div>
         <div style={{ fontSize: 11, color: C.tx3, marginBottom: 8, lineHeight: 1.5 }}>
-          Usada para gerar questionários personalizados de atributos. Gratuita em{" "}
+          Usada para gerar missões e questionários personalizados com IA. Gratuita em{" "}
           <span style={{ color: C.gold }}>console.groq.com</span>.
         </div>
         <div style={{ position: "relative" }}>
@@ -616,6 +637,90 @@ function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects
           </div>
         )}
       </div>
+
+      {/* ── Tutorial Groq ── */}
+      {showGroqTutorial && (
+        <div
+          onClick={() => setShowGroqTutorial(false)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 1000,
+            background: "rgba(0,0,0,0.65)", backdropFilter: "blur(3px)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "0 20px",
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: C.card, borderRadius: 14, border: "1px solid " + C.brd,
+              padding: "20px 20px 24px", width: "100%", maxWidth: 360,
+              boxShadow: "0 8px 40px rgba(0,0,0,0.5)",
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 28, height: 28, borderRadius: 14, background: C.goldDim, border: "1px solid " + C.goldBrd, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                    <line x1="12" y1="17" x2="12.01" y2="17"/>
+                  </svg>
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.tx }}>Como obter a chave Groq</div>
+              </div>
+              <div onClick={() => setShowGroqTutorial(false)} style={{ cursor: "pointer", padding: 4, color: C.tx3 }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.tx3} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </div>
+            </div>
+
+            {/* Steps */}
+            {[
+              { n: "1", text: "Acesse", highlight: "console.groq.com", after: " no seu navegador" },
+              { n: "2", text: "Faça login ou crie uma conta gratuita", highlight: null, after: null },
+              { n: "3", text: "No menu lateral, clique em ", highlight: "API Keys", after: null },
+              { n: "4", text: "Clique em ", highlight: "Create API Key", after: ", dê um nome qualquer e confirme" },
+              { n: "5", text: "Copie a chave gerada (começa com ", highlight: "gsk_", after: ") e cole aqui" },
+            ].map((step, i) => (
+              <div key={i} style={{ display: "flex", gap: 10, marginBottom: i < 4 ? 12 : 0, alignItems: "flex-start" }}>
+                <div style={{
+                  width: 22, height: 22, borderRadius: 11, flexShrink: 0,
+                  background: C.goldDim, border: "1px solid " + C.goldBrd,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 10, fontWeight: 700, color: C.gold,
+                }}>
+                  {step.n}
+                </div>
+                <div style={{ fontSize: 12, color: C.tx2, lineHeight: 1.5, paddingTop: 2 }}>
+                  {step.text}
+                  {step.highlight && <span style={{ color: C.gold, fontWeight: 600 }}>{step.highlight}</span>}
+                  {step.after && step.after}
+                </div>
+              </div>
+            ))}
+
+            {/* Note */}
+            <div style={{ marginTop: 16, padding: "8px 10px", borderRadius: 8, background: C.bg, border: "1px solid " + C.brd }}>
+              <div style={{ fontSize: 11, color: C.tx3, lineHeight: 1.5 }}>
+                O plano gratuito do Groq inclui requisições suficientes para uso diario no app.
+              </div>
+            </div>
+
+            {/* Close button */}
+            <div
+              onClick={() => setShowGroqTutorial(false)}
+              style={{
+                marginTop: 16, padding: "9px 0", borderRadius: 8,
+                background: C.goldDim, border: "1px solid " + C.goldBrd,
+                textAlign: "center", cursor: "pointer",
+                fontSize: 12, fontWeight: 600, color: C.gold,
+              }}
+            >
+              Entendido
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Backup ── */}
       <SLabel>Backup</SLabel>

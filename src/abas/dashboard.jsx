@@ -29,32 +29,28 @@ async function gerarMissaoGroq(apiKey, rankId, rankMain, context, textAnterior) 
 
   const antiRepeat = textAnterior ? `\nNAO repita nem se aproxime desta missao anterior: "${textAnterior}"\n` : "";
 
-  const prompt = `Voce e o sistema de missoes de um app de produtividade gamificado estilo RPG de alto nivel.
+  /* Verbo de abertura varia aleatoriamente para evitar repeticao */
+  const VERBOS = ["Avance", "Conclua", "Finalize", "Execute", "Domine", "Complete", "Supere", "Entregue", "Realize", "Desbrave"];
+  const verboSugerido = VERBOS[Math.floor(Math.random() * VERBOS.length)];
 
-Crie UMA missao exclusiva de rank ${rankId} para este guerreiro. A missao deve ser ESPECIFICA, ACIONAVEL e baseada nas atividades REAIS dele.
+  const prompt = `Voce e o sistema de missoes de um app de produtividade gamificado RPG.
 
-PERFIL DO GUERREIRO:
-- Rank: ${rankAtual} (${rankId}) | Poder: ${poder}
-- Sequencia ativa: ${streak} dias | ENERGIA ganha hoje: ${xpHoje}
-
-PROJETOS ATIVOS:
-${projetosStr}
-
-ROTINAS ATIVAS:
-${rotinasStr}
-
-TAREFAS AVULSAS:
-${tarefasStr}
-
-TAREFAS DE PROJETO PENDENTES:
-${tarefasProjStr}
+Crie UMA missao unica de rank ${rankId} para este usuario.
 ${antiRepeat}
-INSTRUCOES:
-- Mencione projetos, rotinas ou tarefas ESPECIFICOS sempre que possivel
-- Seja direto e imperativo, estilo RPG (ex: "Avance...", "Conclua...", "Domine...")
-- A missao deve ser realizavel em ate 6 horas
-- Sem emojis, sem aspas, sem pontuacao final
-- Responda APENAS com o texto da missao, maximo 110 caracteres`;
+PERFIL:
+- Rank ${rankAtual} (${rankId}) | Poder ${poder} | Streak ${streak} dias | Energia hoje ${xpHoje}
+
+PROJETOS ATIVOS: ${projetosStr}
+ROTINAS ATIVAS: ${rotinasStr}
+TAREFAS AVULSAS: ${tarefasStr}
+TAREFAS DE PROJETO: ${tarefasProjStr}
+
+REGRAS:
+- Use EXATAMENTE este verbo no inicio: "${verboSugerido}"
+- Mencione nome REAL de projeto, rotina ou tarefa do usuario
+- Seja especifico e acionavel, realizavel em ate 6 horas
+- Sem emojis, sem aspas, sem pontuacao final, maximo 110 caracteres
+- Responda SOMENTE o texto da missao, nada mais`;
 
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
@@ -183,16 +179,15 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
     }
   };
 
-  /* Auto-gera missão se: inexistente, expirada, ou em formato antigo (sem rankMain) */
+  /* Migra missão em formato antigo automaticamente (sem rankMain = legado) */
   useEffect(() => {
     const m = profile.dailyMission;
-    const isOldFormat = m && !m.rankMain;
-    const expirada = m && !m.completed && m.expiresAt && Date.now() > m.expiresAt;
-    const inexistente = !m;
-    if ((inexistente || expirada || isOldFormat) && !gerandoRef.current) {
-      gerarMissao();
+    const isOldFormat = m && !m.rankMain && !m.completed;
+    /* Limpa missão legada para que o usuário gere uma nova manualmente */
+    if (isOldFormat) {
+      setDailyMission(null);
     }
-  }, [profile.dailyMission, rankInfo]);
+  }, []);
 
   const allItems = useMemo(() => {
     const items = [
@@ -408,14 +403,63 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
         const horas = Math.floor(restante / 3600000);
         const mins  = Math.floor((restante % 3600000) / 60000);
         const timerStr = restante > 0 ? (horas > 0 ? horas + "h " + mins + "m" : mins + "m") : "Expirando";
+        const hasActivities = projects.some(p => p.status === "Ativo") || routines.some(r => r.status === "Ativa") || tasks.some(t => t.status === "Pendente");
+        const mExpirada = m && !m.completed && m.expiresAt && agora > m.expiresAt;
 
-        /* ── Loading ── */
-        if (gerandoMissao || !m) {
+        /* ── Sem atividades: não mostra missão ── */
+        if (!hasActivities) return null;
+
+        /* ── Sem chave API ── */
+        if (!groqApiKey) {
+          return (
+            <div style={{ marginBottom: 12, borderRadius: 10, padding: "12px 14px", background: C.card, border: "1px solid " + C.brd }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 16, background: C.goldDim, border: "1px solid " + C.goldBrd, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: C.tx, marginBottom: 3 }}>Missoes personalizadas com IA</div>
+                  <div style={{ fontSize: 11, color: C.tx3, lineHeight: 1.5, marginBottom: 8 }}>Configure sua chave da API Groq em Configuracoes para receber missoes exclusivas geradas com base nas suas atividades. E gratuito.</div>
+                  <div onClick={() => nav("settings")} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: C.gold, cursor: "pointer", padding: "4px 10px", background: C.goldDim, border: "1px solid " + C.goldBrd, borderRadius: 6 }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+                    Ir para Configuracoes
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        /* ── Gerando ── */
+        if (gerandoMissao) {
           return (
             <div style={{ marginBottom: 12, borderRadius: 10, padding: "12px 14px", background: C.card, border: "1px solid " + C.brd, display: "flex", alignItems: "center", gap: 10 }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.tx4} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ animation: "spin 1s linear infinite", flexShrink: 0 }}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-              <span style={{ fontSize: 11, color: C.tx3 }}>{gerandoMissao ? "Gerando missao..." : "Carregando missao..."}</span>
+              <span style={{ fontSize: 11, color: C.tx3 }}>Gerando missao...</span>
               <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
+            </div>
+          );
+        }
+
+        /* ── Sem missão ativa / expirada / concluída: botão para gerar ── */
+        if (!m || mExpirada || m.completed) {
+          const labelBtn = m?.completed ? "Gerar nova missao" : mExpirada ? "Missao expirada — gerar nova" : "Gerar missao";
+          return (
+            <div style={{ marginBottom: 12, borderRadius: 10, overflow: "hidden", background: C.card, border: "1px solid " + C.brd }}>
+              <div style={{ height: 1.5, background: "linear-gradient(90deg," + C.gold + "55,transparent)" }} />
+              <div style={{ padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 10, color: C.tx4, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 3 }}>Missao RPG</div>
+                  <div style={{ fontSize: 11, color: C.tx3 }}>{m?.completed ? "Missao anterior concluida. Pronto para a proxima?" : "Nenhuma missao ativa no momento."}</div>
+                </div>
+                <div
+                  onClick={() => gerarMissao()}
+                  style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 14px", borderRadius: 8, background: C.goldDim, border: "1px solid " + C.goldBrd, cursor: "pointer", flexShrink: 0 }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: C.gold }}>{labelBtn}</span>
+                </div>
+              </div>
             </div>
           );
         }
