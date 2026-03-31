@@ -9,24 +9,52 @@ import { AtributosSection } from './atributos.jsx';
 
 /* ═══ GROQ helper para geração de missão ═══ */
 async function gerarMissaoGroq(apiKey, rankId, rankMain, context, textAnterior) {
-  const { projetos, rotinas, tarefas, streak, rankAtual } = context;
-  const projetosStr = projetos.length > 0 ? projetos.slice(0, 4).join(", ") : "nenhum projeto ativo";
-  const rotinasStr = rotinas.length > 0 ? rotinas.slice(0, 4).join(", ") : "nenhuma rotina ativa";
-  const tarefasStr = tarefas.length > 0 ? tarefas.slice(0, 4).join(", ") : "nenhuma tarefa pendente";
-  const antiRepeat = textAnterior ? `\nNao repita esta missao anterior: "${textAnterior}"\n` : "";
-  const prompt = `Voce e o gerador de missoes de um app de produtividade gamificado estilo RPG.
-Gere UMA missao de rank ${rankId} para o usuario, baseada nos dados dele.
-Seja especifico e mencione projetos, rotinas ou tarefas reais do usuario quando possiivel.
-A missao deve ser alcancavel em ate 6 horas. Seja direto e objetivo.
-${antiRepeat}
-Responda APENAS com o texto da missao, sem explicacoes, sem formatacao, sem emojis. Maximo 90 caracteres.
+  const { projetos, rotinas, tarefas, streak, rankAtual, poder, xpHoje, tarefasProjeto } = context;
 
-Dados do usuario:
-- Rank atual: ${rankAtual}
-- Projetos ativos: ${projetosStr}
-- Rotinas ativas: ${rotinasStr}
-- Tarefas pendentes: ${tarefasStr}
-- Streak: ${streak} dias`;
+  const projetosStr = projetos.length > 0
+    ? projetos.slice(0, 5).map(p => `"${p.nome}" (${p.tarefasPendentes} tarefas pendentes, progresso ${p.progresso}%)`).join("; ")
+    : "nenhum projeto ativo";
+
+  const rotinasStr = rotinas.length > 0
+    ? rotinas.slice(0, 5).map(r => `"${r.nome}" (${r.frequencia}, streak ${r.streak} dias)`).join("; ")
+    : "nenhuma rotina ativa";
+
+  const tarefasStr = tarefas.length > 0
+    ? tarefas.slice(0, 5).map(t => `"${t.nome}" (dificuldade ${t.dificuldade})`).join("; ")
+    : "nenhuma tarefa avulsa";
+
+  const tarefasProjStr = tarefasProjeto.length > 0
+    ? tarefasProjeto.slice(0, 4).map(t => `"${t.nome}" em "${t.projeto}"`).join("; ")
+    : "nenhuma";
+
+  const antiRepeat = textAnterior ? `\nNAO repita nem se aproxime desta missao anterior: "${textAnterior}"\n` : "";
+
+  const prompt = `Voce e o sistema de missoes de um app de produtividade gamificado estilo RPG de alto nivel.
+
+Crie UMA missao exclusiva de rank ${rankId} para este guerreiro. A missao deve ser ESPECIFICA, ACIONAVEL e baseada nas atividades REAIS dele.
+
+PERFIL DO GUERREIRO:
+- Rank: ${rankAtual} (${rankId}) | Poder: ${poder}
+- Sequencia ativa: ${streak} dias | ENERGIA ganha hoje: ${xpHoje}
+
+PROJETOS ATIVOS:
+${projetosStr}
+
+ROTINAS ATIVAS:
+${rotinasStr}
+
+TAREFAS AVULSAS:
+${tarefasStr}
+
+TAREFAS DE PROJETO PENDENTES:
+${tarefasProjStr}
+${antiRepeat}
+INSTRUCOES:
+- Mencione projetos, rotinas ou tarefas ESPECIFICOS sempre que possivel
+- Seja direto e imperativo, estilo RPG (ex: "Avance...", "Conclua...", "Domine...")
+- A missao deve ser realizavel em ate 6 horas
+- Sem emojis, sem aspas, sem pontuacao final
+- Responda APENAS com o texto da missao, maximo 110 caracteres`;
 
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
@@ -34,13 +62,13 @@ Dados do usuario:
     body: JSON.stringify({
       model: "llama-3.3-70b-versatile",
       messages: [{ role: "user", content: prompt }],
-      max_tokens: 120,
-      temperature: 0.9,
+      max_tokens: 150,
+      temperature: 0.92,
     }),
   });
   if (!response.ok) throw new Error("groq_error");
   const data = await response.json();
-  return (data.choices?.[0]?.message?.content || "").trim().slice(0, 90);
+  return (data.choices?.[0]?.message?.content || "").trim().replace(/^["']|["']$/g, "").replace(/[.!]$/, "").slice(0, 110);
 }
 
 /* Fallback de texto por rank quando não há chave Groq */
@@ -72,13 +100,39 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
   const gerandoRef = useRef(false);
 
   /* ── Geração de missão ── */
-  const buildContext = () => ({
-    projetos: projects.filter(p => p.status === "Ativo").map(p => p.name),
-    rotinas: routines.filter(r => r.status === "Ativa").map(r => r.name),
-    tarefas: tasks.filter(t => t.status === "Pendente").map(t => t.name),
-    streak: profile.streak || 0,
-    rankAtual: rankInfo?.label || "Humano",
-  });
+  const buildContext = () => {
+    const projAtivos = projects.filter(p => p.status === "Ativo");
+    const rotAtivas  = routines.filter(r => r.status === "Ativa");
+    const tarefasPend = tasks.filter(t => t.status === "Pendente");
+    /* Tarefas dentro de fases de projetos */
+    const tarefasProjeto = projAtivos.flatMap(p =>
+      (p.phases || []).flatMap(ph =>
+        (ph.tasks || []).filter(t => t.status !== "Concluída").map(t => ({
+          nome: t.name, projeto: p.name, dificuldade: t.difficulty || 1,
+        }))
+      )
+    );
+    return {
+      projetos: projAtivos.map(p => ({
+        nome: p.name,
+        tarefasPendentes: (p.phases || []).reduce((s, ph) => s + (ph.tasks || []).filter(t => t.status !== "Concluída").length, 0),
+        progresso: p.progress || 0,
+      })),
+      rotinas: rotAtivas.map(r => ({
+        nome: r.name,
+        frequencia: r.freq || "Diario",
+        streak: r.streak || 0,
+      })),
+      tarefas: tarefasPend.map(t => ({
+        nome: t.name, dificuldade: t.difficulty || 1,
+      })),
+      tarefasProjeto,
+      streak: profile.streak || 0,
+      rankAtual: rankInfo?.label || "Humano",
+      poder: _poderInfo?.poder || 0,
+      xpHoje: profile.xpToday || 0,
+    };
+  };
 
   const gerarMissao = async (options = {}) => {
     const { variacao = false } = options;
@@ -408,103 +462,121 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
         );
 
         /* ── Modal RPG de detalhe ── */
+        /* ── Cantos ornamentais SVG ── */
+        const CornerSVG = ({ flip }) => (
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none"
+            style={{ position: "absolute", ...(flip === "tr" ? { top: 0, right: 0, transform: "scaleX(-1)" } : flip === "bl" ? { bottom: 0, left: 0, transform: "scaleY(-1)" } : flip === "br" ? { bottom: 0, right: 0, transform: "scale(-1,-1)" } : { top: 0, left: 0 }) }}>
+            <path d="M1 10 L1 1 L10 1" stroke={rankColor + "55"} strokeWidth="1.5" strokeLinecap="round"/>
+          </svg>
+        );
+
         const modalDetalhe = showMissaoDetalhe && (
           <div
             onClick={() => setShowMissaoDetalhe(false)}
-            style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.72)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+            style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.82)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
           >
             <div
               onClick={e => e.stopPropagation()}
               style={{
-                width: "100%", maxWidth: 520,
-                background: C.card, borderRadius: "16px 16px 0 0",
-                border: "1px solid " + rankColor + "40",
-                boxShadow: "0 -12px 48px " + rankColor + "22",
+                width: "100%", maxWidth: 360,
+                background: C.card,
+                borderRadius: 14,
+                border: "1px solid " + rankColor + "45",
+                boxShadow: "0 0 0 1px " + rankColor + "15, 0 16px 60px rgba(0,0,0,0.6), 0 0 40px " + rankColor + "18",
                 overflow: "hidden",
-                paddingBottom: 24,
+                position: "relative",
               }}
             >
-              {/* Barra de destaque topo */}
-              <div style={{ height: 3, background: "linear-gradient(90deg," + rankColor + "," + rankColorSec + "55," + rankColor + ")" }} />
+              {/* Barra topo na cor do rank */}
+              <div style={{ height: 3, background: "linear-gradient(90deg," + rankColor + "cc, " + rankColorSec + "55, " + rankColor + "cc)" }} />
 
-              {/* Header: emblema + rank + fechar */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px 10px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <RankEmblemSVG rank={m.rankMain} modifier={m.modifier} size={42} color={rankColor} colorSecondary={rankColorSec} />
-                  <div>
-                    <div style={{ fontSize: 9, color: C.tx4, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 3 }}>Missao Ativa</div>
-                    <div style={{ fontSize: 20, fontWeight: 800, color: rankColor, letterSpacing: 0.5, lineHeight: 1 }}>{m.rankId || m.rankMain || "?"}</div>
-                  </div>
-                </div>
-                <div
-                  onClick={() => setShowMissaoDetalhe(false)}
-                  style={{ width: 30, height: 30, borderRadius: 15, background: C.bg, border: "1px solid " + C.brd, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.tx3} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </div>
+              {/* Botão fechar */}
+              <div onClick={() => setShowMissaoDetalhe(false)} style={{ position: "absolute", top: 10, right: 10, zIndex: 1, width: 26, height: 26, borderRadius: 13, background: C.bg + "cc", border: "1px solid " + C.brd, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.tx3} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </div>
 
-              {/* Divisor ornamental */}
-              <div style={{ height: 1, background: "linear-gradient(90deg,transparent," + rankColor + "35,transparent)", margin: "0 16px 14px" }} />
+              {/* Área central: emblema + rank */}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "22px 20px 10px" }}>
+                {/* Halo + emblema */}
+                <div style={{ position: "relative", marginBottom: 10 }}>
+                  <div style={{ width: 64, height: 64, borderRadius: "50%", background: "radial-gradient(" + rankColor + "25, transparent 70%)", border: "1.5px solid " + rankColor + "35", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 24px " + rankColor + "20" }}>
+                    <RankEmblemSVG rank={m.rankMain} modifier={m.modifier} size={38} color={rankColor} colorSecondary={rankColorSec} />
+                  </div>
+                </div>
+                {/* Rank ID em destaque */}
+                <div style={{ fontSize: 22, fontWeight: 900, color: rankColor, letterSpacing: 2, lineHeight: 1, marginBottom: 4 }}>{m.rankId || m.rankMain || "?"}</div>
+                <div style={{ fontSize: 9, color: C.tx4, letterSpacing: 2, textTransform: "uppercase" }}>Missao Ativa</div>
+              </div>
 
-              <div style={{ padding: "0 16px" }}>
-                {/* Objetivo */}
-                <div style={{ fontSize: 9, color: rankColor, letterSpacing: 1.4, textTransform: "uppercase", fontWeight: 700, marginBottom: 6 }}>Objetivo</div>
-                <div style={{ fontSize: 14, fontWeight: 500, color: C.tx, lineHeight: 1.65, marginBottom: 16 }}>{m.text}</div>
+              {/* Divisor com losango central */}
+              <div style={{ display: "flex", alignItems: "center", gap: 6, margin: "10px 20px" }}>
+                <div style={{ flex: 1, height: 1, background: "linear-gradient(90deg,transparent," + rankColor + "35)" }} />
+                <div style={{ width: 5, height: 5, background: rankColor + "80", transform: "rotate(45deg)", flexShrink: 0 }} />
+                <div style={{ flex: 1, height: 1, background: "linear-gradient(90deg," + rankColor + "35,transparent)" }} />
+              </div>
+
+              {/* Conteúdo */}
+              <div style={{ padding: "0 20px 20px", position: "relative" }}>
+                {/* Cantos ornamentais no conteúdo */}
+                <div style={{ position: "relative", border: "1px solid " + rankColor + "20", borderRadius: 8, padding: "14px 14px 10px", marginBottom: 14, background: rankColor + "06" }}>
+                  <CornerSVG flip="tl" /><CornerSVG flip="tr" /><CornerSVG flip="bl" /><CornerSVG flip="br" />
+                  <div style={{ fontSize: 9, color: rankColor, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 700, marginBottom: 8 }}>Objetivo</div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: C.tx, lineHeight: 1.7 }}>{m.text}</div>
+                </div>
 
                 {/* Recompensas */}
                 <div style={{ fontSize: 9, color: C.tx4, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 }}>Recompensas</div>
-                <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-                  <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 10, background: rankColor + "12", border: "1px solid " + rankColor + "30", borderRadius: 8, padding: "10px 12px" }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={rankColor} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                  <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, background: rankColor + "10", border: "1px solid " + rankColor + "28", borderRadius: 8, padding: "9px 11px" }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={rankColor} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
                     <div>
-                      <div style={{ fontSize: 9, color: C.tx4, letterSpacing: 0.5 }}>ENERGIA</div>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: rankColor }}>+{m.energia || 0}</div>
+                      <div style={{ fontSize: 8, color: C.tx4, letterSpacing: 0.5 }}>ENERGIA</div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: rankColor, lineHeight: 1.1 }}>+{m.energia || 0}</div>
                     </div>
                   </div>
-                  <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 10, background: C.goldDim, border: "1px solid " + C.goldBrd, borderRadius: 8, padding: "10px 12px" }}>
-                    <div style={{ width: 18, height: 18, background: C.gold, borderRadius: 9, fontSize: 11, color: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, flexShrink: 0 }}>$</div>
+                  <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, background: C.goldDim, border: "1px solid " + C.goldBrd, borderRadius: 8, padding: "9px 11px" }}>
+                    <div style={{ width: 16, height: 16, background: C.gold, borderRadius: 8, fontSize: 10, color: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, flexShrink: 0 }}>$</div>
                     <div>
-                      <div style={{ fontSize: 9, color: C.tx4, letterSpacing: 0.5 }}>MOEDAS</div>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: C.gold }}>+{m.coins || 0}</div>
+                      <div style={{ fontSize: 8, color: C.tx4, letterSpacing: 0.5 }}>MOEDAS</div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: C.gold, lineHeight: 1.1 }}>+{m.coins || 0}</div>
                     </div>
                   </div>
                 </div>
 
-                {/* Timer + variar */}
+                {/* Timer + Variar */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.tx4} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={C.tx4} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                     <span style={{ fontSize: 11, color: C.tx4 }}>Renova em <span style={{ color: C.tx3, fontWeight: 600 }}>{timerStr}</span></span>
                   </div>
                   {!m.completed && (
-                    <div
-                      onClick={() => { if (!gerandoMissao) gerarMissao({ variacao: true }); }}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 5,
-                        cursor: gerandoMissao ? "not-allowed" : "pointer",
-                        opacity: gerandoMissao ? 0.4 : 1,
-                      }}
-                    >
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.tx3} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/>
-                        <polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/>
-                      </svg>
+                    <div onClick={() => { if (!gerandoMissao) gerarMissao({ variacao: true }); }} style={{ display: "flex", alignItems: "center", gap: 4, cursor: gerandoMissao ? "not-allowed" : "pointer", opacity: gerandoMissao ? 0.4 : 1 }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.tx3} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
                       <span style={{ fontSize: 11, color: C.tx3 }}>Variar ideia</span>
                     </div>
                   )}
                 </div>
 
-                {/* Botão concluir */}
+                {/* CTA */}
                 {m.completed ? (
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px", background: C.bg, borderRadius: 10, border: "1px solid " + C.brd }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                     <span style={{ fontSize: 12, color: C.green, fontWeight: 600 }}>Missao Concluida</span>
                   </div>
                 ) : (
-                  <Btn primary onClick={() => { claimMissionRpg(); setShowMissaoDetalhe(false); }} style={{ width: "100%", padding: "11px 0", fontSize: 13, fontWeight: 600 }}>
+                  <div
+                    onClick={() => { claimMissionRpg(); setShowMissaoDetalhe(false); }}
+                    style={{
+                      width: "100%", padding: "11px 0", borderRadius: 10, textAlign: "center",
+                      background: "linear-gradient(135deg," + rankColor + "cc, " + rankColorSec + "aa)",
+                      border: "1px solid " + rankColor + "60",
+                      boxShadow: "0 4px 20px " + rankColor + "25",
+                      cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#fff",
+                      letterSpacing: 0.5,
+                    }}
+                  >
                     Missao Concluida
-                  </Btn>
+                  </div>
                 )}
               </div>
             </div>
