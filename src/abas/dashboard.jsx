@@ -9,48 +9,47 @@ import { AtributosSection } from './atributos.jsx';
 
 /* ═══ GROQ helper para geração de missão ═══ */
 async function gerarMissaoGroq(apiKey, rankId, rankMain, context, textAnterior) {
-  const { projetos, rotinas, tarefas, streak, rankAtual, poder, xpHoje, tarefasProjeto } = context;
+  const { projetos, rotinas, tarefas, streak, rankAtual, poder } = context;
 
-  const projetosStr = projetos.length > 0
-    ? projetos.slice(0, 5).map(p => `"${p.nome}" (${p.tarefasPendentes} tarefas pendentes, progresso ${p.progresso}%)`).join("; ")
-    : "nenhum projeto ativo";
+  /* Categoriza tipos de atividade sem expor nomes reais */
+  const tipos = [];
+  if (projetos.length > 0) tipos.push("criacao/desenvolvimento");
+  if (rotinas.length > 0) tipos.push("rotinas e disciplina");
+  if (tarefas.length > 0) tipos.push("tarefas e entregas");
+  const tiposStr = tipos.length > 0 ? tipos.join(", ") : "atividades gerais";
 
-  const rotinasStr = rotinas.length > 0
-    ? rotinas.slice(0, 5).map(r => `"${r.nome}" (${r.frequencia}, streak ${r.streak} dias)`).join("; ")
-    : "nenhuma rotina ativa";
+  const nivelStr = poder < 15 ? "iniciante" : poder < 100 ? "em crescimento" : poder < 1500 ? "intermediario" : "veterano";
 
-  const tarefasStr = tarefas.length > 0
-    ? tarefas.slice(0, 5).map(t => `"${t.nome}" (dificuldade ${t.dificuldade})`).join("; ")
-    : "nenhuma tarefa avulsa";
+  const antiRepeat = textAnterior ? `\nNAO repita nem variacao do titulo anterior: "${textAnterior}"\n` : "";
 
-  const tarefasProjStr = tarefasProjeto.length > 0
-    ? tarefasProjeto.slice(0, 4).map(t => `"${t.nome}" em "${t.projeto}"`).join("; ")
-    : "nenhuma";
-
-  const antiRepeat = textAnterior ? `\nNAO repita nem se aproxime desta missao anterior: "${textAnterior}"\n` : "";
-
-  /* Verbo de abertura varia aleatoriamente para evitar repeticao */
-  const VERBOS = ["Avance", "Conclua", "Finalize", "Execute", "Domine", "Complete", "Supere", "Entregue", "Realize", "Desbrave"];
+  const VERBOS = ["Avance", "Conclua", "Finalize", "Domine", "Supere", "Conquiste", "Forje", "Perfeccione", "Transcenda", "Entregue", "Desbrave", "Execute", "Construa", "Realize", "Eleve"];
   const verboSugerido = VERBOS[Math.floor(Math.random() * VERBOS.length)];
 
-  const prompt = `Voce e o sistema de missoes de um app de produtividade gamificado RPG.
+  const prompt = `Voce e o narrador de missoes de um RPG de produtividade. Crie uma missao epica de rank ${rankId}.
 
-Crie UMA missao unica de rank ${rankId} para este usuario.
+AVENTUREIRO: rank ${rankAtual} (${nivelStr}), poder ${poder}, streak ${streak} dias
+FOCO ATUAL: ${tiposStr}
 ${antiRepeat}
-PERFIL:
-- Rank ${rankAtual} (${rankId}) | Poder ${poder} | Streak ${streak} dias | Energia hoje ${xpHoje}
+RETORNE SOMENTE JSON valido, sem markdown, sem texto adicional:
+{"titulo":"...","contexto":"..."}
 
-PROJETOS ATIVOS: ${projetosStr}
-ROTINAS ATIVAS: ${rotinasStr}
-TAREFAS AVULSAS: ${tarefasStr}
-TAREFAS DE PROJETO: ${tarefasProjStr}
+REGRAS "titulo":
+- Comece obrigatoriamente com: "${verboSugerido}"
+- Entre 50 e 90 caracteres, contando espacos
+- Linguagem de quest RPG: epica, direta, motivacional
+- ABSTRATO: inspirado no tipo de atividade mas nunca cite nomes reais de projetos ou tarefas
+- Deve soar como uma missao real de RPG, nao um item de lista de tarefas
 
-REGRAS:
-- Use EXATAMENTE este verbo no inicio: "${verboSugerido}"
-- Mencione nome REAL de projeto, rotina ou tarefa do usuario
-- Seja especifico e acionavel, realizavel em ate 6 horas
-- Sem emojis, sem aspas, sem pontuacao final, maximo 110 caracteres
-- Responda SOMENTE o texto da missao, nada mais`;
+REGRAS "contexto":
+- 1 a 2 frases curtas (maximo 130 caracteres no total)
+- Tom narrativo de RPG: descreve o SIGNIFICADO ou DESAFIO por tras da missao
+- UNIVERSAL: qualquer pessoa em qualquer area pode se identificar
+- Sem emojis, sem detalhes especificos sobre projetos
+
+EXEMPLOS de saida valida:
+{"titulo":"Avance no caminho que define quem voce esta se tornando","contexto":"Todo construtor enfrenta o momento em que o esforco invisivel se torna legado visivel."}
+{"titulo":"Domine a consistencia e quebre seu proprio recorde","contexto":"A disciplina diaria e a arma silenciosa dos que chegam ao topo sem fazer barulho."}
+{"titulo":"Forje a proxima versao do seu maior projeto","contexto":"As obras que perduram nao nascem de inspiracao. Nascem de presenca repetida."}`;
 
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
@@ -58,25 +57,55 @@ REGRAS:
     body: JSON.stringify({
       model: "llama-3.3-70b-versatile",
       messages: [{ role: "user", content: prompt }],
-      max_tokens: 150,
-      temperature: 0.92,
+      max_tokens: 220,
+      temperature: 1.05,
+      response_format: { type: "json_object" },
     }),
   });
   if (!response.ok) throw new Error("groq_error");
   const data = await response.json();
-  return (data.choices?.[0]?.message?.content || "").trim().replace(/^["']|["']$/g, "").replace(/[.!]$/, "").slice(0, 110);
+  const raw = (data.choices?.[0]?.message?.content || "").trim();
+  let parsed;
+  try { parsed = JSON.parse(raw); } catch (e) { return { titulo: raw.slice(0, 90), contexto: "" }; }
+  const titulo   = (parsed.titulo   || "").replace(/^["']|["']$/g, "").replace(/[.!]$/, "").slice(0, 90);
+  const contexto = (parsed.contexto || "").replace(/^["']|["']$/g, "").slice(0, 140);
+  return { titulo, contexto };
 }
 
-/* Fallback de texto por rank quando não há chave Groq */
+/* Fallback por rank quando nao ha chave Groq — retorna { titulo, contexto } */
 const FALLBACK_TEXTS = {
-  F:   ["Conclua ao menos 1 tarefa pendente hoje", "Registre seu progresso em qualquer atividade"],
-  E:   ["Finalize 2 tarefas do dia", "Avance em uma rotina ativa hoje"],
-  D:   ["Conclua 3 tarefas antes de encerrar o dia", "Complete todas as rotinas previstas para hoje"],
-  C:   ["Conclua uma fase inteira de um projeto ativo", "Finalize 4 tarefas e mantenha seu streak"],
-  B:   ["Avance de forma significativa em seu projeto principal hoje", "Conclua 5 tarefas e pelo menos 2 rotinas"],
-  A:   ["Entregue um resultado expressivo no seu projeto de maior prioridade", "Complete 6 tarefas incluindo pelo menos uma de alta dificuldade"],
-  S:   ["Conclua uma etapa critica do seu projeto mais importante", "Alcance 200+ ENERGIA em um unico dia de trabalho intenso"],
-  MAX: ["Supere seus proprios limites: conclua o maximo possivel hoje", "Entregue resultados de nivel MAX no seu projeto principal"],
+  F: [
+    { titulo: "Avance um passo em sua jornada mais importante", contexto: "Todo grande caminho comeca com um unico gesto de coragem. Hoje, esse gesto e suficiente." },
+    { titulo: "Conclua ao menos uma entrega antes de encerrar o dia", contexto: "Cada tarefa concluida e uma promessa cumprida consigo mesmo." },
+  ],
+  E: [
+    { titulo: "Finalize duas entregas e fortaleça seu ritmo", contexto: "A consistencia e construida tijolo a tijolo. Cada dia conta." },
+    { titulo: "Avance na rotina que sustenta seu crescimento", contexto: "Os habitos diarios sao os alicerces das conquistas futuras." },
+  ],
+  D: [
+    { titulo: "Conclua tres desafios antes de encerrar o dia", contexto: "Quem faz mais do que o necessario descobre o que e capaz." },
+    { titulo: "Complete o ciclo de atividades previstas para hoje", contexto: "Disciplina nao e restricao. E o caminho mais curto para a liberdade." },
+  ],
+  C: [
+    { titulo: "Domine uma etapa completa do seu projeto mais ativo", contexto: "As grandes obras nao surgem de lampejos. Surgem de presenca repetida." },
+    { titulo: "Entregue quatro resultados e mantenha sua sequencia", contexto: "O momentum e um aliado raro. Uma vez em movimento, mantenha o ritmo." },
+  ],
+  B: [
+    { titulo: "Supere o que voce entregou ontem e avance mais longe", contexto: "O verdadeiro adversario e sempre a versao de si mesmo do dia anterior." },
+    { titulo: "Forje um progresso significativo no seu principal projeto", contexto: "So quem vai alem do confortavel descobre o proximo nivel que o aguarda." },
+  ],
+  A: [
+    { titulo: "Entregue um resultado que fara diferenca na sua trajetoria", contexto: "Os que chegam ao topo nao param quando esta bom. Param quando esta feito." },
+    { titulo: "Execute com precisao o desafio que mais importa hoje", contexto: "Excelencia nao e perfeicao. E intencao aplicada com consistencia." },
+  ],
+  S: [
+    { titulo: "Transcenda os proprios limites em um dia de alta performance", contexto: "Voce ja provou que e capaz. Agora prove que e extraordinario." },
+    { titulo: "Conquiste a etapa critica que separa o bom do excepcional", contexto: "As lendas nao sao feitas de dias faceis. Sao forjadas nos dificeies." },
+  ],
+  MAX: [
+    { titulo: "Eleve o padrao e entregue resultados que definem legado", contexto: "No topo, a competicao e consigo mesmo. So o maximo e suficiente." },
+    { titulo: "Perfeccione o que outros considerariam completo", contexto: "O nivel MAX nao e um destino. E uma postura diante de cada desafio." },
+  ],
 };
 function getFallbackText(rankMain) {
   const pool = FALLBACK_TEXTS[rankMain] || FALLBACK_TEXTS.F;
@@ -142,28 +171,29 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
         ? { rankMain: prev.rankMain, rankId: prev.rankId, modifier: prev.modifier || "", color: prev.color, colorSecondary: prev.colorSecondary, energia: prev.energia, coins: prev.coins }
         : rollMissionRank(rankInfo);
 
-      let text = "";
+      let resultado = { titulo: "", contexto: "" };
       const ctx = buildContext();
       if (groqApiKey) {
         try {
-          text = await gerarMissaoGroq(groqApiKey, rolled.rankId, rolled.rankMain, ctx, variacao ? (prev?.text || "") : "");
+          resultado = await gerarMissaoGroq(groqApiKey, rolled.rankId, rolled.rankMain, ctx, variacao ? (prev?.text || "") : "");
         } catch (e) {
-          text = getFallbackText(rolled.rankMain);
+          resultado = getFallbackText(rolled.rankMain);
         }
       } else {
-        text = getFallbackText(rolled.rankMain);
+        resultado = getFallbackText(rolled.rankMain);
       }
-      if (!text) text = getFallbackText(rolled.rankMain);
+      if (!resultado.titulo) resultado = getFallbackText(rolled.rankMain);
 
       const agora = Date.now();
-      /* Variar preserva o timer original — só muda o texto */
+      /* Variar preserva o timer original — só muda o texto e contexto */
       const novaMissao = {
         rankMain: rolled.rankMain,
         rankId: rolled.rankId,
         modifier: rolled.modifier || "",
         color: rolled.color,
         colorSecondary: rolled.colorSecondary,
-        text,
+        text: resultado.titulo,
+        context: resultado.contexto,
         energia: rolled.energia,
         coins: rolled.coins,
         generatedAt: variacao && prev ? (prev.generatedAt || agora) : agora,
@@ -420,7 +450,7 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: C.tx, marginBottom: 3 }}>Missoes personalizadas com IA</div>
                   <div style={{ fontSize: 11, color: C.tx3, lineHeight: 1.5, marginBottom: 8 }}>Configure sua chave da API Groq em Configuracoes para receber missoes exclusivas geradas com base nas suas atividades. E gratuito.</div>
-                  <div onClick={() => nav("settings")} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: C.gold, cursor: "pointer", padding: "4px 10px", background: C.goldDim, border: "1px solid " + C.goldBrd, borderRadius: 6 }}>
+                  <div onClick={() => nav("config")} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: C.gold, cursor: "pointer", padding: "4px 10px", background: C.goldDim, border: "1px solid " + C.goldBrd, borderRadius: 6 }}>
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
                     Ir para Configuracoes
                   </div>
@@ -565,7 +595,10 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
                 <div style={{ position: "relative", border: "1px solid " + rankColor + "20", borderRadius: 8, padding: "14px 14px 10px", marginBottom: 14, background: rankColor + "06" }}>
                   <CornerSVG flip="tl" /><CornerSVG flip="tr" /><CornerSVG flip="bl" /><CornerSVG flip="br" />
                   <div style={{ fontSize: 9, color: rankColor, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 700, marginBottom: 8 }}>Objetivo</div>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: C.tx, lineHeight: 1.7 }}>{m.text}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: C.tx, lineHeight: 1.6 }}>{m.text}</div>
+                  {m.context && (
+                    <div style={{ fontSize: 11, color: C.tx3, lineHeight: 1.65, marginTop: 10, paddingTop: 10, borderTop: "1px solid " + rankColor + "20", fontStyle: "italic" }}>{m.context}</div>
+                  )}
                 </div>
 
                 {/* Recompensas */}
