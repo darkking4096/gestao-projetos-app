@@ -68,6 +68,7 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
   const [customTo, setCustomTo] = useState("");
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [gerandoMissao, setGerandoMissao] = useState(false);
+  const [showMissaoDetalhe, setShowMissaoDetalhe] = useState(false);
   const gerandoRef = useRef(false);
 
   /* ── Geração de missão ── */
@@ -85,15 +86,17 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
     gerandoRef.current = true;
     setGerandoMissao(true);
     try {
-      const rolled = variacao && profile.dailyMission
-        ? { rankMain: profile.dailyMission.rankMain, rankId: profile.dailyMission.rankId, modifier: profile.dailyMission.modifier, color: profile.dailyMission.color, colorSecondary: profile.dailyMission.colorSecondary, energia: profile.dailyMission.energia, coins: profile.dailyMission.coins }
+      const prev = profile.dailyMission;
+      /* Variar: mantém rank e recompensas, só muda o texto */
+      const rolled = variacao && prev && prev.rankMain
+        ? { rankMain: prev.rankMain, rankId: prev.rankId, modifier: prev.modifier || "", color: prev.color, colorSecondary: prev.colorSecondary, energia: prev.energia, coins: prev.coins }
         : rollMissionRank(rankInfo);
 
       let text = "";
       const ctx = buildContext();
       if (groqApiKey) {
         try {
-          text = await gerarMissaoGroq(groqApiKey, rolled.rankId, rolled.rankMain, ctx, variacao ? (profile.dailyMission?.text || "") : "");
+          text = await gerarMissaoGroq(groqApiKey, rolled.rankId, rolled.rankMain, ctx, variacao ? (prev?.text || "") : "");
         } catch (e) {
           text = getFallbackText(rolled.rankMain);
         }
@@ -103,20 +106,21 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
       if (!text) text = getFallbackText(rolled.rankMain);
 
       const agora = Date.now();
+      /* Variar preserva o timer original — só muda o texto */
       const novaMissao = {
         rankMain: rolled.rankMain,
         rankId: rolled.rankId,
-        modifier: rolled.modifier,
+        modifier: rolled.modifier || "",
         color: rolled.color,
         colorSecondary: rolled.colorSecondary,
         text,
         energia: rolled.energia,
         coins: rolled.coins,
-        generatedAt: agora,
-        expiresAt: agora + 6 * 60 * 60 * 1000,
+        generatedAt: variacao && prev ? (prev.generatedAt || agora) : agora,
+        expiresAt:   variacao && prev ? (prev.expiresAt   || agora + 6 * 60 * 60 * 1000) : agora + 6 * 60 * 60 * 1000,
         completed: false,
         claimedAt: null,
-        variacaoCount: variacao ? ((profile.dailyMission?.variacaoCount || 0) + 1) : 0,
+        variacaoCount: variacao ? ((prev?.variacaoCount || 0) + 1) : 0,
       };
       setDailyMission(novaMissao);
     } finally {
@@ -125,12 +129,13 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
     }
   };
 
-  /* Auto-gera missão se inexistente ou expirada */
+  /* Auto-gera missão se: inexistente, expirada, ou em formato antigo (sem rankMain) */
   useEffect(() => {
     const m = profile.dailyMission;
+    const isOldFormat = m && !m.rankMain;
     const expirada = m && !m.completed && m.expiresAt && Date.now() > m.expiresAt;
     const inexistente = !m;
-    if ((inexistente || expirada) && !gerandoRef.current) {
+    if ((inexistente || expirada || isOldFormat) && !gerandoRef.current) {
       gerarMissao();
     }
   }, [profile.dailyMission, rankInfo]);
@@ -342,129 +347,171 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
       {/* ═══ MISSAO RPG ═══ */}
       {(() => {
         const m = profile.dailyMission;
-        const rankColor = m?.color || C.gold;
-        const rankColorSec = m?.colorSecondary || C.gold;
-
-        /* Estado: gerando */
-        if (gerandoMissao || (!m && !gerandoMissao)) {
-          return (
-            <div style={{
-              marginBottom: 12, borderRadius: 12, padding: "18px 16px",
-              background: C.card,
-              border: "1px solid " + C.brd,
-              display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
-            }}>
-              <div style={{ fontSize: 9, color: C.tx4, letterSpacing: 1.2, textTransform: "uppercase", fontWeight: 600 }}>Missao Ativa</div>
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.tx4} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ animation: "spin 1s linear infinite" }}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-                <span style={{ fontSize: 11, color: C.tx3 }}>Gerando missao...</span>
-              </div>
-              <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-            </div>
-          );
-        }
-
-        /* Estado: concluída */
-        if (m.completed) {
-          return (
-            <div style={{
-              marginBottom: 12, borderRadius: 12, padding: "14px 16px",
-              background: C.card, border: "1px solid " + C.brd, opacity: 0.6,
-              display: "flex", alignItems: "center", gap: 10,
-            }}>
-              <RankEmblemSVG rank={m.rankMain} modifier={m.modifier} size={28} color={rankColor} colorSecondary={rankColorSec} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 9, color: C.tx4, letterSpacing: 1.2, textTransform: "uppercase", fontWeight: 600, marginBottom: 2 }}>Missao Concluida</div>
-                <div style={{ fontSize: 11, color: C.tx3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.text}</div>
-              </div>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            </div>
-          );
-        }
-
-        /* Timer */
+        const rankColor    = (m?.color)          || C.gold;
+        const rankColorSec = (m?.colorSecondary) || C.gold;
         const agora = Date.now();
-        const restante = m.expiresAt ? Math.max(0, m.expiresAt - agora) : 0;
+        const restante = m?.expiresAt ? Math.max(0, m.expiresAt - agora) : 0;
         const horas = Math.floor(restante / 3600000);
-        const mins = Math.floor((restante % 3600000) / 60000);
+        const mins  = Math.floor((restante % 3600000) / 60000);
         const timerStr = restante > 0 ? (horas > 0 ? horas + "h " + mins + "m" : mins + "m") : "Expirando";
 
-        return (
-          <div style={{
-            marginBottom: 12, borderRadius: 12,
-            background: C.card,
-            border: "1.5px solid " + rankColor + "55",
-            boxShadow: "0 0 20px " + rankColor + "18",
-            overflow: "hidden",
-            position: "relative",
-          }}>
-            {/* Linha de destaque superior na cor do rank */}
-            <div style={{ height: 2, background: "linear-gradient(90deg," + rankColor + "cc, " + rankColorSec + "44)", width: "100%" }} />
+        /* ── Loading ── */
+        if (gerandoMissao || !m) {
+          return (
+            <div style={{ marginBottom: 12, borderRadius: 10, padding: "12px 14px", background: C.card, border: "1px solid " + C.brd, display: "flex", alignItems: "center", gap: 10 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.tx4} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ animation: "spin 1s linear infinite", flexShrink: 0 }}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+              <span style={{ fontSize: 11, color: C.tx3 }}>{gerandoMissao ? "Gerando missao..." : "Carregando missao..."}</span>
+              <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
+            </div>
+          );
+        }
 
-            <div style={{ padding: "12px 14px" }}>
-              {/* Cabeçalho */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <RankEmblemSVG rank={m.rankMain} modifier={m.modifier} size={32} color={rankColor} colorSecondary={rankColorSec} />
-                  <div>
-                    <div style={{ fontSize: 9, color: rankColor, letterSpacing: 1.4, textTransform: "uppercase", fontWeight: 700 }}>Missao Ativa</div>
-                    <div style={{ fontSize: 11, color: C.tx3, marginTop: 1 }}>Rank {m.rankId || m.rankMain}</div>
-                  </div>
-                </div>
-                {/* Timer + botao refresh */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ fontSize: 10, color: C.tx4, textAlign: "right" }}>
-                    <div style={{ fontSize: 9, color: C.tx4, letterSpacing: 0.5 }}>Renova em</div>
-                    <div style={{ color: C.tx3, fontWeight: 500 }}>{timerStr}</div>
-                  </div>
-                </div>
+        /* ── Card compacto (sempre visível no dashboard) ── */
+        const cardCompacto = (
+          <div
+            onClick={() => setShowMissaoDetalhe(true)}
+            style={{
+              marginBottom: 12, borderRadius: 10, overflow: "hidden",
+              background: C.card,
+              border: "1px solid " + (m.completed ? C.brd : rankColor + "45"),
+              boxShadow: m.completed ? "none" : "0 0 14px " + rankColor + "12",
+              cursor: "pointer", transition: "box-shadow .15s",
+            }}
+          >
+            {/* Barra superior cor do rank */}
+            <div style={{ height: 2, background: m.completed ? C.brd : "linear-gradient(90deg," + rankColor + "cc,transparent)" }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px" }}>
+              {/* Emblema + rank ID */}
+              <div style={{ flexShrink: 0 }}>
+                <RankEmblemSVG rank={m.rankMain} modifier={m.modifier} size={28} color={m.completed ? C.tx4 : rankColor} colorSecondary={m.completed ? C.tx4 : rankColorSec} />
               </div>
-
-              {/* Linha ornamental */}
-              <div style={{ height: "1px", background: "linear-gradient(90deg,transparent," + rankColor + "30,transparent)", marginBottom: 10 }} />
-
-              {/* Texto da missão */}
-              <div style={{ fontSize: 13, fontWeight: 500, color: C.tx, lineHeight: 1.5, marginBottom: 12 }}>{m.text}</div>
-
-              {/* Recompensas */}
-              <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 4, background: rankColor + "15", border: "1px solid " + rankColor + "30", borderRadius: 6, padding: "4px 10px" }}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={rankColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                  <span style={{ fontSize: 11, color: rankColor, fontWeight: 600 }}>+{m.energia} ENERGIA</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 2 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: m.completed ? C.tx4 : rankColor, letterSpacing: 0.3 }}>{m.rankId || m.rankMain || "?"}</span>
+                  <span style={{ fontSize: 9, color: C.tx4, letterSpacing: 0.8, textTransform: "uppercase" }}>Missao</span>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 4, background: C.goldDim, border: "1px solid " + C.goldBrd, borderRadius: 6, padding: "4px 10px" }}>
-                  <div style={{ width: 10, height: 10, background: C.gold, borderRadius: 5, fontSize: 8, color: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>$</div>
-                  <span style={{ fontSize: 11, color: C.gold, fontWeight: 600 }}>+{m.coins} moedas</span>
-                </div>
+                <div style={{ fontSize: 12, color: m.completed ? C.tx3 : C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.text}</div>
               </div>
-
-              {/* Acoes */}
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                <Btn primary onClick={claimMissionRpg} style={{ flex: 1, minWidth: 120 }}>
-                  Missao Concluida
-                </Btn>
-                {/* Botao variar ideia */}
-                <div
-                  onClick={() => !gerandoMissao && gerarMissao({ variacao: true })}
-                  title="Muda a ideia da missao, mantendo o rank e as recompensas"
-                  style={{
-                    display: "flex", alignItems: "center", gap: 5, padding: "7px 12px",
-                    borderRadius: 8, border: "1px solid " + C.brd, background: C.bg,
-                    cursor: gerandoMissao ? "not-allowed" : "pointer",
-                    opacity: gerandoMissao ? 0.4 : 1, transition: "opacity .15s",
-                    flexShrink: 0,
-                  }}
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.tx3} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/>
-                    <polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/>
-                  </svg>
-                  <span style={{ fontSize: 11, color: C.tx3 }}>Variar ideia</span>
-                </div>
+              {/* Estado direito */}
+              <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+                {m.completed ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                ) : (
+                  <>
+                    <span style={{ fontSize: 9, color: C.tx4 }}>{timerStr}</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={rankColor + "99"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                  </>
+                )}
               </div>
             </div>
           </div>
         );
+
+        /* ── Modal RPG de detalhe ── */
+        const modalDetalhe = showMissaoDetalhe && (
+          <div
+            onClick={() => setShowMissaoDetalhe(false)}
+            style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.72)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                width: "100%", maxWidth: 520,
+                background: C.card, borderRadius: "16px 16px 0 0",
+                border: "1px solid " + rankColor + "40",
+                boxShadow: "0 -12px 48px " + rankColor + "22",
+                overflow: "hidden",
+                paddingBottom: 24,
+              }}
+            >
+              {/* Barra de destaque topo */}
+              <div style={{ height: 3, background: "linear-gradient(90deg," + rankColor + "," + rankColorSec + "55," + rankColor + ")" }} />
+
+              {/* Header: emblema + rank + fechar */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px 10px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <RankEmblemSVG rank={m.rankMain} modifier={m.modifier} size={42} color={rankColor} colorSecondary={rankColorSec} />
+                  <div>
+                    <div style={{ fontSize: 9, color: C.tx4, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 3 }}>Missao Ativa</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: rankColor, letterSpacing: 0.5, lineHeight: 1 }}>{m.rankId || m.rankMain || "?"}</div>
+                  </div>
+                </div>
+                <div
+                  onClick={() => setShowMissaoDetalhe(false)}
+                  style={{ width: 30, height: 30, borderRadius: 15, background: C.bg, border: "1px solid " + C.brd, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.tx3} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </div>
+              </div>
+
+              {/* Divisor ornamental */}
+              <div style={{ height: 1, background: "linear-gradient(90deg,transparent," + rankColor + "35,transparent)", margin: "0 16px 14px" }} />
+
+              <div style={{ padding: "0 16px" }}>
+                {/* Objetivo */}
+                <div style={{ fontSize: 9, color: rankColor, letterSpacing: 1.4, textTransform: "uppercase", fontWeight: 700, marginBottom: 6 }}>Objetivo</div>
+                <div style={{ fontSize: 14, fontWeight: 500, color: C.tx, lineHeight: 1.65, marginBottom: 16 }}>{m.text}</div>
+
+                {/* Recompensas */}
+                <div style={{ fontSize: 9, color: C.tx4, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 }}>Recompensas</div>
+                <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                  <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 10, background: rankColor + "12", border: "1px solid " + rankColor + "30", borderRadius: 8, padding: "10px 12px" }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={rankColor} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                    <div>
+                      <div style={{ fontSize: 9, color: C.tx4, letterSpacing: 0.5 }}>ENERGIA</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: rankColor }}>+{m.energia || 0}</div>
+                    </div>
+                  </div>
+                  <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 10, background: C.goldDim, border: "1px solid " + C.goldBrd, borderRadius: 8, padding: "10px 12px" }}>
+                    <div style={{ width: 18, height: 18, background: C.gold, borderRadius: 9, fontSize: 11, color: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, flexShrink: 0 }}>$</div>
+                    <div>
+                      <div style={{ fontSize: 9, color: C.tx4, letterSpacing: 0.5 }}>MOEDAS</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: C.gold }}>+{m.coins || 0}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Timer + variar */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.tx4} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    <span style={{ fontSize: 11, color: C.tx4 }}>Renova em <span style={{ color: C.tx3, fontWeight: 600 }}>{timerStr}</span></span>
+                  </div>
+                  {!m.completed && (
+                    <div
+                      onClick={() => { if (!gerandoMissao) gerarMissao({ variacao: true }); }}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 5,
+                        cursor: gerandoMissao ? "not-allowed" : "pointer",
+                        opacity: gerandoMissao ? 0.4 : 1,
+                      }}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.tx3} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/>
+                        <polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/>
+                      </svg>
+                      <span style={{ fontSize: 11, color: C.tx3 }}>Variar ideia</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Botão concluir */}
+                {m.completed ? (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px", background: C.bg, borderRadius: 10, border: "1px solid " + C.brd }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    <span style={{ fontSize: 12, color: C.green, fontWeight: 600 }}>Missao Concluida</span>
+                  </div>
+                ) : (
+                  <Btn primary onClick={() => { claimMissionRpg(); setShowMissaoDetalhe(false); }} style={{ width: "100%", padding: "11px 0", fontSize: 13, fontWeight: 600 }}>
+                    Missao Concluida
+                  </Btn>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+
+        return <>{cardCompacto}{modalDetalhe}</>;
       })()}
       {/* Chart */}
       <Card style={{ marginBottom: 10 }}>
