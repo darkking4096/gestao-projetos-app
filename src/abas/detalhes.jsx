@@ -43,7 +43,7 @@ function ProjectDetail({ item, onUpdate, onDelete, onComplete, nav, navBack, obj
       } />
       <div style={{ fontSize: 17, fontWeight: 600, color: C.tx, marginBottom: 2 }}>{item.name}</div>
       {item.description && <div style={{ fontSize: 11, color: C.tx2, marginBottom: 8, lineHeight: 1.5 }}>{item.description}</div>}
-      {item.objective && <div style={{ background: "#1a1a2e", border: "0.5px solid " + C.purple + "25", borderRadius: 8, padding: 10, marginBottom: 10 }}>
+      {item.objective && <div style={{ background: C.purple + "10", border: "0.5px solid " + C.purple + "30", borderRadius: 8, padding: 10, marginBottom: 10 }}>
         <div style={{ fontSize: 11, color: C.purple, letterSpacing: 1, textTransform: "uppercase", marginBottom: 3 }}>Objetivo</div>
         <div style={{ fontSize: 12, color: C.tx }}>{item.objective}</div>
       </div>}

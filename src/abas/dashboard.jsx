@@ -410,11 +410,11 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
       {dashSubTab === "overview" && <>
 
       {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 5, marginBottom: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(88px, 1fr))", gap: 6, marginBottom: 12 }}>
         {[[totalActive, "Ativas", null], ["+" + (profile.xpToday || 0), "Energia hoje", null], ["+" + (profile.coinsToday || 0), "Moedas", null], [profile.streak, "Streak", getMultiplier(profile.streak) > 0 ? "+" + Math.round(getMultiplier(profile.streak)*100) + "%" : null]].map(([v, l, sub], i) => (
-          <div key={i} style={{ background: C.card, borderRadius: 6, padding: "7px 4px", textAlign: "center" }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: i === 3 ? C.orange : C.tx }}>{v}</div>
-            <div style={{ fontSize: 11, color: C.tx3 }}>{l}</div>
+          <div key={i} style={{ background: C.card, borderRadius: 8, padding: "8px 6px", textAlign: "center", minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: i === 3 ? C.orange : C.tx, lineHeight: 1.15, wordBreak: "break-word" }}>{v}</div>
+            <div style={{ fontSize: 11, color: C.tx3, lineHeight: 1.2 }}>{l}</div>
             {sub && <div style={{ fontSize: 11, color: C.green, marginTop: 1 }}>{sub}</div>}
           </div>
         ))}
@@ -452,8 +452,8 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
       )}
       {/* V2: Objectives card */}
       {activeObjectives.length > 0 && (
-        <Card style={{ marginBottom: 10, borderLeft: "3px solid #534AB7" }}>
-          <div onClick={() => nav("activities", "objectives", "list")} style={{ fontSize: 11, color: "#534AB7", letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600, marginBottom: 6, cursor: "pointer", transition: "opacity .12s" }}>Seus Objetivos</div>
+        <Card style={{ marginBottom: 10, borderLeft: "3px solid " + C.purple }}>
+          <div onClick={() => nav("activities", "objectives", "list")} style={{ fontSize: 11, color: C.purple, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600, marginBottom: 6, cursor: "pointer", transition: "opacity .12s" }}>Seus Objetivos</div>
           {activeObjectives.map(o => {
             const actCount = (o.linkedActivities || []).length;
             const projCount = (o.linkedActivities || []).filter(l => l.type === "project").length;

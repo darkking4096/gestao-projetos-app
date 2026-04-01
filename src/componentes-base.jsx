@@ -20,10 +20,10 @@ function Btn({ children, primary, danger, small, onClick, style: s }) {
         padding: small ? "6px 12px" : "10px 16px", borderRadius: 7,
         fontSize: small ? 10 : 11, fontWeight: 500, cursor: "pointer",
         border: "none",
-        background: danger ? "#e74c3c15" : primary ? (hasTones ? "linear-gradient(135deg, " + C.goldDim + ", " + (C.gold2 || C.gold) + "18)" : C.goldDim) : C.card,
+        background: danger ? C.red + "15" : primary ? (hasTones ? "linear-gradient(135deg, " + C.goldDim + ", " + (C.gold2 || C.gold) + "18)" : C.goldDim) : C.card,
         color: danger ? C.red : primary ? C.gold : C.tx2,
         borderWidth: 1, borderStyle: "solid",
-        borderColor: danger ? (hovered ? C.red : "#e74c3c30") : primary ? C.goldBrd : (hovered ? C.brd2 : C.brd),
+        borderColor: danger ? (hovered ? C.red : C.red + "30") : primary ? C.goldBrd : (hovered ? C.brd2 : C.brd),
         boxShadow: primary && C.goldShadow ? "0 2px 8px " + C.goldShadow : "none",
         transition: "opacity .12s, transform .1s, border-color .12s, filter .12s",
         opacity: pressed ? 0.7 : 1,
@@ -98,8 +98,8 @@ function Chk({ done, onClick }) {
       onTouchCancel={() => setPressed(false)}
       style={{
         width: 20, height: 20, borderRadius: 4,
-        border: "1.5px solid " + (done ? C.green : active ? C.tx3 : "#333"),
-        background: done ? C.green : active ? "#33333388" : "transparent",
+        border: "1.5px solid " + (done ? C.green : active ? C.tx3 : C.brd2),
+        background: done ? C.green : active ? C.brd + "88" : "transparent",
         display: "flex", alignItems: "center", justifyContent: "center",
         cursor: "pointer", flexShrink: 0,
         transition: "border-color .12s, background .12s",
@@ -122,8 +122,8 @@ function TopBar({ title, onBack, right }) {
 
 function Modal({ children }) {
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div style={{ background: C.card, borderRadius: 12, padding: 20, maxWidth: 340, width: "100%" }}>{children}</div>
+    <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div style={{ background: C.card, borderRadius: 12, padding: 20, maxWidth: 380, width: "100%", maxHeight: "calc(100vh - 32px)", overflowY: "auto", border: "1px solid " + C.brd }}>{children}</div>
     </div>
   );
 }

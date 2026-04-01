@@ -9,7 +9,7 @@ import { Social } from '../armazenamento.js';
 
 function WrenchMiniIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff6b00" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M14.7 6.3a4 4 0 0 0 3.01 5.53l-8.18 8.18a2 2 0 1 1-2.83-2.83l8.18-8.18A4 4 0 0 0 17.7 4.3l-2.1 2.1-2.8-.1-.1-2.8 2.1-2.1z" />
     </svg>
   );
@@ -50,8 +50,8 @@ function DevField({ label, value, onChange, type = "number", min, max, step = 1 
         onChange={e => onChange(type === "number" ? Number(e.target.value) : e.target.value)}
         style={{
           flex: 1, padding: "5px 8px",
-          background: C.bg, border: "1px solid #ff6b0055",
-          borderRadius: 6, color: "#ff6b00", fontSize: 12,
+          background: C.bg, border: "1px solid " + C.goldBrd,
+          borderRadius: 6, color: C.gold, fontSize: 12,
           fontWeight: 600, outline: "none",
         }}
       />
@@ -131,8 +131,8 @@ function DevPanel({ open, onOpen, onClose, profile, setProfile, poderInfo, rankI
   return (
     <div style={{
       marginTop: 16,
-      background: "#1a0a00",
-      border: "1px solid #ff6b0055",
+      background: C.card,
+      border: "1px solid " + C.goldBrd,
       borderRadius: 12,
       padding: 14,
       marginBottom: 12,
@@ -141,27 +141,27 @@ function DevPanel({ open, onOpen, onClose, profile, setProfile, poderInfo, rankI
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ display: "inline-flex" }}><WrenchMiniIcon /></span>
-          <span style={{ fontSize: 12, fontWeight: 700, color: "#ff6b00", letterSpacing: 0.5 }}>PAINEL DEV</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: C.gold, letterSpacing: 0.5 }}>PAINEL DEV</span>
         </div>
         <div style={{
-          fontSize: 11, color: rankInfo.color || "#ff6b00", fontWeight: 600,
-          background: (rankInfo.color || "#ff6b00") + "20",
-          border: "1px solid " + (rankInfo.color || "#ff6b00") + "40",
+          fontSize: 11, color: rankInfo.color || C.gold, fontWeight: 600,
+          background: (rankInfo.color || C.gold) + "20",
+          border: "1px solid " + (rankInfo.color || C.gold) + "40",
           padding: "2px 8px", borderRadius: 5,
         }}>
           PODER {poderInfo.poder} · {rankInfo.label || "—"}
         </div>
-        <span onClick={onClose} style={{ fontSize: 11, color: "#ff6b0088", cursor: "pointer" }}>Fechar</span>
+        <span onClick={onClose} style={{ fontSize: 11, color: C.gold, cursor: "pointer" }}>Fechar</span>
       </div>
 
       {/* ENERGIA → drives PODER + Rank */}
-      <div style={{ background: "#ff6b0010", borderRadius: 8, padding: "8px 10px", marginBottom: 10 }}>
-        <div style={{ fontSize: 10, color: "#ff6b0088", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
+      <div style={{ background: C.goldDim, borderRadius: 8, padding: "8px 10px", marginBottom: 10 }}>
+        <div style={{ fontSize: 10, color: C.gold, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
           ENERGIA — controla PODER e Rank
         </div>
         <DevField label="ENERGIA total (totalXp)" value={profile.totalXp || 0} min={0} step={100}
           onChange={v => set("totalXp", v)} />
-        <div style={{ fontSize: 10, color: "#ff6b0066", marginTop: -4, marginBottom: 4, paddingLeft: 148 }}>
+        <div style={{ fontSize: 10, color: C.gold, opacity: 0.7, marginTop: -4, marginBottom: 4, paddingLeft: 148 }}>
           PODER {Math.floor((profile.totalXp || 0) / 100)}
         </div>
         <DevField label="ENERGIA hoje (xpToday)" value={profile.xpToday || 0} min={0}
@@ -171,8 +171,8 @@ function DevPanel({ open, onOpen, onClose, profile, setProfile, poderInfo, rankI
       </div>
 
       {/* Moedas */}
-      <div style={{ background: "#f0a50010", borderRadius: 8, padding: "8px 10px", marginBottom: 10 }}>
-        <div style={{ fontSize: 10, color: "#f0a50088", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
+      <div style={{ background: C.goldDim, borderRadius: 8, padding: "8px 10px", marginBottom: 10 }}>
+        <div style={{ fontSize: 10, color: C.gold, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
           Moedas
         </div>
         <DevField label="Moedas" value={profile.coins || 0} min={0}
@@ -184,8 +184,8 @@ function DevPanel({ open, onOpen, onClose, profile, setProfile, poderInfo, rankI
       </div>
 
       {/* Streak */}
-      <div style={{ background: "#f9731610", borderRadius: 8, padding: "8px 10px", marginBottom: 10 }}>
-        <div style={{ fontSize: 10, color: "#f9731688", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
+      <div style={{ background: C.orange + "12", borderRadius: 8, padding: "8px 10px", marginBottom: 10 }}>
+        <div style={{ fontSize: 10, color: C.orange, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
           Streak
         </div>
         <DevField label="Streak atual" value={profile.streak || 0} min={0}
@@ -195,8 +195,8 @@ function DevPanel({ open, onOpen, onClose, profile, setProfile, poderInfo, rankI
       </div>
 
       {/* Tarefas / Conquistas */}
-      <div style={{ background: "#2ecc7110", borderRadius: 8, padding: "8px 10px", marginBottom: 10 }}>
-        <div style={{ fontSize: 10, color: "#2ecc7188", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
+      <div style={{ background: C.green + "12", borderRadius: 8, padding: "8px 10px", marginBottom: 10 }}>
+        <div style={{ fontSize: 10, color: C.green, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
           Tarefas / Conquistas
         </div>
         <DevField label="Tarefas concluídas" value={profile.tasksCompleted || 0} min={0}
@@ -217,9 +217,9 @@ function DevPanel({ open, onOpen, onClose, profile, setProfile, poderInfo, rankI
               onClick={() => set(key, !profile[key])}
               style={{
                 fontSize: 10, cursor: "pointer", padding: "3px 8px", borderRadius: 5,
-                background: profile[key] ? "#2ecc7130" : C.bg,
-                border: "1px solid " + (profile[key] ? "#2ecc71" : C.brd),
-                color: profile[key] ? "#2ecc71" : C.tx4,
+                background: profile[key] ? C.green + "30" : C.bg,
+                border: "1px solid " + (profile[key] ? C.green : C.brd),
+                color: profile[key] ? C.green : C.tx4,
                 transition: "all .12s",
               }}
             >
@@ -230,7 +230,7 @@ function DevPanel({ open, onOpen, onClose, profile, setProfile, poderInfo, rankI
       </div>
 
       {/* Atalhos rápidos */}
-      <div style={{ fontSize: 10, color: "#ff6b0066", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
+      <div style={{ fontSize: 10, color: C.gold, opacity: 0.7, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
         Atalhos rápidos de PODER
       </div>
       <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
@@ -251,8 +251,8 @@ function DevPanel({ open, onOpen, onClose, profile, setProfile, poderInfo, rankI
             onClick={() => set("totalXp", xp)}
             style={{
               fontSize: 10, cursor: "pointer", padding: "4px 8px",
-              borderRadius: 5, background: "#ff6b0015",
-              border: "1px solid #ff6b0035", color: "#ff6b00",
+              borderRadius: 5, background: C.goldDim,
+              border: "1px solid " + C.goldBrd, color: C.gold,
               transition: "background .1s",
             }}
           >
@@ -265,7 +265,7 @@ function DevPanel({ open, onOpen, onClose, profile, setProfile, poderInfo, rankI
 }
 
 /* ── Main ConfigTab ── */
-function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects, routines, tasks, objectives, setProjects, setRoutines, setTasks, setObjectives, levelInfo, poderInfo: poderInfoProp, rankInfo: rankInfoProp, onSignOut }) {
+function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects, routines, tasks, objectives, reportNotes, reportFolders, atributos, setProjects, setRoutines, setTasks, setObjectives, setReportNotes, setReportFolders, setAtributos, levelInfo, poderInfo: poderInfoProp, rankInfo: rankInfoProp, onSignOut }) {
   const [showReset, setShowReset] = useState(false);
   const [resetInput, setResetInput] = useState("");
   const [confirmDel, setConfirmDel] = useState(null);
@@ -320,7 +320,7 @@ function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects
   };
 
   const exportB = () => {
-    const d = { projects, routines, tasks, objectives, trash, profile, at: new Date().toISOString() };
+    const d = { projects, routines, tasks, objectives, trash, reportNotes, reportFolders, atributos, profile, at: new Date().toISOString() };
     const b = new Blob([JSON.stringify(d, null, 2)], { type: "application/json" });
     const u = URL.createObjectURL(b);
     const a = document.createElement("a");
@@ -342,6 +342,9 @@ function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects
           if (d.tasks) setTasks(d.tasks);
           if (d.objectives) setObjectives(d.objectives);
           if (d.trash) setTrash(d.trash);
+          if (d.reportNotes) setReportNotes(d.reportNotes);
+          if (d.reportFolders) setReportFolders(d.reportFolders);
+          if (d.atributos) setAtributos(d.atributos);
           if (d.profile) setProfile(d.profile);
         } catch { alert("Arquivo inválido"); }
       };
@@ -351,7 +354,7 @@ function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects
   };
 
   const reset = () => {
-    setProjects([]); setRoutines([]); setTasks([]); setObjectives([]); setTrash([]);
+    setProjects([]); setRoutines([]); setTasks([]); setObjectives([]); setTrash([]); setReportNotes([]); setReportFolders([]); setAtributos([]);
     setProfile(p => ({ totalXp: 0, coins: 0, streak: 0, bestStreak: 0, tasksCompleted: 0, xpToday: 0, coinsToday: 0, lastActiveDate: td(), dailyLog: [], difficultyPresets: DEFAULT_PRESETS, nextActionWeights: { priority: 3, deadline: 2, difficulty: 1 }, dailyMission: null, tasksToday: 0, projTasksToday: 0, hardTaskToday: false, maxTaskToday: false, goalUpdatedToday: false, totalCoinsEarned: 0, bestXpDay: 0, bestXpWeek: 0, maxTaskEver: false, projectsCompleted: 0, masteryGoldCount: 0, achievementsUnlocked: [], pendingChest: null, streakLostDays: 0, purchasedItems: ["t_iniciante", "i_estrela", "obsidiana", "b_simples"], equippedTitle: "t_iniciante", equippedIcon: "i_estrela", equippedTheme: "obsidiana", equippedBorder: "b_simples", upgradeLevels: {}, username: p.username }));
     setShowReset(false);
   };
@@ -809,7 +812,7 @@ function ConfigTab({ profile, setProfile, trash, setTrash, restoreItem, projects
               <div style={{ fontSize: 11, color: C.tx2 }}>{item.name}</div>
               <div style={{ fontSize: 11, color: C.tx4 }}>{item._type} · {dl}d restantes{item.autoArchived ? " (auto-arquivada)" : ""}</div>
             </div>
-            <span onClick={() => restoreItem(item)} style={{ fontSize: 11, color: C.purple, cursor: "pointer", textDecoration: "underline" }}>Restaurar</span>
+            <span onClick={() => restoreItem(item)} style={{ fontSize: 11, color: C.gold, cursor: "pointer", textDecoration: "underline" }}>Restaurar</span>
             <span onClick={() => setConfirmDel(item)} style={{ fontSize: 11, color: C.red, cursor: "pointer" }}>Deletar</span>
           </div>
         );

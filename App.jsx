@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
 import { THEMES, setCurrentTheme, generateThemeTones, C } from './src/temas.js';
 import { uid, td, getLevelInfo, getPoderInfo, getRankInfo, getMastery, getMasteryBonus, getEnergia, getMoedas, getXp, getCoins, migrateDifficulty, getMultiplier, openChest, rollMissionRank, calcObjectiveXp, ACHIEVEMENTS, checkProjectCompletion, removeObjectiveLinksFromActivities, similarName, migrateFreq, isRoutineDueOn } from './src/utilidades.js';
 import { CATEGORIES, FREQUENCIES, WEEK_DAYS, UNITS, DEFAULT_PRESETS, STREAK_RECOVER, CHEST_TYPES, COLORS } from './src/constantes.js';
@@ -6,13 +6,24 @@ import { S, Social } from './src/armazenamento.js';
 import { SHOP_THEMES_LIST, getUpgradeCost, UPGRADE_LABELS } from './src/icones.jsx';
 import { Btn, Modal, ConfirmModal } from './src/componentes-base.jsx';
 import { ProjectForm, RoutineForm, TaskForm, ObjectiveForm } from './src/formularios.jsx';
-import DashboardTab from './src/abas/dashboard.jsx';
-import ActivitiesTab from './src/abas/atividades.jsx';
-import { ProjectDetail, RoutineDetail, TaskDetail, ObjectiveDetail } from './src/abas/detalhes.jsx';
-import HistoryTab from './src/abas/historico.jsx';
-import ShopTab from './src/abas/loja.jsx';
-import ConfigTab from './src/abas/configuracoes.jsx';
-import ReportsTab from './src/abas/relatorios.jsx';
+const DashboardTab = lazy(() => import('./src/abas/dashboard.jsx'));
+const ActivitiesTab = lazy(() => import('./src/abas/atividades.jsx'));
+const ProjectDetail = lazy(() => import('./src/abas/detalhes.jsx').then(m => ({ default: m.ProjectDetail })));
+const RoutineDetail = lazy(() => import('./src/abas/detalhes.jsx').then(m => ({ default: m.RoutineDetail })));
+const TaskDetail = lazy(() => import('./src/abas/detalhes.jsx').then(m => ({ default: m.TaskDetail })));
+const ObjectiveDetail = lazy(() => import('./src/abas/detalhes.jsx').then(m => ({ default: m.ObjectiveDetail })));
+const HistoryTab = lazy(() => import('./src/abas/historico.jsx'));
+const ShopTab = lazy(() => import('./src/abas/loja.jsx'));
+const ConfigTab = lazy(() => import('./src/abas/configuracoes.jsx'));
+const ReportsTab = lazy(() => import('./src/abas/relatorios.jsx'));
+
+function TabFallback() {
+  return (
+    <div style={{ padding: 18, color: C.tx3, fontSize: 12 }}>
+      Carregando...
+    </div>
+  );
+}
 
 export default function App({ user, onSignOut }) {
   const [tab, setTab] = useState("dashboard");
@@ -97,7 +108,7 @@ export default function App({ user, onSignOut }) {
         streak: profile.streak || 0,
         tasksCompleted: profile.tasksCompleted || 0,
         projectsCompleted: profile.projectsCompleted || 0,
-        objectivesCount: objectives.length,
+        objectivesCount: objectives.filter(o => o.status === "Ativo").length,
         equippedIcon: profile.equippedIcon || 'i_estrela',
         equippedBorder: profile.equippedBorder || 'b_simples',
         equippedTitle: profile.equippedTitle || 't_iniciante',
@@ -210,11 +221,21 @@ export default function App({ user, onSignOut }) {
       setRoutines(prev => prev.map(r => {
         if (r.status !== "Ativa") return r;
         if (migrateFreq(r).freq === "Livre") return r;
-        const wasDue = isRoutineDueOn(r, profile.lastActiveDate);
-        if (!wasDue) return r;
-        const doneYesterday = (r.completionLog || []).some(l => l.date === profile.lastActiveDate);
-        if (doneYesterday) return { ...r, consecutiveFails: 0 };
-        const newFails = (r.consecutiveFails || 0) + 1;
+        let missedDueCount = 0;
+        let lastDueDone = false;
+        for (let i = 0; i < daysGap; i++) {
+          const checkDate = new Date(profile.lastActiveDate + "T12:00:00");
+          checkDate.setDate(checkDate.getDate() + i);
+          const dateStr = checkDate.toISOString().split("T")[0];
+          if (!isRoutineDueOn(r, dateStr)) continue;
+          const doneOnDate = (r.completionLog || []).some(l => l.date === dateStr);
+          if (i === 0 && doneOnDate) lastDueDone = true;
+          if (!doneOnDate) missedDueCount += 1;
+        }
+        if (missedDueCount === 0) {
+          return lastDueDone ? { ...r, consecutiveFails: 0 } : r;
+        }
+        const newFails = (lastDueDone ? 0 : (r.consecutiveFails || 0)) + missedDueCount;
         if (newFails >= 5) return { ...r, consecutiveFails: newFails, status: "Desativada" };
         return { ...r, consecutiveFails: newFails };
       }));
@@ -488,8 +509,8 @@ export default function App({ user, onSignOut }) {
     syncObjToObjLinks(obj.id, obj.linkedObjectives, old ? old.linkedObjectives : []);
   };
   const deleteObjective = (objId, deleteAll) => {
+    const obj = objectives.find(o => o.id === objId);
     if (deleteAll) {
-      const obj = objectives.find(o => o.id === objId);
       if (obj) {
         // Coleta itens vinculados a partir do estado atual antes de remover
         // Passa pelo trash (recuperável) em vez de deleção permanente
@@ -518,7 +539,13 @@ export default function App({ user, onSignOut }) {
     } else {
       removeObjectiveLinksFromActivities(objId, setProjects, setRoutines, setTasks);
     }
-    setObjectives(prev => prev.filter(o => o.id !== objId));
+    setObjectives(prev => prev
+      .filter(o => o.id !== objId)
+      .map(o => ({
+        ...o,
+        linkedObjectives: (o.linkedObjectives || []).filter(link => link.id !== objId)
+      }))
+    );
     nav("activities", "objectives", "list");
   };
 
@@ -556,7 +583,74 @@ export default function App({ user, onSignOut }) {
   const restoreItem = (item) => {
     const m = { project: setProjects, routine: setRoutines, task: setTasks, objective: setObjectives };
     const { _type, deletedAt, autoArchived, ...clean } = item;
-    if (m[_type]) m[_type](pr => [...pr, clean]);
+    if (m[_type]) m[_type](pr => pr.some(x => x.id === clean.id) ? pr : [...pr, clean]);
+
+    if (_type === "project" || _type === "routine" || _type === "task") {
+      const linkedObjectiveIds = new Set((clean.linkedObjectives || []).map(link => link.id));
+      if (linkedObjectiveIds.size > 0) {
+        setObjectives(prev => prev.map(o => {
+          if (!linkedObjectiveIds.has(o.id)) return o;
+          const alreadyLinked = (o.linkedActivities || []).some(link => link.id === clean.id && link.type === _type);
+          if (alreadyLinked) return o;
+          return { ...o, linkedActivities: [...(o.linkedActivities || []), { id: clean.id, type: _type }] };
+        }));
+      }
+    }
+
+    if (_type === "objective") {
+      setObjectives(prev => prev.map(o => {
+        const reverseLink = (clean.linkedObjectives || []).find(link => link.id === o.id);
+        if (!reverseLink) return o;
+        const alreadyLinked = (o.linkedObjectives || []).some(link => link.id === clean.id);
+        if (alreadyLinked) return o;
+        return {
+          ...o,
+          linkedObjectives: [
+            ...(o.linkedObjectives || []),
+            { id: clean.id, relation: reverseLink.relation === "maior" ? "menor" : "maior" }
+          ]
+        };
+      }));
+      const relinkObjectiveInActivities = (items) => items.map(activity => {
+        const isLinked = (clean.linkedActivities || []).some(link => link.id === activity.id);
+        if (!isLinked) return activity;
+        const alreadyLinked = (activity.linkedObjectives || []).some(link => link.id === clean.id);
+        if (alreadyLinked) return activity;
+        return { ...activity, linkedObjectives: [...(activity.linkedObjectives || []), { id: clean.id }] };
+      });
+      setProjects(prev => relinkObjectiveInActivities(prev));
+      setRoutines(prev => relinkObjectiveInActivities(prev));
+      setTasks(prev => relinkObjectiveInActivities(prev));
+    }
+
+    if (_type === "routine" && clean.phaseRef?.projectId && clean.phaseRef?.phaseId) {
+      setProjects(prev => prev.map(project => {
+        if (project.id !== clean.phaseRef.projectId) return project;
+        return {
+          ...project,
+          phases: (project.phases || []).map(phase => {
+            if (phase.id !== clean.phaseRef.phaseId) return phase;
+            const alreadyLinked = (phase.linkedRoutines || []).some(link => link.routineId === clean.id);
+            if (alreadyLinked) return phase;
+            return { ...phase, linkedRoutines: [...(phase.linkedRoutines || []), { routineId: clean.id }] };
+          })
+        };
+      }));
+    }
+
+    if (_type === "project") {
+      const routinePhaseRefs = (clean.phases || []).flatMap(phase =>
+        (phase.linkedRoutines || []).map(link => ({ routineId: link.routineId, phaseId: phase.id }))
+      );
+      if (routinePhaseRefs.length > 0) {
+        setRoutines(prev => prev.map(routine => {
+          const match = routinePhaseRefs.find(link => link.routineId === routine.id);
+          if (!match) return routine;
+          return { ...routine, phaseRef: { projectId: clean.id, phaseId: match.phaseId } };
+        }));
+      }
+    }
+
     setTrash(pr => pr.filter(x => !(x.id === item.id && x._type === item._type)));
   };
 
@@ -913,6 +1007,7 @@ export default function App({ user, onSignOut }) {
           if (dx > 0 && cur > 0) { setTab(tabKeys[cur - 1]); setView("list"); }
         } : undefined}
       >
+        <Suspense fallback={<TabFallback />}>
         <div key={tab} style={isDesktop ? { ...(tab !== "reports" ? { maxWidth: 780, margin: "0 auto" } : {}), animation: "tabFadeIn 0.22s ease" } : { animation: "tabFadeIn 0.22s ease" }}>
         {tab === "dashboard" && <DashboardTab profile={profile} levelInfo={levelInfo} poderInfo={poderInfo} rankInfo={rankInfo} projects={projects} routines={routines} tasks={tasks} objectives={objectives} nav={nav} completeTask={completeTask} completeRoutine={completeRoutine} earn={earn} setDailyMission={setDailyMission} claimMissionRpg={claimMissionRpg} atributos={atributos} setAtributos={setAtributos} groqApiKey={profile.groqApiKey || ""} />}
         {tab === "activities" && view === "list" && <ActivitiesTab subTab={subTab} setSubTab={setSubTab} projects={projects} routines={routines} tasks={tasks} objectives={objectives} nav={nav} completeTask={completeTask} completeRoutine={completeRoutine} updProject={updProject} setProfile={setProfile} setCompletionConfirm={setCompletionConfirm} addTask={addTask} addRoutine={addRoutine} addProject={addProject} setTasks={setTasks} setRoutines={setRoutines} setProjects={setProjects} groqApiKey={profile.groqApiKey || ""} profile={profile} isDesktop={isDesktop} />}
@@ -941,8 +1036,9 @@ export default function App({ user, onSignOut }) {
         {tab === "reports" && <ReportsTab notes={reportNotes} folders={reportFolders} onUpdateNotes={setReportNotes} onUpdateFolders={setReportFolders} />}
         {tab === "history" && <HistoryTab profile={profile} projects={projects} routines={routines} tasks={tasks} recoverStreak={recoverStreak} openChestAction={openChestAction} claimAchievement={claimAchievement} />}
         {tab === "shop" && <ShopTab profile={profile} buyItem={buyItem} equipItem={equipItem} buyConsumable={buyConsumable} upgradeItem={upgradeItem} setProfile={setProfile} />}
-        {tab === "config" && <ConfigTab profile={profile} setProfile={setProfile} trash={trash} setTrash={setTrash} restoreItem={restoreItem} projects={projects} routines={routines} tasks={tasks} objectives={objectives} setProjects={setProjects} setRoutines={setRoutines} setTasks={setTasks} setObjectives={setObjectives} levelInfo={levelInfo} poderInfo={poderInfo} rankInfo={rankInfo} onSignOut={!isDesktop ? onSignOut : null} user={user} />}
+        {tab === "config" && <ConfigTab profile={profile} setProfile={setProfile} trash={trash} setTrash={setTrash} restoreItem={restoreItem} projects={projects} routines={routines} tasks={tasks} objectives={objectives} reportNotes={reportNotes} reportFolders={reportFolders} atributos={atributos} setProjects={setProjects} setRoutines={setRoutines} setTasks={setTasks} setObjectives={setObjectives} setReportNotes={setReportNotes} setReportFolders={setReportFolders} setAtributos={setAtributos} levelInfo={levelInfo} poderInfo={poderInfo} rankInfo={rankInfo} onSignOut={!isDesktop ? onSignOut : null} user={user} />}
         </div>
+        </Suspense>
       </div>
       {/* Bottom tabs — mobile only */}
       {!isDesktop && <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, display: "flex", background: C.bg, borderTop: "0.5px solid " + C.brd, zIndex: 100 }}>
