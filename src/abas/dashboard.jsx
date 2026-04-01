@@ -9,47 +9,95 @@ import { AtributosSection } from './atributos.jsx';
 
 /* ═══ GROQ helper para geração de missão ═══ */
 async function gerarMissaoGroq(apiKey, rankId, rankMain, context, textAnterior) {
-  const { projetos, rotinas, tarefas, streak, rankAtual, poder } = context;
+  const { projetos, rotinas, tarefas, streak, rankAtual, poder, xpHoje } = context;
 
-  /* Categoriza tipos de atividade sem expor nomes reais */
-  const tipos = [];
-  if (projetos.length > 0) tipos.push("criacao/desenvolvimento");
-  if (rotinas.length > 0) tipos.push("rotinas e disciplina");
-  if (tarefas.length > 0) tipos.push("tarefas e entregas");
-  const tiposStr = tipos.length > 0 ? tipos.join(", ") : "atividades gerais";
+  /* ── Perfil de atividade (sem nomes reais) ── */
+  const temProjetos = projetos.length > 0;
+  const temRotinas  = rotinas.length > 0;
+  const temTarefas  = tarefas.length > 0;
 
-  const nivelStr = poder < 15 ? "iniciante" : poder < 100 ? "em crescimento" : poder < 1500 ? "intermediario" : "veterano";
+  /* Domínio preferencial baseado no perfil */
+  const dominioHint = temProjetos && !temRotinas ? "planejamento e visao de longo prazo"
+    : temRotinas && !temProjetos ? "habitos, saude e autoconsciencia"
+    : temProjetos && temRotinas  ? "produtividade, sistemas e desenvolvimento pessoal"
+    : "organizacao pessoal e autoconsciencia";
 
-  const antiRepeat = textAnterior ? `\nNAO repita nem variacao do titulo anterior: "${textAnterior}"\n` : "";
+  /* Estado de streak */
+  const streakCtx = streak === 0 ? "retomando o ritmo"
+    : streak <= 2  ? "voltando ao ritmo"
+    : streak <= 6  ? "mantendo o momento"
+    : streak <= 29 ? "em crescimento continuo"
+    : "em nivel de elite";
 
-  const VERBOS = ["Avance", "Conclua", "Finalize", "Domine", "Supere", "Conquiste", "Forje", "Perfeccione", "Transcenda", "Entregue", "Desbrave", "Execute", "Construa", "Realize", "Eleve"];
-  const verboSugerido = VERBOS[Math.floor(Math.random() * VERBOS.length)];
+  /* Estado de energia hoje */
+  const hojeCtx = xpHoje > 0 ? "ja agiu hoje — pode ir mais longe" : "ainda nao agiu hoje — momento de ativar";
 
-  const prompt = `Voce e o narrador de missoes de um RPG de produtividade. Crie uma missao epica de rank ${rankId}.
+  /* Complexidade por rank */
+  const complexidade =
+    rankMain === "F"   ? "SIMPLES: 1 atividade unica, 10 a 30 minutos, resultado imediato" :
+    rankMain === "E"   ? "SIMPLES COM REFLEXAO: 1 atividade + etapa de registro ou reflexao, 30 min" :
+    rankMain === "D"   ? "MODERADA: 2 etapas encadeadas, 30 a 60 minutos, entregavel concreto" :
+    rankMain === "C"   ? "MODERADA-COMPLEXA: 2 a 3 etapas, 1 a 2 horas, requer planejamento leve" :
+    rankMain === "B"   ? "COMPLEXA: 3 a 4 etapas encadeadas, 2 a 3 horas, entregavel claro e significativo" :
+    rankMain === "A"   ? "ALTA COMPLEXIDADE: missao multi-etapa, impacto de medio prazo, 3 a 6 horas" :
+    rankMain === "S"   ? "EPICA: cadeia de acoes onde A leva a B que leva a C — resultado transformador" :
+    /* MAX */            "LENDARIA: missao de impacto de longo prazo, mudanca real e duravel de vida";
 
-AVENTUREIRO: rank ${rankAtual} (${nivelStr}), poder ${poder}, streak ${streak} dias
-FOCO ATUAL: ${tiposStr}
+  /* Tamanho do contexto por rank */
+  const tamanhoCtx =
+    (rankMain === "F" || rankMain === "E") ? "2 frases, maximo 180 caracteres" :
+    (rankMain === "D" || rankMain === "C") ? "3 frases, maximo 280 caracteres" :
+    (rankMain === "B" || rankMain === "A") ? "4 frases encadeadas, maximo 360 caracteres" :
+    /* S e MAX */                            "4 a 5 frases com logica de cadeia (A leva a B...), maximo 420 caracteres";
+
+  const antiRepeat = textAnterior
+    ? `\nNAO repita nem use variacao do titulo anterior: "${textAnterior}"\nEscolha um dominio DIFERENTE do anterior.\n`
+    : "";
+
+  const prompt = `Voce e o sistema de missoes de um app de produtividade gamificado RPG.
+
+Sua tarefa: gerar uma MISSAO NOVA de rank ${rankId} para o usuario. Uma missao e uma atividade de vida real que o usuario provavelmente ainda nao pensou em fazer. Ela deve inspirar uma "faisca" — uma ideia nova que pode criar um novo projeto, habito ou perspectiva na vida dele.
+
+PERFIL DO USUARIO:
+- Rank: ${rankAtual} (${rankId}) | Poder: ${poder}
+- Streak: ${streak} dias (${streakCtx})
+- Hoje: ${hojeCtx}
+- Perfil de atividades: ${dominioHint}
 ${antiRepeat}
-RETORNE SOMENTE JSON valido, sem markdown, sem texto adicional:
+COMPLEXIDADE DESTA MISSAO (rank ${rankId}):
+${complexidade}
+
+RETORNE SOMENTE JSON valido, sem markdown, sem explicacoes:
 {"titulo":"...","contexto":"..."}
 
-REGRAS "titulo":
-- Comece obrigatoriamente com: "${verboSugerido}"
-- Entre 50 e 90 caracteres, contando espacos
-- Linguagem de quest RPG: epica, direta, motivacional
-- ABSTRATO: inspirado no tipo de atividade mas nunca cite nomes reais de projetos ou tarefas
-- Deve soar como uma missao real de RPG, nao um item de lista de tarefas
+REGRAS PARA "titulo":
+- Nome claro e concreto da atividade (NAO uma frase filosofica)
+- Entre 25 e 60 caracteres
+- Pode ser substantivo + complemento: "Analise de Gastos Pessoais", "Pratica de Jornalismo Reflexivo", "Revisao Semanal de Prioridades", "Sessao de Limpeza Mental"
+- Nunca cite nomes de projetos ou tarefas do usuario
+- Nunca comece com verbo no imperativo — use substantivos que nomeiam a atividade
 
-REGRAS "contexto":
-- 1 a 2 frases curtas (maximo 130 caracteres no total)
-- Tom narrativo de RPG: descreve o SIGNIFICADO ou DESAFIO por tras da missao
-- UNIVERSAL: qualquer pessoa em qualquer area pode se identificar
-- Sem emojis, sem detalhes especificos sobre projetos
+REGRAS PARA "contexto":
+- Deve conter: (1) POR QUE a missao importa, (2) O QUE exatamente fazer, (3) COMO abordar
+- ${tamanhoCtx}
+- Tom pratico e direto — instrucoes reais, nao apenas motivacao
+- Instrucoes especificas o suficiente para o usuario saber exatamente o que fazer
+- Genericas o suficiente para funcionar para qualquer pessoa (sem supor profissao ou contexto especifico)
+- Sem emojis
 
-EXEMPLOS de saida valida:
-{"titulo":"Avance no caminho que define quem voce esta se tornando","contexto":"Todo construtor enfrenta o momento em que o esforco invisivel se torna legado visivel."}
-{"titulo":"Domine a consistencia e quebre seu proprio recorde","contexto":"A disciplina diaria e a arma silenciosa dos que chegam ao topo sem fazer barulho."}
-{"titulo":"Forje a proxima versao do seu maior projeto","contexto":"As obras que perduram nao nascem de inspiracao. Nascem de presenca repetida."}`;
+DOMINIOS POSSIVEIS (escolha o mais relevante para o perfil, varie entre geracoes):
+  financas pessoais | saude e bem-estar | aprendizado e leitura | criatividade e expressao |
+  relacionamentos | organizacao pessoal | mindfulness e autoconhecimento |
+  produtividade e sistemas | visao e projetos de vida
+
+EXEMPLOS DE SAIDA CORRETA:
+{"titulo":"Analise de Gastos Pessoais","contexto":"Revisar os gastos dos ultimos 3 meses te da uma visao real de onde seu dinheiro vai. Categorize em planilha simples, identifique pelo menos 1 area de desperdicio e defina um ajuste concreto para o proximo mes."}
+{"titulo":"Pratica de Jornalismo Reflexivo","contexto":"Escrever sobre o proprio dia desenvolve autoconsciencia e ajuda a processar decisoes. Reserve 10 minutos, escreva sobre o que aconteceu hoje, o que aprendeu e como se sentiu. Sem julgamentos — so observacao."}
+{"titulo":"Mapeamento de Relacionamentos-Chave","contexto":"Liste as 5 pessoas mais importantes na sua vida hoje. Para cada uma, escreva: qual e o estado atual da relacao e uma acao concreta que voce poderia fazer esta semana para fortalecer esse laco."}
+
+EXEMPLOS DE SAIDA ERRADA (nunca faca assim):
+{"titulo":"Domine a arte de transformar ideias em acoes","contexto":"A verdadeira forca reside na capacidade de iniciar e persistir."} — titulo filosofico, contexto vazio
+{"titulo":"Finalize Implementar mudancas em Melhorar esse aplicativo","contexto":"..."} — cita nome real de projeto`;
 
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
@@ -57,8 +105,8 @@ EXEMPLOS de saida valida:
     body: JSON.stringify({
       model: "llama-3.3-70b-versatile",
       messages: [{ role: "user", content: prompt }],
-      max_tokens: 220,
-      temperature: 1.05,
+      max_tokens: 400,
+      temperature: 0.95,
       response_format: { type: "json_object" },
     }),
   });
@@ -66,45 +114,45 @@ EXEMPLOS de saida valida:
   const data = await response.json();
   const raw = (data.choices?.[0]?.message?.content || "").trim();
   let parsed;
-  try { parsed = JSON.parse(raw); } catch (e) { return { titulo: raw.slice(0, 90), contexto: "" }; }
-  const titulo   = (parsed.titulo   || "").replace(/^["']|["']$/g, "").replace(/[.!]$/, "").slice(0, 90);
-  const contexto = (parsed.contexto || "").replace(/^["']|["']$/g, "").slice(0, 140);
+  try { parsed = JSON.parse(raw); } catch (e) { return { titulo: raw.slice(0, 60), contexto: "" }; }
+  const titulo   = (parsed.titulo   || "").replace(/^["']|["']$/g, "").replace(/\.$/, "").slice(0, 70);
+  const contexto = (parsed.contexto || "").replace(/^["']|["']$/g, "").slice(0, 430);
   return { titulo, contexto };
 }
 
-/* Fallback por rank quando nao ha chave Groq — retorna { titulo, contexto } */
+/* Fallback por rank quando nao ha chave Groq — titulo concreto + contexto pratico */
 const FALLBACK_TEXTS = {
   F: [
-    { titulo: "Avance um passo em sua jornada mais importante", contexto: "Todo grande caminho comeca com um unico gesto de coragem. Hoje, esse gesto e suficiente." },
-    { titulo: "Conclua ao menos uma entrega antes de encerrar o dia", contexto: "Cada tarefa concluida e uma promessa cumprida consigo mesmo." },
+    { titulo: "Pratica de Agradecimento Diario", contexto: "Escreva 3 coisas pelas quais voce e grato hoje — sem repetir do dia anterior. Leva menos de 5 minutos e treina o cerebro a enxergar o que ja funciona na sua vida." },
+    { titulo: "Organizacao da Mesa de Trabalho", contexto: "Dedique 15 minutos para limpar e reorganizar o espaco onde voce trabalha. Um ambiente ordenado reduz o atrito mental e aumenta o foco imediatamente." },
   ],
   E: [
-    { titulo: "Finalize duas entregas e fortaleça seu ritmo", contexto: "A consistencia e construida tijolo a tijolo. Cada dia conta." },
-    { titulo: "Avance na rotina que sustenta seu crescimento", contexto: "Os habitos diarios sao os alicerces das conquistas futuras." },
+    { titulo: "Diario Reflexivo do Dia", contexto: "Reserve 10 minutos e escreva: o que aconteceu hoje, o que voce aprendeu e como se sentiu. Sem julgamentos — so observacao honesta. Desenvolvida por tempo, essa pratica transforma a autoconsciencia." },
+    { titulo: "Revisao de Uma Meta Pessoal", contexto: "Escolha uma meta que voce definiu ha algum tempo. Avalie honestamente: ainda faz sentido? Qual foi o progresso real? Redefina o proximo passo concreto." },
   ],
   D: [
-    { titulo: "Conclua tres desafios antes de encerrar o dia", contexto: "Quem faz mais do que o necessario descobre o que e capaz." },
-    { titulo: "Complete o ciclo de atividades previstas para hoje", contexto: "Disciplina nao e restricao. E o caminho mais curto para a liberdade." },
+    { titulo: "Analise de Gastos Pessoais", contexto: "Abra seu extrato bancario dos ultimos 30 dias. Categorize os gastos em grupos (alimentacao, lazer, assinaturas, etc). Identifique pelo menos 1 area de desperdicio e defina um ajuste para o proximo mes." },
+    { titulo: "Sessao de Leitura Focada", contexto: "Leia 20 paginas de um livro relevante para voce hoje — sem interrupcoes, sem celular. Ao final, escreva 3 linhas sobre o que mais chamou sua atencao. O registro consolida o aprendizado." },
   ],
   C: [
-    { titulo: "Domine uma etapa completa do seu projeto mais ativo", contexto: "As grandes obras nao surgem de lampejos. Surgem de presenca repetida." },
-    { titulo: "Entregue quatro resultados e mantenha sua sequencia", contexto: "O momentum e um aliado raro. Uma vez em movimento, mantenha o ritmo." },
+    { titulo: "Mapeamento de Relacionamentos-Chave", contexto: "Liste as 5 pessoas mais importantes na sua vida hoje. Para cada uma, escreva o estado atual do relacionamento e uma acao concreta que voce poderia fazer esta semana para fortalecer esse laco. Depois, escolha uma e faca." },
+    { titulo: "Revisao Semanal de Prioridades", contexto: "Reserve 45 minutos para revisar tudo que esta em aberto: tarefas, projetos, compromissos. Reorganize por impacto real. Cancele ou delegue pelo menos 1 coisa. Defina as 3 prioridades mais importantes da proxima semana." },
   ],
   B: [
-    { titulo: "Supere o que voce entregou ontem e avance mais longe", contexto: "O verdadeiro adversario e sempre a versao de si mesmo do dia anterior." },
-    { titulo: "Forje um progresso significativo no seu principal projeto", contexto: "So quem vai alem do confortavel descobre o proximo nivel que o aguarda." },
+    { titulo: "Auditoria de Habitos e Rotinas", contexto: "Liste todos os habitos que voce pratica regularmente — bons e ruins. Para cada um, avalie: este habito me aproxima ou me afasta de quem quero ser? Escolha 1 habito negativo para eliminar e 1 positivo para fortalecer. Defina como voce vai monitorar os dois." },
+    { titulo: "Construcao de Sistema de Rastreamento Pessoal", contexto: "Escolha 3 metricas importantes para voce (sono, exercicio, leitura, etc). Crie uma forma simples de registrar essas metricas diariamente — planilha, caderno ou app. Configure o sistema hoje e registre o dia de hoje como primeiro dado." },
   ],
   A: [
-    { titulo: "Entregue um resultado que fara diferenca na sua trajetoria", contexto: "Os que chegam ao topo nao param quando esta bom. Param quando esta feito." },
-    { titulo: "Execute com precisao o desafio que mais importa hoje", contexto: "Excelencia nao e perfeicao. E intencao aplicada com consistencia." },
+    { titulo: "Planejamento de Meta Transformadora de 90 Dias", contexto: "Defina UMA meta que, se alcancar em 90 dias, mudara algo importante na sua vida. Quebre em 3 fases mensais, cada uma com um entregavel claro. Liste os principais obstaculos previstos e como voce vai lidar com eles. Escreva tudo em um lugar que voce vai rever toda semana." },
+    { titulo: "Criacao de Manifesto de Valores Pessoais", contexto: "Escreva seus 5 valores fundamentais — os principios que guiam suas decisoes mais importantes. Para cada valor, descreva como ele se manifesta (ou deveria se manifestar) na sua vida hoje. Identifique onde ha conflito entre seus valores declarados e suas acoes reais. Defina 1 mudanca concreta." },
   ],
   S: [
-    { titulo: "Transcenda os proprios limites em um dia de alta performance", contexto: "Voce ja provou que e capaz. Agora prove que e extraordinario." },
-    { titulo: "Conquiste a etapa critica que separa o bom do excepcional", contexto: "As lendas nao sao feitas de dias faceis. Sao forjadas nos dificeies." },
+    { titulo: "Construcao de um Sistema de Vida Integrado", contexto: "Mapeie as 5 areas principais da sua vida (saude, financas, relacionamentos, trabalho, crescimento). Para cada area: qual e a situacao atual, qual e a situacao ideal em 1 ano e qual e a proxima acao concreta. Depois, defina uma revisao mensal recorrente para acompanhar cada area." },
+    { titulo: "Sprint de Aprendizado Acelerado", contexto: "Escolha um tema que voce quer dominar. Estude por 3 horas focadas usando o metodo: 50 min de estudo, 10 min de pausa. Ao final, produza um output concreto — resumo escrito, mapa mental ou explicacao em voz alta. O output forca o processamento real do conhecimento." },
   ],
   MAX: [
-    { titulo: "Eleve o padrao e entregue resultados que definem legado", contexto: "No topo, a competicao e consigo mesmo. So o maximo e suficiente." },
-    { titulo: "Perfeccione o que outros considerariam completo", contexto: "O nivel MAX nao e um destino. E uma postura diante de cada desafio." },
+    { titulo: "Manifesto Pessoal de Vida", contexto: "Escreva o documento mais importante sobre si mesmo: sua missao de vida em 1 frase, seus valores em 5 topicos, sua visao de onde quer estar em 10 anos e os principios que guiam suas decisoes. Revise o que ja escreveu antes, refine com honestidade brutal. Isso e o norte que vai guiar tudo." },
+    { titulo: "Auditoria Completa de Produtividade e Foco", contexto: "Por uma semana, registre em que voce gasta cada hora do dia. Analise os dados: onde vai seu tempo vs onde deveria ir. Calcule sua taxa de 'trabalho profundo' real. Redesenhe sua rotina com blocos de foco protegidos. Implemente e revise apos 30 dias." },
   ],
 };
 function getFallbackText(rankMain) {

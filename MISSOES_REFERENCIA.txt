@@ -1,0 +1,222 @@
+================================================================================
+SISTEMA DE MISSOES RPG — DOCUMENTO DE REFERENCIA
+Gestao de Projetos Gamificado | Ultima atualizacao: 2026-03-31
+================================================================================
+
+FILOSOFIA CENTRAL
+-----------------
+As missoes NAO sao baseadas nas tarefas ja existentes do usuario no app.
+Elas sao ATIVIDADES NOVAS — sugestoes que o sistema oferece como uma faísca.
+
+O objetivo e que o usuario abra a missao e pense:
+"Isso e algo que eu nunca pensei em fazer mas faz muito sentido pra mim."
+Ou: "Isso me deu uma ideia nova que pode mudar algo na minha vida."
+
+As missoes sao geradas com base no PERFIL DO USUARIO (rank, streak, tipos de
+atividades que ele registra no app), NAO nos nomes especificos dos projetos.
+O perfil serve para calibrar a COMPLEXIDADE e o DOMINIO mais relevante,
+nao para citar nomes literais.
+
+A missao ideal:
+  - Tem um titulo que e um NOME DE ATIVIDADE claro (nao uma frase filosofica)
+  - Tem uma descricao pratica que explica O QUE fazer, POR QUE importa e COMO abordar
+  - Sugere algo que o usuario ainda nao registrou como projeto/tarefa
+  - Pode plantar a semente de um novo habito, projeto ou reflexao de vida
+
+
+================================================================================
+ESTRUTURA DE UMA MISSAO
+================================================================================
+
+TITULO (campo "titulo"):
+  - E o NOME DA ATIVIDADE, claro e concreto
+  - Exemplos certos:
+      "Analise de Gastos Pessoais"
+      "Pratica de Jornalismo Reflexivo"
+      "Pratica de Agradecimento Diario"
+      "Mapeamento de Relacionamentos-Chave"
+      "Sessao de Limpeza Mental"
+      "Revisao Semanal de Prioridades"
+  - Exemplos errados (muito filosofico, sem acao clara):
+      "Domine a arte de transformar ideias em acoes"
+      "Desbrave o limite da sua capacidade criativa"
+      "A verdadeira forca reside em persistir"
+
+CONTEXTO (campo "contexto"):
+  Deve combinar as tres coisas abaixo em 2 a 4 frases curtas:
+  1. POR QUE a missao importa (motivacao / impacto na vida)
+  2. O QUE exatamente fazer (instrucoes praticas)
+  3. COMO abordar (dica de estrategia ou perspectiva)
+
+  Exemplo correto:
+    "Revisar os gastos dos ultimos 3 meses te da uma visao real de onde seu dinheiro
+     vai. Categorize os gastos em uma planilha simples, identifique pelo menos 1 area
+     de desperdicio e defina um ajuste concreto para o proximo mes."
+
+  Exemplo errado:
+    "A verdadeira forca reside na capacidade de iniciar e persistir."
+    (sem instrucao, sem acao, sem dica — so filosofia vazia)
+
+
+================================================================================
+DOMINIOS DE MISSAO (areas de vida que o sistema pode sugerir)
+================================================================================
+
+O sistema escolhe um dominio relevante para o perfil do usuario.
+Dominios possiveis:
+
+  FINANCAS PESSOAIS
+    Ex: analise de gastos, orcamento mensal, revisao de assinaturas, fundo de emergencia
+
+  SAUDE E BEM-ESTAR
+    Ex: rotina de sono, hidratacao, caminhada de 20 min, revisao de alimentacao
+
+  APRENDIZADO E DESENVOLVIMENTO
+    Ex: ler 20 paginas, assistir uma aula, resumir algo aprendido recentemente
+
+  CRIATIVIDADE E EXPRESSAO
+    Ex: escrever, desenhar, tocar instrumento, brainstorm livre, diario reflexivo
+
+  RELACIONAMENTOS
+    Ex: entrar em contato com alguem importante, escrever carta de agradecimento
+
+  ORGANIZACAO PESSOAL
+    Ex: limpar o desktop, organizar a mesa, revisar to-dos antigos, limpar caixa de email
+
+  MINDFULNESS E AUTOCONHECIMENTO
+    Ex: meditacao, diario de gratidao, revisao de valores pessoais, autoconsciencia
+
+  PRODUTIVIDADE E SISTEMAS
+    Ex: revisao semanal, mapear gargalos, criar template, automatizar tarefa repetitiva
+
+  PROJETOS E VISAO
+    Ex: brainstorm de novo projeto, definir meta de 90 dias, revisao de objetivos de vida
+
+A IA deve ESCOLHER o dominio com base no contexto do usuario, variando entre sessoes.
+Para usuarios com streak alto: preferir missoes de desenvolvimento e visao.
+Para usuarios iniciantes: preferir missoes simples de autoconsciencia e organizacao.
+
+
+================================================================================
+DIFERENCIACAO POR RANK (complexidade e exigencia)
+================================================================================
+
+RANK F (Poder 1-14) — SIMPLES, RAPIDA:
+  Atividade unica, 10 a 30 minutos, impacto imediato e visivel.
+  Contexto: 2 frases. Tom: acolhedor, encorajador.
+  Exemplos de atividade:
+    "Pratica de Agradecimento Diario" (escrever 3 coisas)
+    "Organizacao da Mesa de Trabalho" (10 min de foco)
+    "Caminhada de 15 Minutos" (sem fones, presente)
+
+RANK E (Poder 15-49) — SIMPLES COM REFLEXAO:
+  Atividade com uma etapa de reflexao ou registro.
+  Contexto: 2-3 frases. Tom: motivacional.
+  Exemplos:
+    "Diario Reflexivo do Dia" (5 min escrevendo)
+    "Revisao de Uma Meta Pessoal" (avaliar progresso)
+
+RANK D (Poder 50-99) — MODERADA:
+  Atividade com 2 etapas. 30 a 60 minutos.
+  Contexto: 3 frases. Tom: desafiador mas alcancavel.
+  Exemplos:
+    "Analise de Gastos Pessoais" (revisar e categorizar)
+    "Leitura Focada com Anotacoes" (20 pag + resumo)
+
+RANK C (Poder 100-299) — MODERADA-COMPLEXA:
+  Atividade com 2-3 etapas, algum grau de planejamento.
+  Contexto: 3 frases. Tom: assertivo, voltado a resultado.
+  Exemplos:
+    "Mapeamento de Relacionamentos-Chave" (listar + plano de acao)
+    "Sessao de Revisao Semanal" (estruturada, com entregavel)
+
+RANK B (Poder 300-1499) — COMPLEXA:
+  2-4 etapas encadeadas, requer 1-3 horas. Entregavel claro.
+  Contexto: 3-4 frases com logica encadeada. Tom: epico mas direto.
+  Exemplos:
+    "Construcao de Sistema de Rastreamento Financeiro" (criar + popular + analisar)
+    "Sprint de Aprendizado Acelerado" (escolher topico + estudar + produzir output)
+
+RANK A (Poder 1500-24999) — ALTA COMPLEXIDADE:
+  Missao multi-etapa, pode levar horas ou dias, impacto de medio prazo.
+  Contexto: 4 frases. Tom: exigente, transformador.
+  Exemplos:
+    "Planejamento de Meta Transformadora de 90 Dias"
+    "Auditoria Completa de Produtividade Pessoal"
+
+RANK S (Poder 25000-999999) — EPICA:
+  Cadeia de acoes com resultado transformador. Alta exigencia.
+  Como missoes de RPG de mesa: A leva a B que leva a C que entrega D.
+  Contexto: 4 frases encadeadas logicamente.
+  Exemplos:
+    "Construcao de um Sistema de Vida" (mapa de areas + metricas + rotina + revisao mensal)
+
+RANK MAX (Poder 1000000+) — LENDARIA:
+  Missao de impacto de longo prazo, mudanca de vida real.
+  A mais complexa. Tom: lendario, peso de legado.
+  Exemplo:
+    "Manifesto Pessoal de Vida" (valores + missao + visao de futuro + plano)
+
+
+================================================================================
+COMO USAR O PERFIL DO USUARIO NO PROMPT
+================================================================================
+
+Dados disponíveis e como usá-los:
+
+  RANK (rankAtual, rankId):
+    Determina a complexidade da missao (ver tabela acima).
+
+  PODER (poder):
+    Reforco da complexidade. Poder baixo = missao de entrada. Alto = missao exigente.
+
+  STREAK (streak dias):
+    streak 0-2: Missao de retomada. Tom: "volte ao ritmo".
+    streak 3-6: Missao de manutencao. Tom: "mantenha o momento".
+    streak 7-29: Missao de crescimento. Tom: "va alem".
+    streak 30+: Missao de elite. Tom: "voce esta no nivel".
+
+  TIPOS DE ATIVIDADES (projetos, rotinas, tarefas):
+    NAO citar nomes. Usar para escolher o dominio mais relevante.
+    Ex: usuario com muitos projetos -> dominio "visao e planejamento"
+    Ex: usuario com muitas rotinas -> dominio "saude" ou "mindfulness"
+    Ex: usuario com muitas tarefas avulsas -> dominio "organizacao" ou "sistemas"
+
+  XP HOJE (xpHoje):
+    Se xpHoje > 0: usuario ja agiu hoje. Missao pode ser mais desafiadora.
+    Se xpHoje == 0: missao de entrada, tom de ativacao.
+
+
+================================================================================
+INSTRUCOES PARA O PROMPT DA IA (GROQ)
+================================================================================
+
+O modelo deve:
+  1. Receber o perfil resumido do usuario (rank, streak, tipos de atividade, xp hoje)
+  2. Escolher um DOMINIO de vida relevante para o perfil
+  3. Criar uma missao com titulo concreto e contexto pratico
+  4. Retornar JSON: {"titulo": "...", "contexto": "..."}
+
+O modelo NAO deve:
+  - Citar nomes reais de projetos ou tarefas do usuario
+  - Criar missoes filosoficas sem acao concreta
+  - Repetir missoes anteriores
+  - Usar emojis
+
+CALIBRAGEM DE CRIATIVIDADE:
+  O modelo deve usar variedade de dominios entre geracoes.
+  Cada missao deve parecer algo que o usuario nao teria pensado sozinho.
+  Quanto maior o rank, mais rica e encadeada a cadeia de acoes no contexto.
+
+TAMANHOS:
+  titulo: 30 a 60 caracteres (nome da atividade, claro e concreto)
+  contexto:
+    Rank F-E: 2 frases, maximo 160 caracteres
+    Rank D-C: 3 frases, maximo 240 caracteres
+    Rank B-A: 3-4 frases, maximo 320 caracteres
+    Rank S-MAX: 4 frases encadeadas, maximo 400 caracteres
+
+
+================================================================================
+FIM DO DOCUMENTO
+================================================================================
