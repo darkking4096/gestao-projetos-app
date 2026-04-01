@@ -130,7 +130,7 @@ function ProjectsList({ projects, nav, completeTask, updProject, setProfile: set
           <div style={{ fontSize: 13, fontWeight: 600, color: C.tx, marginBottom: 8 }}>O que são Projetos?</div>
           <div style={{ fontSize: 11, color: C.tx2, lineHeight: 1.6, marginBottom: 8 }}>Projetos são conjuntos de tarefas organizadas em fases, com progresso rastreado. Úteis para trabalhos com etapas definidas — como "Montar portfólio" ou "Estudar para concurso".</div>
           <div style={{ fontSize: 11, color: C.tx3, lineHeight: 1.6, marginBottom: 6 }}>
-            <span style={{ color: C.gold }}>→ ENERGIA ⚡</span>: Ganho ao concluir tarefas do projeto{"\n"}
+            <span style={{ color: C.gold }}>Energia</span>: Ganho ao concluir tarefas do projeto{"\n"}
           </div>
           <div style={{ fontSize: 11, color: C.tx3, lineHeight: 1.6, marginBottom: 6 }}>
             <span style={{ color: C.gold }}>→ Progresso</span>: Calculado pelas tarefas concluídas nas fases
@@ -180,12 +180,12 @@ function ProjectsList({ projects, nav, completeTask, updProject, setProfile: set
                     {hasNumTarget && p.status === "Ativo" && (
                       <div style={{ marginBottom: pendT.length > 0 ? 8 : 0 }}>
                         <PBar pct={Math.min(targetPct, 100)} color={targetPct >= 100 ? C.green : (p.color || C.gold)} />
-                        <div style={{ fontSize: 11, color: targetPct >= 100 ? C.green : C.tx3, marginTop: 1 }}>{p.unit === "R$" ? "R$" : ""}{p.currentValue || 0} / {p.unit === "R$" ? "R$" : ""}{p.target} {p.unit !== "R$" ? p.unit : ""} ({targetPct}%){targetPct >= 100 ? " ✓" : ""}</div>
+                        <div style={{ fontSize: 11, color: targetPct >= 100 ? C.green : C.tx3, marginTop: 1 }}>{p.unit === "R$" ? "R$" : ""}{p.currentValue || 0} / {p.unit === "R$" ? "R$" : ""}{p.target} {p.unit !== "R$" ? p.unit : ""} ({targetPct}%){targetPct >= 100 ? " concluído" : ""}</div>
                         {quickEdit === p.id ? (
                           <div style={{ display: "flex", gap: 4, alignItems: "center", marginTop: 6 }}>
                             <input type="number" value={quickVal} onChange={e => setQuickVal(e.target.value)} onKeyDown={e => { if (e.key === "Enter") saveQuick(p); if (e.key === "Escape") setQuickEdit(null); }} autoFocus placeholder="Novo valor" style={{ flex: 1, padding: "6px 8px", background: C.bg, border: "1px solid " + C.goldBrd, borderRadius: 5, color: C.tx, fontSize: 11, outline: "none" }} />
-                            <Btn small primary onClick={() => saveQuick(p)}>{"✓"}</Btn>
-                            <Btn small onClick={() => setQuickEdit(null)}>{"✕"}</Btn>
+                            <Btn small primary onClick={() => saveQuick(p)}>Salvar</Btn>
+                            <Btn small onClick={() => setQuickEdit(null)}>Fechar</Btn>
                           </div>
                         ) : (
                           <div onClick={(e) => { e.stopPropagation(); setQuickEdit(p.id); setQuickVal(String(p.currentValue || 0)); }} style={{ fontSize: 11, color: C.gold, cursor: "pointer", textAlign: "center", marginTop: 4, transition: "opacity .12s" }}>Atualizar valor</div>
@@ -199,7 +199,7 @@ function ProjectsList({ projects, nav, completeTask, updProject, setProfile: set
                           return (
                             <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0" }}>
                               <Chk done={false} onClick={() => completeTask(t.id, "project", p.id, phId ? phId.id : null)} />
-                              <div style={{ flex: 1 }}><div style={{ fontSize: 11, color: C.tx }}>{t.name}</div><div style={{ fontSize: 11, color: C.tx3 }}><span style={{ color: C.gold }}>+{getEnergia(t.difficulty || 1)} ⚡</span></div></div>
+                              <div style={{ flex: 1 }}><div style={{ fontSize: 11, color: C.tx }}>{t.name}</div><div style={{ fontSize: 11, color: C.tx3 }}><span style={{ color: C.gold }}>+{getEnergia(t.difficulty || 1)} energia</span></div></div>
                             </div>
                           );
                         })}
@@ -230,7 +230,7 @@ function RoutinesList({ routines, projects, nav, completeRoutine }) {
   const [search, setSearch] = useState("");
   const [showHelp, setShowHelp] = useState(false);
   const filterOpts = [
-    { key: "xp", label: "ENERGIA ⚡ acumulada", modes: ["asc", "desc"] },
+    { key: "xp", label: "ENERGIA acumulada", modes: ["asc", "desc"] },
     { key: "streak", label: "Sequência", modes: ["asc", "desc"] },
     { key: "difficulty", label: "Dificuldade", modes: ["asc", "desc"] },
   ];

@@ -730,7 +730,7 @@ export default function App({ user, onSignOut }) {
         const total = coins + extra;
         np.coins += total; np.totalCoinsEarned = (np.totalCoinsEarned || 0) + total;
         if (shield) np.shieldActive = true;
-        const bonus = shield ? " + 🛡️ Escudo!" : boost ? " + ⚡ Boost!" : "";
+        const bonus = shield ? " + Escudo ativo" : boost ? " + Boost ativo" : "";
         setTimeout(() => { setRewardPopup({ xp: 0, coins: total, msg: "Baú Comum aberto!" + bonus }); }, 50);
       } else if (itemId === "c_bau_raro") {
         const coins = 50 + Math.floor(Math.random() * 91);
@@ -740,7 +740,7 @@ export default function App({ user, onSignOut }) {
         const total = coins + extra;
         np.coins += total; np.totalCoinsEarned = (np.totalCoinsEarned || 0) + total;
         if (shield) np.shieldActive = true;
-        const bonus = shield ? " + 🛡️ Escudo!" : boost ? " + ⚡ Boost!" : "";
+        const bonus = shield ? " + Escudo ativo" : boost ? " + Boost ativo" : "";
         setTimeout(() => { setRewardPopup({ xp: 0, coins: total, msg: "Baú Raro aberto!" + bonus }); }, 50);
       }
       return np;
@@ -806,7 +806,7 @@ export default function App({ user, onSignOut }) {
     if (!type) return;
     const result = openChest(type);
     const ct = CHEST_TYPES.find(c => c.id === type);
-    const bonusMsg = result.shield ? " + 🛡️ Escudo!" : result.boost ? " + ⚡ Boost de moedas!" : "";
+    const bonusMsg = result.shield ? " + Escudo ativo" : result.boost ? " + Boost de moedas ativo" : "";
     const extraCoins = result.boost ? Math.floor(result.coins * 0.5) : 0;
     const totalCoins = result.coins + extraCoins;
     setProfile(p => ({ ...p, coins: p.coins + totalCoins, totalCoinsEarned: (p.totalCoinsEarned || 0) + totalCoins, pendingChest: null, shieldActive: result.shield ? true : p.shieldActive }));
@@ -1079,4 +1079,3 @@ export default function App({ user, onSignOut }) {
     </div>
   );
 }
-

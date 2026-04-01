@@ -132,7 +132,7 @@ function DevPanel({ open, onOpen, onClose, profile, setProfile, poderInfo, rankI
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ fontSize: 14 }}>🔧</span>
+          <span style={{ fontSize: 12, color: "#ff6b00", fontWeight: 700 }}>DEV</span>
           <span style={{ fontSize: 12, fontWeight: 700, color: "#ff6b00", letterSpacing: 0.5 }}>PAINEL DEV</span>
         </div>
         <div style={{
@@ -143,29 +143,29 @@ function DevPanel({ open, onOpen, onClose, profile, setProfile, poderInfo, rankI
         }}>
           PODER {poderInfo.poder} · {rankInfo.label || "—"}
         </div>
-        <span onClick={onClose} style={{ fontSize: 11, color: "#ff6b0088", cursor: "pointer" }}>✕ fechar</span>
+        <span onClick={onClose} style={{ fontSize: 11, color: "#ff6b0088", cursor: "pointer" }}>Fechar</span>
       </div>
 
       {/* ENERGIA → drives PODER + Rank */}
       <div style={{ background: "#ff6b0010", borderRadius: 8, padding: "8px 10px", marginBottom: 10 }}>
         <div style={{ fontSize: 10, color: "#ff6b0088", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
-          ⚡ ENERGIA — controla PODER e Rank
+          ENERGIA — controla PODER e Rank
         </div>
         <DevField label="ENERGIA total (totalXp)" value={profile.totalXp || 0} min={0} step={100}
           onChange={v => set("totalXp", v)} />
         <div style={{ fontSize: 10, color: "#ff6b0066", marginTop: -4, marginBottom: 4, paddingLeft: 148 }}>
-          → PODER {Math.floor((profile.totalXp || 0) / 100)}
+          PODER {Math.floor((profile.totalXp || 0) / 100)}
         </div>
-        <DevField label="⚡ ENERGIA hoje (xpToday)" value={profile.xpToday || 0} min={0}
+        <DevField label="ENERGIA hoje (xpToday)" value={profile.xpToday || 0} min={0}
           onChange={v => set("xpToday", v)} />
-        <DevField label="Melhor dia ⚡ (bestXpDay)" value={profile.bestXpDay || 0} min={0}
+        <DevField label="Melhor dia de energia" value={profile.bestXpDay || 0} min={0}
           onChange={v => set("bestXpDay", v)} />
       </div>
 
       {/* Moedas */}
       <div style={{ background: "#f0a50010", borderRadius: 8, padding: "8px 10px", marginBottom: 10 }}>
         <div style={{ fontSize: 10, color: "#f0a50088", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
-          🪙 Moedas
+          Moedas
         </div>
         <DevField label="Moedas" value={profile.coins || 0} min={0}
           onChange={v => set("coins", v)} />
@@ -178,7 +178,7 @@ function DevPanel({ open, onOpen, onClose, profile, setProfile, poderInfo, rankI
       {/* Streak */}
       <div style={{ background: "#f9731610", borderRadius: 8, padding: "8px 10px", marginBottom: 10 }}>
         <div style={{ fontSize: 10, color: "#f9731688", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
-          🔥 Streak
+          Streak
         </div>
         <DevField label="Streak atual" value={profile.streak || 0} min={0}
           onChange={v => set("streak", v)} />
@@ -189,7 +189,7 @@ function DevPanel({ open, onOpen, onClose, profile, setProfile, poderInfo, rankI
       {/* Tarefas / Conquistas */}
       <div style={{ background: "#2ecc7110", borderRadius: 8, padding: "8px 10px", marginBottom: 10 }}>
         <div style={{ fontSize: 10, color: "#2ecc7188", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
-          ✅ Tarefas / Conquistas
+          Tarefas / Conquistas
         </div>
         <DevField label="Tarefas concluídas" value={profile.tasksCompleted || 0} min={0}
           onChange={v => set("tasksCompleted", v)} />
@@ -215,7 +215,7 @@ function DevPanel({ open, onOpen, onClose, profile, setProfile, poderInfo, rankI
                 transition: "all .12s",
               }}
             >
-              {profile[key] ? "✓" : "○"} {label}
+              {profile[key] ? "Ativo" : "Inativo"} · {label}
             </div>
           ))}
         </div>
@@ -223,7 +223,7 @@ function DevPanel({ open, onOpen, onClose, profile, setProfile, poderInfo, rankI
 
       {/* Atalhos rápidos */}
       <div style={{ fontSize: 10, color: "#ff6b0066", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
-        ⚡ Atalhos rápidos de PODER
+        Atalhos rápidos de PODER
       </div>
       <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
         {[

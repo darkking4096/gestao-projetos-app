@@ -147,7 +147,7 @@ function DeleteModal({ onTrash, onPerm, onCancel }) {
   return (
     <ConfirmModal
       title="Deletar atividade"
-      subtitle="ENERGIA ⚡ e moedas ganhos são mantidos."
+      subtitle="ENERGIA e moedas ganhos são mantidos."
       actions={[
         { label: "Mover pra lixeira (30 dias)", onClick: onTrash },
         { label: "Deletar definitivamente", danger: true, onClick: onPerm },

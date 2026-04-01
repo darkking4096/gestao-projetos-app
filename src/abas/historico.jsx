@@ -264,7 +264,7 @@ function HistoryTab({ profile, projects, routines, tasks, recoverStreak, openChe
       <div style={{ marginBottom: 8 }}>
         <button onClick={() => setStreakOpen(v => !v)} style={colHdrSt(streakOpen, C.orange)}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 13 }}>🔥</span>
+            <span style={{ fontSize: 12, color: C.orange, fontWeight: 700 }}>ST</span>
             <span style={{ fontSize: 12, fontWeight: 600, color: C.tx }}>Streak: {profile.streak} dias</span>
             {mult > 0 && <span style={{ fontSize: 11, color: C.orange }}>+{Math.round(mult * 100)}% CULTIVO</span>}
           </div>
@@ -294,7 +294,7 @@ function HistoryTab({ profile, projects, routines, tasks, recoverStreak, openChe
                 </div>
               </div>
             ) : (
-              <div style={{ fontSize: 11, color: C.gold, marginBottom: 8 }}>🎉 Nível máximo de streak!</div>
+              <div style={{ fontSize: 11, color: C.gold, marginBottom: 8 }}>Nível máximo de streak.</div>
             )}
             <div style={{ fontSize: 11, color: C.tx4, marginBottom: profile.streak < (profile.bestStreak || 0) ? 8 : 0 }}>
               Melhor: {profile.bestStreak || 0} dias
@@ -332,7 +332,7 @@ function HistoryTab({ profile, projects, routines, tasks, recoverStreak, openChe
       <div style={{ marginBottom: 8 }}>
         <button onClick={() => setAchOpen(v => !v)} style={colHdrSt(achOpen, C.gold)}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 13 }}>🏆</span>
+            <span style={{ fontSize: 12, color: C.gold, fontWeight: 700 }}>RK</span>
             <span style={{ fontSize: 12, fontWeight: 600, color: C.tx }}>Conquistas ({unlocked.length}/{ACHIEVEMENTS.length})</span>
             {claimable.length > 0 && (
               <span style={{ padding: "1px 7px", borderRadius: 10, background: C.gold, color: "#000", fontSize: 10, fontWeight: 700 }}>

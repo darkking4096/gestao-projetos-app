@@ -363,7 +363,7 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
       </div>
       {/* ENERGIA / PODER bars */}
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.tx3, marginBottom: 3 }}>
-        <span>⚡ {(profile.xpToday || 0).toLocaleString()} ENERGIA hoje</span>
+        <span>{(profile.xpToday || 0).toLocaleString()} ENERGIA hoje</span>
         <span style={{ color: _rankInfo.color || C.gold }}>+{Math.round((_rankInfo.cultivo || 0))}% CULTIVO</span>
       </div>
       <div style={{ marginBottom: 10 }}><EnergiaBarDupla poderInfo={_poderInfo} rankInfo={_rankInfo} /></div>
@@ -411,7 +411,7 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
 
       {/* Stats */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 5, marginBottom: 12 }}>
-        {[[totalActive, "Ativas", null], ["+" + (profile.xpToday || 0), "⚡ hoje", null], ["+" + (profile.coinsToday || 0), "Moedas", null], [profile.streak, "Streak", getMultiplier(profile.streak) > 0 ? "+" + Math.round(getMultiplier(profile.streak)*100) + "%" : null]].map(([v, l, sub], i) => (
+        {[[totalActive, "Ativas", null], ["+" + (profile.xpToday || 0), "Energia hoje", null], ["+" + (profile.coinsToday || 0), "Moedas", null], [profile.streak, "Streak", getMultiplier(profile.streak) > 0 ? "+" + Math.round(getMultiplier(profile.streak)*100) + "%" : null]].map(([v, l, sub], i) => (
           <div key={i} style={{ background: C.card, borderRadius: 6, padding: "7px 4px", textAlign: "center" }}>
             <div style={{ fontSize: 14, fontWeight: 600, color: i === 3 ? C.orange : C.tx }}>{v}</div>
             <div style={{ fontSize: 11, color: C.tx3 }}>{l}</div>
@@ -429,7 +429,7 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
             {[
               ["1", "Crie um Objetivo", "Uma meta grande de longo prazo", "activities", "objectives"],
               ["2", "Adicione um Projeto ou Rotina", "Atividades que te levam ao objetivo", "activities", "projects"],
-              ["3", "Complete e ganhe ENERGIA ⚡", "Cada conclusão te faz avançar", null, null],
+              ["3", "Complete e ganhe ENERGIA", "Cada conclusão te faz avançar", null, null],
             ].map(([num, title, desc, tab, sub]) => (
               <div key={num} onClick={tab ? () => nav(tab, sub, "list") : undefined} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "8px 10px", background: C.bg, borderRadius: 8, cursor: tab ? "pointer" : "default" }}>
                 <div style={{ width: 20, height: 20, borderRadius: 10, background: C.goldDim, border: "1px solid " + C.goldBrd, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: C.gold, flexShrink: 0 }}>{num}</div>
