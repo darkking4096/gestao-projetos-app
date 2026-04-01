@@ -7,6 +7,14 @@ import { Btn, Card, Badge, TopBar, Modal, ConfirmModal, DeleteModal, EnergiaBarD
 import { IconSVG, SHOP_THEMES_LIST, BorderSVG, TitleBanner, SHOP_BORDERS, SHOP_TITLES, getTitleTargetColor, getTitleStyle, getUpgradeCost, getBorderStyle, UPGRADE_LABELS, RARITY_LABELS, RARITY_COLORS } from '../icones.jsx';
 import { Social } from '../armazenamento.js';
 
+function WrenchMiniIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff6b00" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14.7 6.3a4 4 0 0 0 3.01 5.53l-8.18 8.18a2 2 0 1 1-2.83-2.83l8.18-8.18A4 4 0 0 0 17.7 4.3l-2.1 2.1-2.8-.1-.1-2.8 2.1-2.1z" />
+    </svg>
+  );
+}
+
 /* ── Friend row component ── */
 function FriendRow({ fp, onView, onRemove, onAccept, onDecline, onCancel }) {
   const poder = getPoderInfo(fp.xp || 0).poder;
@@ -132,7 +140,7 @@ function DevPanel({ open, onOpen, onClose, profile, setProfile, poderInfo, rankI
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ fontSize: 12, color: "#ff6b00", fontWeight: 700 }}>DEV</span>
+          <span style={{ display: "inline-flex" }}><WrenchMiniIcon /></span>
           <span style={{ fontSize: 12, fontWeight: 700, color: "#ff6b00", letterSpacing: 0.5 }}>PAINEL DEV</span>
         </div>
         <div style={{

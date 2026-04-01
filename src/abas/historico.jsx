@@ -4,6 +4,27 @@ import { td, fmtD, getMultiplier, getMastery, getXp, getEnergia, ACHIEVEMENTS } 
 import { STREAK_RECOVER, STREAK_MULT, CHEST_TYPES } from '../constantes.js';
 import { Btn } from '../componentes-base.jsx';
 
+function FlameMiniIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.orange} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 3c1.2 2.2 3.8 3.9 3.8 7a3.8 3.8 0 0 1-7.6 0c0-1.8.7-3.2 1.8-4.7C6.8 6.9 5 9.5 5 13a7 7 0 0 0 14 0c0-4.4-2.6-7.4-7-10z" />
+    </svg>
+  );
+}
+
+function TrophyMiniIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 4h8v3a4 4 0 0 1-8 0V4z" />
+      <path d="M6 5H4a2 2 0 0 0 2 5h1" />
+      <path d="M18 5h2a2 2 0 0 1-2 5h-1" />
+      <path d="M12 11v4" />
+      <path d="M9 21h6" />
+      <path d="M10 15h4v3h-4z" />
+    </svg>
+  );
+}
+
 /* ── Helpers ── */
 function addDays(dateStr, n) {
   const d = new Date(dateStr + "T12:00:00");
@@ -264,7 +285,7 @@ function HistoryTab({ profile, projects, routines, tasks, recoverStreak, openChe
       <div style={{ marginBottom: 8 }}>
         <button onClick={() => setStreakOpen(v => !v)} style={colHdrSt(streakOpen, C.orange)}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 12, color: C.orange, fontWeight: 700 }}>ST</span>
+            <span style={{ display: "inline-flex" }}><FlameMiniIcon /></span>
             <span style={{ fontSize: 12, fontWeight: 600, color: C.tx }}>Streak: {profile.streak} dias</span>
             {mult > 0 && <span style={{ fontSize: 11, color: C.orange }}>+{Math.round(mult * 100)}% CULTIVO</span>}
           </div>
@@ -332,7 +353,7 @@ function HistoryTab({ profile, projects, routines, tasks, recoverStreak, openChe
       <div style={{ marginBottom: 8 }}>
         <button onClick={() => setAchOpen(v => !v)} style={colHdrSt(achOpen, C.gold)}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 12, color: C.gold, fontWeight: 700 }}>RK</span>
+            <span style={{ display: "inline-flex" }}><TrophyMiniIcon /></span>
             <span style={{ fontSize: 12, fontWeight: 600, color: C.tx }}>Conquistas ({unlocked.length}/{ACHIEVEMENTS.length})</span>
             {claimable.length > 0 && (
               <span style={{ padding: "1px 7px", borderRadius: 10, background: C.gold, color: "#000", fontSize: 10, fontWeight: 700 }}>
