@@ -12,8 +12,16 @@ const C_LOGIN = {
   err: "#ef4444",
 };
 
+function BrandMark() {
+  return (
+    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={C_LOGIN.gold} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 3l2.6 5.27L20.5 9l-4.25 4.14L17.3 19 12 16.2 6.7 19l1.05-5.86L3.5 9l5.9-.73L12 3z" />
+    </svg>
+  );
+}
+
 export default function LoginScreen({ onLogin }) {
-  const [mode, setMode] = useState("login"); // "login" | "signup"
+  const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -30,7 +38,7 @@ export default function LoginScreen({ onLogin }) {
     try {
       if (mode === "signup") {
         await Auth.signUp(email, password);
-        setSuccess("Conta criada! Verifique seu e-mail para confirmar, depois faça login.");
+        setSuccess("Conta criada! Verifique seu e-mail para confirmar, depois faca login.");
         setMode("login");
       } else {
         await Auth.signIn(email, password);
@@ -39,7 +47,7 @@ export default function LoginScreen({ onLogin }) {
     } catch (err) {
       const msg = err.message || "";
       if (msg.includes("Invalid login")) setError("E-mail ou senha incorretos.");
-      else if (msg.includes("already registered")) setError("E-mail já cadastrado. Faça login.");
+      else if (msg.includes("already registered")) setError("E-mail ja cadastrado. Faca login.");
       else if (msg.includes("Email not confirmed")) setError("Confirme seu e-mail antes de entrar.");
       else setError(msg || "Erro ao entrar. Tente novamente.");
     } finally {
@@ -50,16 +58,13 @@ export default function LoginScreen({ onLogin }) {
   return (
     <div style={{ minHeight: "100dvh", background: C_LOGIN.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div style={{ width: "100%", maxWidth: 380 }}>
-        {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>🏆</div>
+          <div style={{ marginBottom: 8, display: "flex", justifyContent: "center" }}><BrandMark /></div>
           <div style={{ fontSize: 20, fontWeight: 700, color: C_LOGIN.tx, letterSpacing: 0.5 }}>Atividades</div>
           <div style={{ fontSize: 12, color: C_LOGIN.tx3, marginTop: 3 }}>Gamifique seus objetivos</div>
         </div>
 
-        {/* Card */}
         <div style={{ background: C_LOGIN.card, border: "0.5px solid " + C_LOGIN.brd, borderRadius: 16, padding: 28 }}>
-          {/* Tabs */}
           <div style={{ display: "flex", marginBottom: 24, background: C_LOGIN.bg, borderRadius: 10, padding: 3 }}>
             {["login", "signup"].map((m) => (
               <button key={m} onClick={() => { setMode(m); setError(""); setSuccess(""); }}
@@ -84,7 +89,7 @@ export default function LoginScreen({ onLogin }) {
             <div style={{ marginBottom: 20 }}>
               <label style={{ display: "block", fontSize: 12, color: C_LOGIN.tx3, marginBottom: 6, letterSpacing: 0.5 }}>SENHA</label>
               <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                placeholder={mode === "signup" ? "Mínimo 6 caracteres" : "••••••••"} autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                placeholder={mode === "signup" ? "Minimo 6 caracteres" : "••••••••"} autoComplete={mode === "signup" ? "new-password" : "current-password"}
                 style={{ width: "100%", padding: "11px 14px", background: C_LOGIN.bg, border: "0.5px solid " + C_LOGIN.brd,
                   borderRadius: 10, color: C_LOGIN.tx, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
             </div>

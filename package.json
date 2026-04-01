@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",
-    "preview": "vite preview --host"
+    "preview": "vite preview --host",
+    "squad": "node tools/squad.js",
+    "squad:prepare": "node tools/squad.js --prepare-only"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
