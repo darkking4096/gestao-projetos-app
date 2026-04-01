@@ -13,7 +13,7 @@ function ActivitiesTab({ subTab, setSubTab, projects, routines, tasks, objective
     <div style={{ position: "relative", minHeight: "100%" }}>
       <div style={{ display: "flex", background: C.card2, borderBottom: "0.5px solid " + C.brd }}>
         {[["projects", "Projetos"], ["routines", "Rotinas"], ["tasks", "Tarefas"], ["objectives", "Objetivos"]].map(([k, l]) => (
-          <div key={k} onClick={() => setSubTab(k)} style={{ flex: 1, padding: "9px 2px", textAlign: "center", fontSize: 11, cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.4, color: subTab === k ? C.gold : C.tx4, borderBottom: subTab === k ? "2px solid " + C.gold : "2px solid transparent", transition: "color .12s, border-color .12s" }}>{l}</div>
+          <div key={k} onClick={() => setSubTab(k)} style={{ flex: 1, minHeight: 46, display: "flex", alignItems: "center", justifyContent: "center", padding: "10px 4px", textAlign: "center", fontSize: 11, cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.4, color: subTab === k ? C.gold : C.tx4, borderBottom: subTab === k ? "2px solid " + C.gold : "2px solid transparent", transition: "color .12s, border-color .12s" }}>{l}</div>
         ))}
       </div>
       <div style={{ padding: 14, paddingBottom: 80 }}>
@@ -31,7 +31,7 @@ function ActivitiesTab({ subTab, setSubTab, projects, routines, tasks, objective
           bottom: isDesktop ? 28 : 70,
           right: isDesktop ? 32 : 16,
           zIndex: 200,
-          width: 46, height: 46, borderRadius: 23,
+          width: 52, height: 52, borderRadius: 26,
           background: C.goldDim,
           border: "1.5px solid " + C.goldBrd,
           boxShadow: "0 4px 16px " + C.gold + "30",
@@ -43,7 +43,7 @@ function ActivitiesTab({ subTab, setSubTab, projects, routines, tasks, objective
         onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.08)"; e.currentTarget.style.boxShadow = "0 6px 22px " + C.gold + "50"; }}
         onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 16px " + C.gold + "30"; }}
       >
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
         </svg>
       </div>
@@ -118,10 +118,10 @@ function ProjectsList({ projects, nav, completeTask, updProject, setProfile: set
         <input
           value={search} onChange={e => setSearch(e.target.value)}
           placeholder="Buscar projeto..."
-          style={{ flex: 1, padding: "7px 10px", background: C.card, border: "1px solid " + C.brd2, borderRadius: 8, color: C.tx, fontSize: 11, outline: "none", transition: "border-color .15s" }}
+          style={{ flex: 1, minHeight: 40, padding: "9px 12px", background: C.card, border: "1px solid " + C.brd2, borderRadius: 8, color: C.tx, fontSize: 12, outline: "none", transition: "border-color .15s" }}
         />
         <FilterBtn onClick={() => setShowFilter(true)} active={!!filter.key} />
-        <span onClick={() => setShowHelp(true)} style={{ cursor: "pointer", display: "flex", alignItems: "center", padding: "4px 2px" }}>
+        <span onClick={() => setShowHelp(true)} style={{ cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", width: 36, height: 36, borderRadius: 18 }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.tx4} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
         </span>
       </div>
@@ -157,19 +157,19 @@ function ProjectsList({ projects, nav, completeTask, updProject, setProfile: set
                 {/* Summary row — always visible */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div onClick={() => nav("activities", "projects", "detail", p.id, "project")} style={{ flex: 1, cursor: "pointer" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 2 }}>
                       <span style={{ fontSize: 13, fontWeight: 500, color: C.tx, display: "flex", alignItems: "center", gap: 4 }}>{hasNumTarget && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>}{p.name}</span>
                       {p.status === "Ativo" ? <span style={{ fontSize: 13, fontWeight: 600, color: C.tx }}>{p.progress || 0}%</span> : <Badge color={C.tx3}>{p.status}</Badge>}
                     </div>
                     {p.objective && <div style={{ fontSize: 11, color: C.tx2, fontStyle: "italic", marginBottom: 3 }}>{p.objective}</div>}
                     {p.status === "Ativo" && <PBar pct={p.progress || 0} color={p.color || C.gold} />}
-                    <div style={{ fontSize: 11, color: C.tx4, marginTop: 3 }}>
+                    <div style={{ fontSize: 11, color: C.tx4, marginTop: 4, lineHeight: 1.45 }}>
                       {(p.phases || []).length} fases · {allT.length} tarefas
                       {getMastery(p.xpAccum || 0) && <span> · <span style={{ color: p.color || C.gold }}>{getMastery(p.xpAccum || 0).name}</span></span>}
                     </div>
                   </div>
                   {hasDetails && (
-                    <div onClick={(e) => { e.stopPropagation(); toggleExpand(p.id); }} style={{ padding: "4px 6px", cursor: "pointer", color: C.tx4, lineHeight: 1 }}>
+                    <div onClick={(e) => { e.stopPropagation(); toggleExpand(p.id); }} style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: C.tx4, lineHeight: 1 }}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: expanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform .2s" }}><polyline points="6 9 12 15 18 9"/></svg>
                     </div>
                   )}
@@ -218,7 +218,7 @@ function ProjectsList({ projects, nav, completeTask, updProject, setProfile: set
           <Btn primary small onClick={() => nav("activities", "projects", "create", null, "project")}>Criar primeiro projeto</Btn>
         </div>
       )}
-      <div onClick={() => nav("activities", "projects", "create", null, "project")} style={{ padding: 10, border: "1px dashed " + C.brd2, borderRadius: 8, textAlign: "center", fontSize: 11, color: C.tx3, cursor: "pointer", marginTop: 6, transition: "color .12s, border-color .12s" }}>+ Novo projeto</div>
+      <div onClick={() => nav("activities", "projects", "create", null, "project")} style={{ minHeight: 42, padding: "11px 12px", border: "1px dashed " + C.brd2, borderRadius: 8, textAlign: "center", fontSize: 12, color: C.tx3, cursor: "pointer", marginTop: 8, transition: "color .12s, border-color .12s", display: "flex", alignItems: "center", justifyContent: "center" }}>+ Novo projeto</div>
       {showFilter && <FilterModal options={filterOpts} active={filter} onApply={setFilter} onClose={() => setShowFilter(false)} />}
     </div>
   );

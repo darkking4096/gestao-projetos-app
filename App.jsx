@@ -51,11 +51,10 @@ export default function App({ user, onSignOut }) {
   const [lastUndo, setLastUndo] = useState(null);
   const shownAchieveIds = useRef(new Set());
   const syncProfileRef = useRef(null);
-  // Ref sempre atualizado com o profile mais recente — usado por earn() fora do updater
+  // Ref sempre atualizado com o profile mais recente â€” usado por earn() fora do updater
   const profileRef = useRef(profile);
-  // Ref para coordenadas do swipe — substitui window._swipeX/Y (namespace global poluído)
-  const swipeRef = useRef({ x: null, y: null });
-  // Ref para estado de navegação — permite nav() com dep [] sem stale closure
+  // Ref para coordenadas do swipe â€” substitui window._swipeX/Y (namespace global poluÃ­do)
+  // Ref para estado de navegaÃ§Ã£o â€” permite nav() com dep [] sem stale closure
   const navStateRef = useRef({ view, tab, subTab, selId, selType });
   const [winW, setWinW] = useState(() => window.innerWidth);
   useEffect(() => {
@@ -68,10 +67,10 @@ export default function App({ user, onSignOut }) {
     const t = setTimeout(() => setStorageError(false), 3000);
     return () => clearTimeout(t);
   }, [storageError]);
-  // Mantém refs sempre sincronizados com o estado atual
+  // MantÃ©m refs sempre sincronizados com o estado atual
   useEffect(() => { profileRef.current = profile; }, [profile]);
   useEffect(() => { navStateRef.current = { view, tab, subTab, selId, selType }; }, [view, tab, subTab, selId, selType]);
-  // Reward popup auto-dismiss — duration scales with reward value
+  // Reward popup auto-dismiss â€” duration scales with reward value
   useEffect(() => {
     if (!rewardPopup) return;
     const val = (rewardPopup.xp || 0) + (rewardPopup.coins || 0);
@@ -124,7 +123,7 @@ export default function App({ user, onSignOut }) {
     if (!loaded) return;
     const onVisible = () => {
       if (document.visibilityState === "visible" && profile.lastActiveDate !== td()) {
-        // Força re-trigger do useEffect de reset diário
+        // ForÃ§a re-trigger do useEffect de reset diÃ¡rio
         setLoaded(false);
         setTimeout(() => setLoaded(true), 50);
       }
@@ -136,7 +135,7 @@ export default function App({ user, onSignOut }) {
   useEffect(() => {
     (async () => {
       try {
-        // Carrega todas as chaves em paralelo — reduz tempo de carregamento em ~8x
+        // Carrega todas as chaves em paralelo â€” reduz tempo de carregamento em ~8x
         const data = await S.getAll(["projects","routines","tasks","objectives","trash","reportNotes","reportFolders","atributos","profile"]);
         if (data.projects)     setProjects(data.projects);
         if (data.routines)     setRoutines(data.routines);
@@ -150,8 +149,8 @@ export default function App({ user, onSignOut }) {
           const pr = data.profile;
           if (!pr.purchasedItems) { pr.purchasedItems = ["t_iniciante", "i_estrela", "obsidiana", "b_simples"]; pr.equippedTitle = "t_iniciante"; pr.equippedIcon = "i_estrela"; pr.equippedTheme = "obsidiana"; pr.equippedBorder = "b_simples"; pr.upgradeLevels = pr.upgradeLevels || {}; }
           setProfile(pr);
-          // Suprime notificações de conquistas que já eram válidas ao abrir o app
-          // (só notifica conquistas desbloqueadas DURANTE a sessão atual)
+          // Suprime notificaÃ§Ãµes de conquistas que jÃ¡ eram vÃ¡lidas ao abrir o app
+          // (sÃ³ notifica conquistas desbloqueadas DURANTE a sessÃ£o atual)
           ACHIEVEMENTS.forEach(a => { if (a.check(pr)) shownAchieveIds.current.add(a.id); });
         }
       } catch (e) { console.log("storage load err", e); }
@@ -173,11 +172,11 @@ export default function App({ user, onSignOut }) {
     if (!loaded) return;
     const d = td();
     if (profile.lastActiveDate !== d) {
-      // Calcula o gap real de dias (quantos dias se passaram desde o último reset)
+      // Calcula o gap real de dias (quantos dias se passaram desde o Ãºltimo reset)
       const daysGap = Math.max(1, Math.round(
         (new Date(d + "T12:00:00") - new Date(profile.lastActiveDate + "T12:00:00")) / 86400000
       ));
-      // Constrói o log diário preenchendo dias faltantes com XP=0 (gráficos ficam corretos)
+      // ConstrÃ³i o log diÃ¡rio preenchendo dias faltantes com XP=0 (grÃ¡ficos ficam corretos)
       const logEntries = [...(profile.dailyLog || [])];
       logEntries.push({ date: profile.lastActiveDate, xp: profile.xpToday, coins: profile.coinsToday });
       for (let i = 1; i < daysGap; i++) {
@@ -191,7 +190,7 @@ export default function App({ user, onSignOut }) {
       let streakLostDays = 0;
       let shieldUsed = false;
       if (wasActive) {
-        // +1 pelo dia ativo; penaliza dias intermediários sem atividade
+        // +1 pelo dia ativo; penaliza dias intermediÃ¡rios sem atividade
         newStreak += 1;
         const missedBetween = daysGap - 1;
         if (missedBetween > 0) {
@@ -200,7 +199,7 @@ export default function App({ user, onSignOut }) {
           streakLostDays = penalty;
         }
       } else if (profile.shieldActive) {
-        // Escudo protege 1 dia; dias extras além de 1 são penalizados normalmente
+        // Escudo protege 1 dia; dias extras alÃ©m de 1 sÃ£o penalizados normalmente
         shieldUsed = true;
         if (daysGap > 1) {
           const extraMissed = daysGap - 1;
@@ -209,7 +208,7 @@ export default function App({ user, onSignOut }) {
           streakLostDays = penalty;
         }
       } else {
-        // Aplica penalidade para cada dia de ausência (fix: antes só aplicava 1 vez)
+        // Aplica penalidade para cada dia de ausÃªncia (fix: antes sÃ³ aplicava 1 vez)
         const penalty = Math.min(newStreak, daysGap * 5);
         newStreak = Math.max(0, newStreak - penalty);
         streakLostDays = penalty;
@@ -249,7 +248,7 @@ export default function App({ user, onSignOut }) {
         });
         if (toArchive.length === 0) return currentTasks;
         const archiveIds = new Set(toArchive.map(t => t.id));
-        // Efeitos secundários agendados fora do updater (mantém updater puro)
+        // Efeitos secundÃ¡rios agendados fora do updater (mantÃ©m updater puro)
         setTimeout(() => {
           setTrash(tr => [...tr, ...toArchive.map(t => ({ ...t, status: "Arquivada", _type: "task", deletedAt: Date.now(), autoArchived: true }))]);
           setObjectives(prev => prev.map(o => ({
@@ -278,17 +277,17 @@ export default function App({ user, onSignOut }) {
   }, [loaded]);
 
   const earn = useCallback((xp, coins, msg, onEarned) => {
-    // Lê o perfil atual via ref (evita mutações dentro do updater — antipadrão React)
+    // LÃª o perfil atual via ref (evita mutaÃ§Ãµes dentro do updater â€” antipadrÃ£o React)
     const p = profileRef.current;
 
-    // Multiplicadores: CULTIVO (rank) + Streak são aditivos
+    // Multiplicadores: CULTIVO (rank) + Streak sÃ£o aditivos
     const streakMult = getMultiplier(p.streak);
     const currentRank = getRankInfo(getPoderInfo(p.totalXp || 0).poder);
     const cultivoPct = (currentRank.cultivo || 0) / 100;
     const totalMult = streakMult + cultivoPct;
 
     let finalXp = xp + Math.round(xp * totalMult);
-    let finalCoins = coins; // streak e cultivo só multiplicam ENERGIA, não moedas
+    let finalCoins = coins; // streak e cultivo sÃ³ multiplicam ENERGIA, nÃ£o moedas
     const boostActive = p.boostExpiry && p.boostExpiry > Date.now();
     if (boostActive) finalCoins += Math.round(finalCoins * 0.25);
 
@@ -298,7 +297,7 @@ export default function App({ user, onSignOut }) {
     if (boostActive) suffixes.push("+25% boost");
     const popupMsg = suffixes.length > 0 ? msg + " (" + suffixes.join(", ") + ")" : msg;
 
-    // Verifica progressão de PODER e rank
+    // Verifica progressÃ£o de PODER e rank
     const oldPoder = getPoderInfo(p.totalXp || 0).poder;
     const newPoder = getPoderInfo((p.totalXp || 0) + finalXp).poder;
     let notifData = null;
@@ -306,14 +305,14 @@ export default function App({ user, onSignOut }) {
       const oldRankInfo = getRankInfo(oldPoder);
       const newRankInfo = getRankInfo(newPoder);
       if (oldRankInfo.rankMain !== newRankInfo.rankMain) {
-        // Mudança de rank principal → notificação especial
+        // MudanÃ§a de rank principal â†’ notificaÃ§Ã£o especial
         notifData = { type: "rank", poder: newPoder, label: newRankInfo.subRank, rankMain: newRankInfo.rankMain, color: newRankInfo.color };
         // Mensagem especial para primeiro rank (F-)
         if (newRankInfo.rankMain === "F" && oldRankInfo.rankMain === null) {
           notifData.welcomeMsg = "Parabéns, Você começou a Jogar o Jogo de VERDADE (o da Vida). Conclua mais tarefas para alcançar novos patamares.";
         }
       } else {
-        // Verifica se atingiu milestone de notificação de PODER
+        // Verifica se atingiu milestone de notificaÃ§Ã£o de PODER
         const interval = newRankInfo.notifInterval;
         if (Math.floor(oldPoder / interval) < Math.floor(newPoder / interval)) {
           notifData = { type: "poder", poder: newPoder, label: newRankInfo.subRank, color: newRankInfo.color };
@@ -321,7 +320,7 @@ export default function App({ user, onSignOut }) {
       }
     }
 
-    // Updater puro: sem efeitos colaterais, sem mutação de variáveis externas
+    // Updater puro: sem efeitos colaterais, sem mutaÃ§Ã£o de variÃ¡veis externas
     setProfile(prev => ({
       ...prev,
       totalXp: prev.totalXp + finalXp,
@@ -336,7 +335,7 @@ export default function App({ user, onSignOut }) {
   }, []);
 
   const nav = useCallback((t, st, v, id, tp) => {
-    // Lê estado atual via ref — dep [] evita recriar nav e re-renderizar todos os filhos
+    // LÃª estado atual via ref â€” dep [] evita recriar nav e re-renderizar todos os filhos
     const { view: curView, tab: curTab, subTab: curSubTab, selId: curSelId, selType: curSelType } = navStateRef.current;
     // Push to history when navigating FROM a detail view TO another detail view
     if (curView === "detail" && v === "detail") {
@@ -370,8 +369,8 @@ export default function App({ user, onSignOut }) {
     }
   }, [navHistory]);
 
-  // Botão voltar do sistema (Android/browser) — navega dentro do app
-  // Colocado APÓS navBack ser declarado para evitar TDZ
+  // BotÃ£o voltar do sistema (Android/browser) â€” navega dentro do app
+  // Colocado APÃ“S navBack ser declarado para evitar TDZ
   useEffect(() => {
     const navBackRef = { current: navBack };
     navBackRef.current = navBack;
@@ -385,7 +384,7 @@ export default function App({ user, onSignOut }) {
     return () => window.removeEventListener("popstate", onPop);
   }, [navBack]);
 
-  // V2: Bidirectional sync — keeps objective.linkedActivities in sync with activity.linkedObjectives
+  // V2: Bidirectional sync â€” keeps objective.linkedActivities in sync with activity.linkedObjectives
   const syncObjLinks = useCallback((actId, actType, newLinkedObjs, oldLinkedObjs) => {
     const newIds = (newLinkedObjs || []).map(l => l.id);
     const oldIds = (oldLinkedObjs || []).map(l => l.id);
@@ -513,7 +512,7 @@ export default function App({ user, onSignOut }) {
     if (deleteAll) {
       if (obj) {
         // Coleta itens vinculados a partir do estado atual antes de remover
-        // Passa pelo trash (recuperável) em vez de deleção permanente
+        // Passa pelo trash (recuperÃ¡vel) em vez de deleÃ§Ã£o permanente
         const now = Date.now();
         const toTrash = [];
         const projIds = new Set(), rotIds = new Set(), taskIds = new Set();
@@ -714,7 +713,7 @@ export default function App({ user, onSignOut }) {
           }, 800);
         }
         const np = { ...p, phases, progress, xpAccum: xpAcc };
-        // V2: New completion logic — no XP reward for project completion
+        // V2: New completion logic â€” no XP reward for project completion
         if (checkProjectCompletion(np) && p.status === "Ativo" && (p.progress || 0) < 100) {
           setTimeout(() => setCompletionConfirm({ type: "project", id: p.id, name: p.name }), 500);
         }
@@ -762,7 +761,7 @@ export default function App({ user, onSignOut }) {
           return { ...p, xpAccum: (p.xpAccum || 0) + xp };
         }));
       }
-      // V2: Rotina Livre não acumula streak
+      // V2: Rotina Livre nÃ£o acumula streak
       const ns = isLibre ? 0 : r.streak + 1;
       return { ...r, streak: ns, bestStreak: isLibre ? r.bestStreak : Math.max(r.bestStreak, ns), totalCompletions: r.totalCompletions + 1, consecutiveFails: 0, xpAccum: newXpAcc, completionLog: [...(r.completionLog || []), { date: td(), xp, coins: co }] };
     }));
@@ -787,7 +786,7 @@ export default function App({ user, onSignOut }) {
     setRewardPopup(null);
   }, [lastUndo]);
 
-  // V2: New acceptCompletion — no XP/coins reward
+  // V2: New acceptCompletion â€” no XP/coins reward
   const acceptCompletion = () => {
     if (!completionConfirm) return;
     if (completionConfirm.type === "project") {
@@ -807,7 +806,7 @@ export default function App({ user, onSignOut }) {
       if (cur !== level) return p;
       return { ...p, coins: p.coins - cost, upgradeLevels: { ...(p.upgradeLevels || {}), [itemId]: level + 1 } };
     });
-    setRewardPopup({ xp: 0, coins: 0, msg: UPGRADE_LABELS[level + 1] || ("Nível " + (level + 1)) });
+    setRewardPopup({ xp: 0, coins: 0, msg: UPGRADE_LABELS[level + 1] || ("NÃ­vel " + (level + 1)) });
   }, []);
 
   const buyConsumable = useCallback((itemId, price) => {
@@ -876,7 +875,7 @@ export default function App({ user, onSignOut }) {
     const energia = m.energia || 0;
     const coins = m.coins || 0;
     if (energia > 0) {
-      earn(energia, 0, "Missão " + (m.rankId || m.rankMain || "") + " concluida!");
+      earn(energia, 0, "Missão " + (m.rankId || m.rankMain || "") + " concluída!");
     }
     if (coins > 0) {
       setProfile(p => ({ ...p, coins: p.coins + coins, coinsToday: (p.coinsToday || 0) + coins, totalCoinsEarned: (p.totalCoinsEarned || 0) + coins, dailyMission: { ...p.dailyMission, completed: true, claimedAt: td() } }));
@@ -922,8 +921,8 @@ export default function App({ user, onSignOut }) {
     const info = SHOP_THEMES_LIST.find(t => t.id === _themeKey) || SHOP_THEMES_LIST[0];
     return { ...base, ...generateThemeTones(info.accent, info.rarity, _themeUpLv) };
   }, [_themeKey, _themeUpLv]);
-  // useLayoutEffect: aplica o tema antes do paint — evita flash de cor errada
-  // e remove o efeito colateral do corpo do render (violação das regras do React)
+  // useLayoutEffect: aplica o tema antes do paint â€” evita flash de cor errada
+  // e remove o efeito colateral do corpo do render (violaÃ§Ã£o das regras do React)
   useLayoutEffect(() => { setCurrentTheme(_computedTheme); }, [_computedTheme]);
 
   const levelInfo  = useMemo(() => getLevelInfo(profile.totalXp || 0), [profile.totalXp]);
@@ -960,13 +959,13 @@ export default function App({ user, onSignOut }) {
     ["shop", "Loja", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>],
     ["config", "Perfil", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>],
   ];
-  // Centro dos popups fixos: metade da área de conteúdo (direita da sidebar em desktop)
+  // Centro dos popups fixos: metade da Ã¡rea de conteÃºdo (direita da sidebar em desktop)
   const popupLeft = isDesktop ? `calc(50% + ${SIDEBAR_W / 2}px)` : "50%";
 
   return (
-    <div style={{ background: C.bg, minHeight: "100vh", fontFamily: "'Segoe UI','Helvetica Neue',system-ui,sans-serif", color: C.tx, position: "relative", ...(isDesktop ? {} : { maxWidth: 430, margin: "0 auto", paddingBottom: 56 }) }}>
+    <div style={{ background: C.bg, minHeight: "100dvh", fontFamily: "'Segoe UI','Helvetica Neue',system-ui,sans-serif", color: C.tx, position: "relative", ...(isDesktop ? {} : { maxWidth: 430, margin: "0 auto", paddingBottom: "calc(64px + env(safe-area-inset-bottom, 0px))" }) }}>
       <style>{`@keyframes popupSlideIn{from{opacity:0;transform:translateX(-50%) translateY(-12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}@keyframes bannerSlideUp{from{opacity:0;transform:translateX(-50%) translateY(12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}@keyframes errFadeOut{0%{opacity:1}70%{opacity:1}100%{opacity:0}}@keyframes tabFadeIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}.rl-item{transition:filter .12s,opacity .12s}.rl-item:hover{filter:brightness(1.1)}.rl-item:active{opacity:.7!important}`}</style>
-      {/* Sidebar — desktop */}
+      {/* Sidebar â€” desktop */}
       {isDesktop && (
         <div style={{ position: "fixed", left: 0, top: 0, bottom: 0, width: SIDEBAR_W, background: C.bg, borderRight: "0.5px solid " + C.brd, zIndex: 100, display: "flex", flexDirection: "column", overflowY: "auto" }}>
           <div style={{ padding: "20px 20px 16px", borderBottom: "0.5px solid " + C.brd }}>
@@ -990,23 +989,7 @@ export default function App({ user, onSignOut }) {
           )}
         </div>
       )}
-      <div style={{ minHeight: isDesktop ? "100vh" : "calc(100vh - 56px)", overflow: "auto", marginLeft: isDesktop ? SIDEBAR_W : 0 }}
-        onTouchStart={!isDesktop ? (e) => { swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; } : undefined}
-        onTouchEnd={!isDesktop ? (e) => {
-          if (swipeRef.current.x == null) return;
-          const dx = e.changedTouches[0].clientX - swipeRef.current.x;
-          const dy = e.changedTouches[0].clientY - swipeRef.current.y;
-          swipeRef.current = { x: null, y: null };
-          // Só swipe horizontal com pelo menos 60px e mais horizontal que vertical
-          if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
-          // Só troca de aba se estiver na tela de lista (não em detalhe/formulário)
-          if (view !== "list") return;
-          const tabKeys = ["dashboard","activities","reports","history","shop","config"];
-          const cur = tabKeys.indexOf(tab);
-          if (dx < 0 && cur < tabKeys.length - 1) { setTab(tabKeys[cur + 1]); setView("list"); }
-          if (dx > 0 && cur > 0) { setTab(tabKeys[cur - 1]); setView("list"); }
-        } : undefined}
-      >
+      <div style={{ minHeight: isDesktop ? "100vh" : "calc(100dvh - 56px)", overflow: "auto", marginLeft: isDesktop ? SIDEBAR_W : 0, background: C.bg, touchAction: isDesktop ? "auto" : "pan-y pinch-zoom", WebkitOverflowScrolling: "touch" }}>
         <Suspense fallback={<TabFallback />}>
         <div key={tab} style={isDesktop ? { ...(tab !== "reports" ? { maxWidth: 780, margin: "0 auto" } : {}), animation: "tabFadeIn 0.22s ease" } : { animation: "tabFadeIn 0.22s ease" }}>
         {tab === "dashboard" && <DashboardTab profile={profile} levelInfo={levelInfo} poderInfo={poderInfo} rankInfo={rankInfo} projects={projects} routines={routines} tasks={tasks} objectives={objectives} nav={nav} completeTask={completeTask} completeRoutine={completeRoutine} earn={earn} setDailyMission={setDailyMission} claimMissionRpg={claimMissionRpg} atributos={atributos} setAtributos={setAtributos} groqApiKey={profile.groqApiKey || ""} />}
@@ -1040,22 +1023,22 @@ export default function App({ user, onSignOut }) {
         </div>
         </Suspense>
       </div>
-      {/* Bottom tabs — mobile only */}
-      {!isDesktop && <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, display: "flex", background: C.bg, borderTop: "0.5px solid " + C.brd, zIndex: 100 }}>
+      {/* Bottom tabs â€” mobile only */}
+      {!isDesktop && <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, display: "flex", background: C.bg, borderTop: "0.5px solid " + C.brd, zIndex: 100, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
         {navTabs.map(([k, l, icon]) => (
-          <div key={k} onClick={() => { setTab(k); setView("list"); }} style={{ flex: 1, padding: "8px 2px 6px", textAlign: "center", fontSize: 11, color: tab === k ? C.gold : C.tx3, borderTop: tab === k ? "2px solid " + C.gold : "2px solid transparent", cursor: "pointer", letterSpacing: 0.2, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, transition: "color .12s, border-color .12s" }}>
+          <div key={k} onClick={() => { setTab(k); setView("list"); }} style={{ flex: 1, minHeight: 56, padding: "8px 2px 6px", textAlign: "center", fontSize: 11, color: tab === k ? C.gold : C.tx3, borderTop: tab === k ? "2px solid " + C.gold : "2px solid transparent", cursor: "pointer", letterSpacing: 0.2, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, transition: "color .12s, border-color .12s" }}>
             <span style={{ lineHeight: 1 }}>{icon}</span>
           </div>
         ))}
       </div>}
       {/* Storage error banner */}
-      {storageError && <div style={{ position: "fixed", top: 0, left: isDesktop ? SIDEBAR_W : "50%", transform: isDesktop ? "none" : "translateX(-50%)", right: isDesktop ? 0 : "auto", width: isDesktop ? "auto" : "100%", maxWidth: isDesktop ? "none" : 430, background: "#b91c1c99", zIndex: 400, padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, backdropFilter: "blur(4px)", animation: "errFadeOut 3s ease forwards" }}>
+      {storageError && <div style={{ position: "fixed", top: 0, left: isDesktop ? SIDEBAR_W : "50%", transform: isDesktop ? "none" : "translateX(-50%)", right: isDesktop ? 0 : "auto", width: isDesktop ? "auto" : "100%", maxWidth: isDesktop ? "none" : 430, background: C.red + "dd", zIndex: 400, padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, backdropFilter: "blur(4px)", animation: "errFadeOut 3s ease forwards" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.tx} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           <span style={{ fontSize: 11, color: "#fff" }}>Erro ao sincronizar com o servidor. Verifique sua conexão com a internet.</span>
         </div>
         <span onClick={() => setStorageError(false)} style={{ cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0 }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.tx} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </span>
       </div>}
       {/* Reward popup */}
@@ -1068,20 +1051,20 @@ export default function App({ user, onSignOut }) {
         const glow = huge ? "0 0 28px " + C.gold + "44, 0 4px 24px #0009" : big ? "0 0 14px " + C.gold + "28, 0 4px 24px #0009" : "0 4px 24px #0009";
         const brd = big ? "1.5px solid " + C.gold + "80" : "1px solid " + C.goldBrd;
         return (
-          <div style={{ position: "fixed", top: 60, left: popupLeft, transform: "translateX(-50%)", background: "linear-gradient(135deg,#1a1d2ef0,#2a1f3df0)", border: brd, borderRadius: 14, padding: big ? "16px 28px" : "14px 24px", zIndex: 300, textAlign: "center", boxShadow: glow, minWidth: 200, animation: "popupSlideIn 0.28s ease" }}>
+          <div style={{ position: "fixed", top: 60, left: popupLeft, transform: "translateX(-50%)", background: "linear-gradient(135deg," + C.card + "f0," + C.bg + "f0)", border: brd, borderRadius: 14, padding: big ? "16px 28px" : "14px 24px", zIndex: 300, textAlign: "center", boxShadow: glow, minWidth: 200, animation: "popupSlideIn 0.28s ease" }}>
             <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 16, marginBottom: rewardPopup.msg ? 6 : 0 }}>
               {rewardPopup.xp > 0 && <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <svg width={iconSz} height={iconSz} viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
                 <span style={{ fontSize: numSz, fontWeight: 700, color: C.gold }}>+{rewardPopup.xp} ⚡</span>
               </div>}
               {rewardPopup.coins > 0 && <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <svg width={iconSz} height={iconSz} viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                <span style={{ fontSize: numSz, fontWeight: 700, color: "#f59e0b" }}>+{rewardPopup.coins}</span>
+                <svg width={iconSz} height={iconSz} viewBox="0 0 24 24" fill="none" stroke={C.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                <span style={{ fontSize: numSz, fontWeight: 700, color: C.orange }}>+{rewardPopup.coins}</span>
               </div>}
             </div>
             {rewardPopup.msg && <div style={{ fontSize: 11, color: C.tx2, marginTop: 2 }}>{rewardPopup.msg}</div>}
             {lastUndo && <div style={{ marginTop: 8, textAlign: "center" }}>
-              <span onClick={undoCompletion} style={{ fontSize: 11, color: C.tx3, cursor: "pointer", borderBottom: "1px dashed " + C.tx3, paddingBottom: 1, letterSpacing: 0.3 }}>↩ Desfazer</span>
+              <span onClick={undoCompletion} style={{ fontSize: 11, color: C.tx3, cursor: "pointer", borderBottom: "1px dashed " + C.tx3, paddingBottom: 1, letterSpacing: 0.3 }}>Voltar</span>
             </div>}
           </div>
         );
@@ -1117,7 +1100,7 @@ export default function App({ user, onSignOut }) {
           </div>
         );
       })()}
-      {/* V2: Completion confirmation — sem recompensa */}
+      {/* V2: Completion confirmation â€” sem recompensa */}
       {completionConfirm && <Modal>
         <div style={{ textAlign: "center", marginBottom: 12 }}>
           <div style={{ fontSize: 28, marginBottom: 6 }}>{"\ud83c\udfc6"}</div>
@@ -1131,7 +1114,7 @@ export default function App({ user, onSignOut }) {
         </div>
       </Modal>}
       {/* V2: Routine suggestion banner */}
-      {routineSuggestion && <div style={{ position: "fixed", top: 60, left: popupLeft, transform: "translateX(-50%)", background: "#1a1d2eee", border: "1px solid " + C.purple + "60", borderRadius: 10, padding: "10px 16px", zIndex: 300, textAlign: "center", maxWidth: 340, animation: "popupSlideIn 0.28s ease" }}>
+      {routineSuggestion && <div style={{ position: "fixed", top: 60, left: popupLeft, transform: "translateX(-50%)", background: C.card + "ee", border: "1px solid " + C.purple + "60", borderRadius: 10, padding: "10px 16px", zIndex: 300, textAlign: "center", maxWidth: 340, animation: "popupSlideIn 0.28s ease" }}>
         <div style={{ fontSize: 11, color: C.purple, fontWeight: 500, marginBottom: 4 }}>Transformar <span style={{ color: C.tx, fontStyle: "italic" }}>"{routineSuggestion}"</span> em rotina?</div>
         <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
           <Btn small primary onClick={() => { nav("activities", "routines", "create", null, "routine"); setRoutineSuggestion(null); }}>Criar rotina</Btn>
@@ -1139,15 +1122,15 @@ export default function App({ user, onSignOut }) {
         </div>
       </div>}
       {/* Achievement notification banner */}
-      {achieveNotif && <div style={{ position: "fixed", bottom: isDesktop ? 16 : 68, left: popupLeft, transform: "translateX(-50%)", width: "92%", maxWidth: 400, background: "linear-gradient(135deg,#1a1d2e,#2a1f3d)", border: "1px solid " + C.goldBrd, borderRadius: 12, padding: "12px 16px", zIndex: 310, display: "flex", alignItems: "center", gap: 12, boxShadow: "0 4px 20px #0008", animation: "bannerSlideUp 0.3s ease" }}>
+      {achieveNotif && <div style={{ position: "fixed", bottom: isDesktop ? 16 : 68, left: popupLeft, transform: "translateX(-50%)", width: "92%", maxWidth: 400, background: "linear-gradient(135deg," + C.card + "," + C.bg + ")", border: "1px solid " + C.goldBrd, borderRadius: 12, padding: "12px 16px", zIndex: 310, display: "flex", alignItems: "center", gap: 12, boxShadow: "0 4px 20px #0008", animation: "bannerSlideUp 0.3s ease" }}>
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="18" width="12" height="4"/></svg>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: C.gold }}>Conquista desbloqueada!</div>
-          <div style={{ fontSize: 11, color: C.tx2, marginTop: 2 }}>{achieveNotif.text} — <span style={{ color: C.gold }}>+{achieveNotif.coins} moedas</span></div>
+          <div style={{ fontSize: 11, color: C.tx2, marginTop: 2 }}>{achieveNotif.text} - <span style={{ color: C.gold }}>+{achieveNotif.coins} moedas</span></div>
         </div>
         <span onClick={() => setAchieveNotif(null)} style={{ cursor: "pointer", color: C.tx3, display: "flex", alignItems: "center", padding: "0 4px" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>
       </div>}
-      {/* Onboarding overlay — primeira abertura */}
+      {/* Onboarding overlay â€” primeira abertura */}
       {loaded && !profile.onboardingDone && projects.length === 0 && routines.length === 0 && tasks.length === 0 && objectives.length === 0 && (
         <div style={{ position: "fixed", inset: 0, background: C.bg, zIndex: 500, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "28px 24px", ...(isDesktop ? {} : { maxWidth: 430, width: "100%", left: "50%", transform: "translateX(-50%)" }) }}>
           <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: 20 }}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="18" width="12" height="4"/></svg>
@@ -1168,10 +1151,11 @@ export default function App({ user, onSignOut }) {
               </div>
             ))}
           </div>
-          <Btn primary onClick={() => { setProfile(p => ({ ...p, onboardingDone: true })); nav("activities", "objectives", "create", null, "objective"); }} style={{ width: "100%", padding: "13px 0", fontSize: 13 }}>Criar meu primeiro objetivo →</Btn>
+          <Btn primary onClick={() => { setProfile(p => ({ ...p, onboardingDone: true })); nav("activities", "objectives", "create", null, "objective"); }} style={{ width: "100%", padding: "13px 0", fontSize: 13 }}>Criar meu primeiro objetivo</Btn>
           <div onClick={() => setProfile(p => ({ ...p, onboardingDone: true }))} style={{ marginTop: 14, fontSize: 11, color: C.tx4, cursor: "pointer", textAlign: "center" }}>Pular por agora</div>
         </div>
       )}
     </div>
   );
 }
+

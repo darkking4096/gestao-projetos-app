@@ -345,18 +345,18 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
   return (
     <div style={{ padding: 14 }}>
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {/* 1. Ícone + borda */}
-          <div style={{ position: "relative" }}>
-            <BorderSVG level={(profile.upgradeLevels || {})[profile.equippedBorder] || 0} color={C.gold} accentColor={(SHOP_BORDERS.find(b => b.id === profile.equippedBorder) || SHOP_BORDERS[0]).color} size={54}><IconSVG id={profile.equippedIcon || "i_estrela"} size={20} color={C.gold} /></BorderSVG>
+      <div style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", gap: 10, alignItems: "center", marginBottom: 10 }}>
+        <div style={{ position: "relative" }}>
+          <BorderSVG level={(profile.upgradeLevels || {})[profile.equippedBorder] || 0} color={C.gold} accentColor={(SHOP_BORDERS.find(b => b.id === profile.equippedBorder) || SHOP_BORDERS[0]).color} size={54}><IconSVG id={profile.equippedIcon || "i_estrela"} size={20} color={C.gold} /></BorderSVG>
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
+            <RankEmblemSVG rank={_rankInfo.rankMain} modifier="" size={20} color={_rankInfo.color} colorSecondary={_rankInfo.colorSecondary} />
+            <div style={{ fontSize: 11, color: _rankInfo.color || C.gold, fontWeight: 600, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{_rankInfo.label || "Humano"}</div>
           </div>
-          {/* 2. Emblema de rank (sem modificador, sem label) */}
-          <RankEmblemSVG rank={_rankInfo.rankMain} modifier="" size={24} color={_rankInfo.color} colorSecondary={_rankInfo.colorSecondary} />
-          {/* 3. Título */}
           <TitleBanner level={(profile.upgradeLevels || {})[(profile.equippedTitle)] || 0} color={C.gold} accentColor={getTitleTargetColor((SHOP_TITLES.find(t => t.id === profile.equippedTitle) || SHOP_TITLES[0]).price) || C.gold}><span style={{ fontSize: 11, fontStyle: "italic", fontWeight: 600, color: C.gold }}>{(SHOP_TITLES.find(t => t.id === profile.equippedTitle) || SHOP_TITLES[0]).name}</span></TitleBanner>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 4, background: C.card, borderRadius: 6, padding: "4px 10px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 4, background: C.card, borderRadius: 8, padding: "6px 10px", justifySelf: "end" }}>
           <div style={{ width: 18, height: 18, background: C.gold, borderRadius: 9, fontSize: 11, color: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>$</div>
           <span style={{ fontSize: 14, fontWeight: 600, color: C.tx }}>{profile.coins}</span>
         </div>
@@ -382,7 +382,7 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
               onClick={() => setDashSubTab(key)}
               style={{
                 flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
-                padding: "6px 4px", borderRadius: 6, cursor: "pointer",
+                minHeight: 50, justifyContent: "center", padding: "7px 4px", borderRadius: 6, cursor: "pointer",
                 background: active ? C.bg : "transparent",
                 color: active ? C.gold : C.tx4,
                 border: active ? "0.5px solid " + C.goldBrd : "0.5px solid transparent",
@@ -410,11 +410,11 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
       {dashSubTab === "overview" && <>
 
       {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(88px, 1fr))", gap: 6, marginBottom: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))", gap: 8, marginBottom: 12 }}>
         {[[totalActive, "Ativas", null], ["+" + (profile.xpToday || 0), "Energia hoje", null], ["+" + (profile.coinsToday || 0), "Moedas", null], [profile.streak, "Streak", getMultiplier(profile.streak) > 0 ? "+" + Math.round(getMultiplier(profile.streak)*100) + "%" : null]].map(([v, l, sub], i) => (
-          <div key={i} style={{ background: C.card, borderRadius: 8, padding: "8px 6px", textAlign: "center", minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: i === 3 ? C.orange : C.tx, lineHeight: 1.15, wordBreak: "break-word" }}>{v}</div>
-            <div style={{ fontSize: 11, color: C.tx3, lineHeight: 1.2 }}>{l}</div>
+          <div key={i} style={{ background: C.card, borderRadius: 10, padding: "11px 10px", textAlign: "center", minWidth: 0, minHeight: 74, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: i === 3 ? C.orange : C.tx, lineHeight: 1.1, wordBreak: "break-word" }}>{v}</div>
+            <div style={{ fontSize: 11, color: C.tx3, lineHeight: 1.2, marginTop: 3 }}>{l}</div>
             {sub && <div style={{ fontSize: 11, color: C.green, marginTop: 1 }}>{sub}</div>}
           </div>
         ))}
@@ -525,14 +525,14 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
           return (
             <div style={{ marginBottom: 12, borderRadius: 10, overflow: "hidden", background: C.card, border: "1px solid " + C.brd }}>
               <div style={{ height: 1.5, background: "linear-gradient(90deg," + C.gold + "55,transparent)" }} />
-              <div style={{ padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", alignItems: "stretch", gap: 10 }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 10, color: C.tx4, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 3 }}>Missao RPG</div>
                   <div style={{ fontSize: 11, color: C.tx3 }}>{m?.completed ? "Missao anterior concluida. Pronto para a proxima?" : "Nenhuma missao ativa no momento."}</div>
                 </div>
                 <div
                   onClick={() => gerarMissao()}
-                  style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 14px", borderRadius: 8, background: C.goldDim, border: "1px solid " + C.goldBrd, cursor: "pointer", flexShrink: 0 }}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 40, padding: "9px 14px", borderRadius: 8, background: C.goldDim, border: "1px solid " + C.goldBrd, cursor: "pointer", width: "100%" }}
                 >
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                   <span style={{ fontSize: 11, fontWeight: 600, color: C.gold }}>{labelBtn}</span>
@@ -696,7 +696,7 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
                       background: "linear-gradient(135deg," + rankColor + "cc, " + rankColorSec + "aa)",
                       border: "1px solid " + rankColor + "60",
                       boxShadow: "0 4px 20px " + rankColor + "25",
-                      cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#fff",
+                      cursor: "pointer", fontSize: 13, fontWeight: 700, color: C.bg,
                       letterSpacing: 0.5,
                     }}
                   >
@@ -712,13 +712,13 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
       })()}
       {/* Chart */}
       <Card style={{ marginBottom: 10 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
           <div style={{ fontSize: 11, color: C.tx2 }}>⚡ ENERGIA por dia</div>
-          <div style={{ display: "flex", gap: 3 }}>
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
             {["7d", "30d", "90d"].map(r => (
-              <div key={r} onClick={() => { setChartRange(r); setShowDatePicker(false); }} style={{ padding: "2px 8px", borderRadius: 4, fontSize: 11, cursor: "pointer", background: chartRange === r && !showDatePicker ? C.goldDim : C.bg, color: chartRange === r && !showDatePicker ? C.gold : C.tx4, border: "0.5px solid " + (chartRange === r && !showDatePicker ? C.goldBrd : C.brd), transition: "background .12s, color .12s, border-color .12s" }}>{r}</div>
+              <div key={r} onClick={() => { setChartRange(r); setShowDatePicker(false); }} style={{ minWidth: 38, minHeight: 32, padding: "6px 8px", borderRadius: 6, fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: chartRange === r && !showDatePicker ? C.goldDim : C.bg, color: chartRange === r && !showDatePicker ? C.gold : C.tx4, border: "0.5px solid " + (chartRange === r && !showDatePicker ? C.goldBrd : C.brd), transition: "background .12s, color .12s, border-color .12s" }}>{r}</div>
             ))}
-            <div onClick={() => setShowDatePicker(!showDatePicker)} style={{ padding: "2px 8px", borderRadius: 4, fontSize: 11, cursor: "pointer", background: chartRange === "custom" ? C.goldDim : C.bg, color: chartRange === "custom" ? C.gold : C.tx4, border: "0.5px solid " + (chartRange === "custom" ? C.goldBrd : C.brd), transition: "background .12s, color .12s, border-color .12s" }}>Datas</div>
+            <div onClick={() => setShowDatePicker(!showDatePicker)} style={{ minWidth: 38, minHeight: 32, padding: "6px 8px", borderRadius: 6, fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: chartRange === "custom" ? C.goldDim : C.bg, color: chartRange === "custom" ? C.gold : C.tx4, border: "0.5px solid " + (chartRange === "custom" ? C.goldBrd : C.brd), transition: "background .12s, color .12s, border-color .12s" }}>Datas</div>
           </div>
         </div>
         {showDatePicker && (
@@ -729,9 +729,9 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
             <Btn small primary onClick={() => { setChartRange("custom"); setShowDatePicker(false); }}>OK</Btn>
           </div>
         )}
-        <div style={{ display: "flex", gap: 12, marginBottom: 8, fontSize: 11, color: C.tx3 }}>
+        <div style={{ display: "flex", gap: 12, marginBottom: 8, fontSize: 11, color: C.tx3, flexWrap: "wrap" }}>
           <span><span style={{ color: C.gold }}>+{totalXpRange}</span> ⚡</span>
-          <span><span style={{ color: "#e0a030" }}>+{totalCoinsRange}</span> moedas</span>
+          <span><span style={{ color: C.orange }}>+{totalCoinsRange}</span> moedas</span>
           <span>{chartData.length} {chartData.length > 15 ? "semanas" : "dias"}</span>
         </div>
         {chartData.length > 0 ? (

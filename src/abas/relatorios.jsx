@@ -169,12 +169,12 @@ export default function ReportsTab({ notes, folders, onUpdateNotes, onUpdateFold
     const dy = Math.abs(t.clientY - touchRef.current.startY);
 
     // Se movimento claramente vertical → é scroll, cancela drag
-    if (dy > 8 && dy > dx * 1.6) {
+    if (dy > 12 && dy > dx * 1.8) {
       touchRef.current = null;
       return;
     }
     // Threshold atingido → ativa drag
-    if (dx > 8 || dy > 8) {
+    if (dx > 16 || dy > 16) {
       touchRef.current.active = true;
       e.preventDefault();
       setDragPos({ x: t.clientX, y: t.clientY });

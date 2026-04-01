@@ -17,8 +17,9 @@ function Btn({ children, primary, danger, small, onClick, style: s }) {
       onTouchStart={() => setPressed(true)}
       onTouchEnd={() => setPressed(false)}
       style={{
-        padding: small ? "6px 12px" : "10px 16px", borderRadius: 7,
-        fontSize: small ? 10 : 11, fontWeight: 500, cursor: "pointer",
+        minHeight: small ? 34 : 42,
+        padding: small ? "7px 12px" : "11px 16px", borderRadius: 7,
+        fontSize: small ? 11 : 12, fontWeight: 500, cursor: "pointer",
         border: "none",
         background: danger ? C.red + "15" : primary ? (hasTones ? "linear-gradient(135deg, " + C.goldDim + ", " + (C.gold2 || C.gold) + "18)" : C.goldDim) : C.card,
         color: danger ? C.red : primary ? C.gold : C.tx2,
@@ -58,7 +59,7 @@ function Card({ children, style: s, onClick }) {
 }
 
 function Badge({ children, color }) {
-  return <span style={{ fontSize: 11, padding: "2px 6px", borderRadius: 3, background: color + "20", color }}>{children}</span>;
+  return <span style={{ fontSize: 11, padding: "4px 8px", borderRadius: 4, background: color + "20", color }}>{children}</span>;
 }
 
 function SLabel({ children }) {
@@ -97,21 +98,28 @@ function Chk({ done, onClick }) {
       onTouchEnd={() => setPressed(false)}
       onTouchCancel={() => setPressed(false)}
       style={{
-        width: 20, height: 20, borderRadius: 4,
-        border: "1.5px solid " + (done ? C.green : active ? C.tx3 : C.brd2),
-        background: done ? C.green : active ? C.brd + "88" : "transparent",
+        width: 28, height: 28, borderRadius: 7,
+        border: "1px solid transparent",
+        background: active ? C.brd + "44" : "transparent",
         display: "flex", alignItems: "center", justifyContent: "center",
         cursor: "pointer", flexShrink: 0,
         transition: "border-color .12s, background .12s",
         transform: pressed ? "scale(0.88)" : "scale(1)",
-      }}>{done ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.bg} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> : null}</div>
+      }}>
+      <div style={{
+        width: 20, height: 20, borderRadius: 4,
+        border: "1.5px solid " + (done ? C.green : active ? C.tx3 : C.brd2),
+        background: done ? C.green : "transparent",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        transition: "border-color .12s, background .12s",
+      }}>{done ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.bg} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> : null}</div></div>
   );
 }
 
 function TopBar({ title, onBack, right }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 14px 8px" }}>
-      {onBack && <span onClick={onBack} style={{ display: "flex", alignItems: "center", cursor: "pointer", padding: "4px 2px" }}>
+      {onBack && <span onClick={onBack} style={{ display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", width: 36, height: 36, borderRadius: 18 }}>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.tx2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
       </span>}
       <span style={{ fontSize: 15, fontWeight: 500, color: C.tx, flex: 1 }}>{title}</span>
@@ -179,7 +187,7 @@ function FilterModal({ options, active, onApply, onClose }) {
                 const isActive = sel.key === o.key && sel.mode === m;
                 return (
                   <div key={m} onClick={() => pick(o.key, m)} style={{
-                    padding: "5px 10px", borderRadius: 6, fontSize: 11, cursor: "pointer",
+                    minHeight: 36, padding: "7px 10px", borderRadius: 6, fontSize: 11, cursor: "pointer",
                     display: "flex", alignItems: "center", gap: 4,
                     background: isActive ? C.goldDim : C.bg,
                     color: isActive ? C.gold : C.tx3,
@@ -198,7 +206,7 @@ function FilterModal({ options, active, onApply, onClose }) {
                 const isActive = sel.key === o.key && sel.mode === v;
                 return (
                   <div key={v} onClick={() => pick(o.key, v)} style={{
-                    padding: "5px 10px", borderRadius: 6, fontSize: 11, cursor: "pointer",
+                    minHeight: 36, padding: "7px 10px", borderRadius: 6, fontSize: 11, cursor: "pointer",
                     background: isActive ? C.goldDim : C.bg,
                     color: isActive ? C.gold : C.tx3,
                     border: "0.5px solid " + (isActive ? C.goldBrd : C.brd),
@@ -226,7 +234,7 @@ function FilterBtn({ onClick, active }) {
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
-        display: "flex", alignItems: "center", gap: 5, padding: "7px 12px",
+        minHeight: 38, display: "flex", alignItems: "center", gap: 5, padding: "8px 12px",
         borderRadius: 6, cursor: "pointer", fontSize: 11,
         background: active ? C.goldDim : C.card,
         color: active ? C.gold : hov ? C.tx2 : C.tx3,
@@ -649,7 +657,7 @@ function DiffPick({ value, onChange }) {
             const sel = value === lvl;
             return (
               <div key={sub} onClick={() => handleSubSelect(lvl)} style={{
-                flex: 1, padding: "10px 4px", borderRadius: 7, cursor: "pointer", textAlign: "center",
+                flex: 1, minHeight: 48, padding: "10px 6px", borderRadius: 7, cursor: "pointer", textAlign: "center",
                 background: sel ? cc + "25" : cc + "10",
                 border: "1px solid " + (sel ? cc + "88" : cc + "30"),
                 transition: "background .12s, border-color .12s",
@@ -676,7 +684,7 @@ function DiffPick({ value, onChange }) {
           const cc = cat.color;
           return (
             <div key={cat.id} onClick={() => handleCatSelect(cat)} style={{
-              padding: "8px 4px", borderRadius: 7, cursor: "pointer", textAlign: "center",
+              minHeight: 48, padding: "9px 6px", borderRadius: 7, cursor: "pointer", textAlign: "center",
               background: isCurrent ? cc + "25" : cc + "10",
               border: "1px solid " + (isCurrent ? cc + "88" : cc + "28"),
               transition: "background .12s, border-color .12s",
@@ -706,10 +714,10 @@ function Toggle({ on, onToggle, label }) {
       onClick={onToggle}
       onMouseDown={() => setPressed(true)} onMouseUp={() => setPressed(false)} onMouseLeave={() => setPressed(false)}
       onTouchStart={() => setPressed(true)} onTouchEnd={() => setPressed(false)}
-      style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", cursor: "pointer", opacity: pressed ? 0.72 : 1, transition: "opacity .1s" }}>
+      style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 38, padding: "8px 0", cursor: "pointer", opacity: pressed ? 0.72 : 1, transition: "opacity .1s" }}>
       <span style={{ fontSize: 11, color: on ? C.tx : C.tx2, flex: 1 }}>{label}</span>
-      <div style={{ width: 36, height: 20, borderRadius: 10, background: on ? C.gold + "80" : "#333", position: "relative", transition: "background .2s" }}>
-        <div style={{ width: 16, height: 16, borderRadius: 8, background: "#eee", position: "absolute", top: 2, left: on ? 18 : 2, transition: "left .2s" }} />
+      <div style={{ width: 40, height: 24, borderRadius: 12, background: on ? C.gold + "80" : C.brd2, position: "relative", transition: "background .2s" }}>
+        <div style={{ width: 18, height: 18, borderRadius: 9, background: C.tx, position: "absolute", top: 3, left: on ? 19 : 3, transition: "left .2s" }} />
       </div>
     </div>
   );

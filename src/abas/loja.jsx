@@ -271,10 +271,10 @@ function ShopTab({ profile, buyItem, equipItem, buyConsumable, upgradeItem, setP
           {profile.boostExpiry && profile.boostExpiry > Date.now() && <div style={{ fontSize: 11, color: C.gold, display: "flex", alignItems: "center", gap: 3 }}><ConsumableSVG id="c_boost" size={10} color={C.gold} />{" Boost +25% ("}{Math.ceil((profile.boostExpiry - Date.now()) / 60000)}{"min)"}</div>}
         </div>
       )}
-      <div style={{ display: "flex", gap: 4, marginBottom: 14, overflowX: "auto" }}>
+      <div style={{ display: "flex", gap: 6, marginBottom: 14, overflowX: "auto", paddingBottom: 2 }}>
         {cats.map(([k, l]) => (
           <div key={k} onClick={() => setCat(k)} style={{
-            padding: "7px 14px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+            minHeight: 38, padding: "8px 14px", borderRadius: 7, fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", display: "flex", alignItems: "center",
             background: cat === k ? C.goldDim : C.card, color: cat === k ? C.gold : C.tx3,
             border: "1px solid " + (cat === k ? C.goldBrd : C.brd),
             transition: "background .12s, color .12s, border-color .12s"
