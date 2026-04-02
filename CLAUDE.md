@@ -87,7 +87,8 @@ O app é uma SPA com navegação por estado interno (`nav(tab, section, view, id
 │       ├── relatorios.jsx   # Relatórios e estatísticas
 │       ├── loja.jsx         # Loja de cosméticos
 │       ├── atributos.jsx    # Sistema de atributos RPG
-│       └── configuracoes.jsx # Config de perfil, temas, amigos, painel dev
+│       ├── configuracoes.jsx # Config de perfil, temas, amigos, painel dev (apenas modo dev)
+│       └── chat-ia.jsx      # Assistente IA via Groq: sugestões de atividades (panel lateral/fullscreen)
 ```
 
 ---
