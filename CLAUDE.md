@@ -4,6 +4,37 @@ Instruções para agentes de IA trabalhando neste projeto. Leia antes de qualque
 
 ---
 
+## TL;DR — Leia isso primeiro (contexto em 60 segundos)
+
+**O que é:** SPA React 18 + Vite de gestão de tarefas gamificada com sistema RPG (ENERGIA, PODER, Ranks F→MAX). Backend Supabase, deploy Vercel, repo `darkking4096/gestao-projetos-app` (branch `master`).
+
+**Regras de ouro (nunca violar):**
+- ZERO emojis na interface — jamais, em nenhum elemento
+- Cores SEMPRE via `C.{token}` de `temas.js` — nunca hex hardcoded
+- Ícones SEMPRE SVG inline — nunca unicode, nunca libs de ícone externas
+- Estilos SEMPRE inline `style={{...}}` — sem CSS files, sem Tailwind
+- Sem TypeScript — só `.jsx` e `.js`
+- Campo Supabase ainda se chama `totalXp` (não renomear — retrocompat)
+
+**Arquivos-chave:**
+- `App.jsx` → estado global, earn(), navegação por estado (`nav()`)
+- `src/constantes.js` → RANKS, tabelas de ENERGIA/COINS
+- `src/utilidades.js` → getPoderInfo(), getRankInfo(), earn helpers
+- `src/temas.js` → paleta `C` (objeto de cores do tema atual)
+- `src/armazenamento.js` → Supabase: Auth, S.get/set/getAll
+- `src/componentes-base.jsx` → Btn, Card, Modal, RankEmblemSVG, EnergiaBarDupla
+- `src/abas/` → uma aba por arquivo (dashboard, atividades, detalhes, loja, etc.)
+
+**Gamificação em resumo:** ENERGIA = XP por tarefa (1–100 por dificuldade). PODER = floor(totalEnergia/100). Rank determinado por PODER (F- até MAX, 38 sub-ranks). finalXp = xp * (1 + streakMult + cultivoPct). Moedas NÃO são multiplicadas por streak/cultivo.
+
+**Como commitar:** `git add . && git commit -m "feat/fix: ..." && git push origin master` → Vercel faz deploy automático.
+
+**Estado atual relevante:** o app já usa `S.getAll()` no carregamento inicial, histórico foi regravado em UTF-8 limpo e as abas principais já estão em `lazy loading` com chunk splitting no Vite.
+
+---
+
+---
+
 ## Visão Geral
 
 Aplicativo web de **gestão de produtividade pessoal gamificado**, construído em React 18 + Vite, com backend Supabase e deploy no Vercel. O usuário gerencia projetos, rotinas e tarefas standalone, e é recompensado com um sistema de RPG (ENERGIA ⚡, PODER, Ranks F→MAX).
@@ -26,7 +57,7 @@ BD: Supabase (tabelas `app_data`, `user_profiles`, `friendships`)
 | Estado | useState/useCallback — sem Redux |
 
 **Não há TypeScript, não há rotas (React Router), não há testes automatizados.**
-O app é uma SPA de arquivo único com navegação por estado interno (`nav(tab, section, view, id, type)`).
+O app é uma SPA com navegação por estado interno (`nav(tab, section, view, id, type)`), ainda centralizada em `App.jsx`.
 
 ---
 
@@ -187,35 +218,31 @@ Seletor inline de dificuldade para tarefas dentro de fases de projeto.
 
 ### 🔴 Crítico
 
-**Variável global mutável para temas (`temas.js`)** — `export let C = THEMES.obsidiana` é mutado diretamente via `setCurrentTheme(tema)`. React não detecta essa mudança. Funciona porque `setCurrentTheme` é chamado no render do App pai, mas é frágil. Solução correta: React Context para tema.
+**Variável global mutável para temas (`temas.js`)** — `export let C = THEMES.obsidiana` continua sendo mutado diretamente via `setCurrentTheme(tema)`. Ainda funciona, mas segue frágil. Solução correta: React Context para tema.
 
-**`setCurrentTheme` no corpo do render (`App.jsx`)** — chamado diretamente fora de `useEffect`, executa a cada render. Em StrictMode (ativo em `main.jsx`) executa duas vezes, podendo causar cores inconsistentes em filhos que importam `C` diretamente.
-
-**Proteção anti-ciclo em `calcObjectiveXp` (`utilidades.js`)** — a função é recursiva, mas sem Set de IDs visitados. Dados corrompidos com ciclo circular travam o browser. Solução: adicionar parâmetro `_visited = new Set()` com guard `if (_visited.has(id)) return 0`.
+**Race condition potencial em `earn()` (`App.jsx`)** — a função já foi melhorada, mas continua concentrando muita responsabilidade de progressão, popup e rank-up.
 
 ### 🟠 Alto
 
-**Stale closure no reset diário (`App.jsx`)** — o `useEffect` de reset tem dependência `[loaded]`, capturando `tasks` do momento da montagem (array vazio). A funcionalidade de auto-arquivamento de tarefas vencidas há 3+ dias provavelmente não funciona por isso.
+**`App.jsx` continua grande e muito acoplado** — concentra estado global, sincronização, navegação, reward flow e montagem de telas.
 
-**Race condition em `earn()` (`App.jsx`)** — dentro do updater funcional de `setProfile`, variáveis externas (`popupXp`, `levelUpData`) são mutadas. Em StrictMode, o React executa updaters duas vezes, podendo sobrescrever com valores de estados diferentes. Popup pode mostrar XP incorreto e notificações de rank-up podem sumir.
+**`configuracoes.jsx` ainda tem trechos com encoding inconsistente** — há texto visível com mojibake nessa tela.
 
-**Carregamento sequencial (`App.jsx`)** — 9 chamadas `await S.get()` em sequência (~1800ms de latência total). Solução: `Promise.all` ou `S.getAll()` já implementado.
-
-**`deleteObjective` com deleção permanente silenciosa** — quando o usuário escolhe "deletar tudo", projetos/rotinas/tarefas vinculados são removidos diretamente sem passar pela lixeira, contornando o sistema de recuperação.
+**Painel dev removido de produção** — agora só renderiza em modo dev (`import.meta.env.DEV`). Em build de produção, o componente e a senha são eliminados pelo tree-shaking do Vite.
 
 ### 🟡 Médio
 
-**Swipe com variáveis globais em `window`** — `window._swipeX` e `window._swipeY` poluem o namespace global. Solução: usar `useRef`.
+**Tema e design system ainda não são totalmente consistentes** — ainda há pontos com hardcodes e exceções visuais fora dos tokens.
 
-**Streak com gaps múltiplos** — o reset de streak executa uma única vez ao abrir o app. Se o usuário ficar ausente 15 dias, o streak só cai 5 (não 75). O reset não é executado uma vez por dia ausente.
+**Ainda não há testes automatizados** — as regras de streak, recompensas, restore e sync continuam sem cobertura.
 
-**Mensagem de erro de storage enganosa** — o toast exibe "Verifique o armazenamento do dispositivo" quando o erro é na rede/Supabase.
+**Chunk principal ainda pode cair mais** — houve melhora relevante com `lazy loading` e `manualChunks`, mas o `index` principal continua relativamente grande.
 
 ---
 
-## Painel Dev (DEV_PASSWORD = "darkking")
+## Painel Dev (DEV_PASSWORD = "333tesla")
 
-Disponível na aba Configurações. Clicar em "v2.0" no rodapé abre campo de senha. Senha correta → painel para editar todas as variáveis de perfil (totalXp, moedas, streak, etc.) e atalhos de rank para testes.
+Disponível **apenas em modo dev** (`npm run dev`) na aba Configurações. Clicar em "v2.0" no rodapé abre campo de senha. Senha correta → painel para editar todas as variáveis de perfil (totalXp, moedas, streak, etc.) e atalhos de rank para testes. **Em build de produção o painel não existe** (guard `import.meta.env.DEV`).
 
 ---
 

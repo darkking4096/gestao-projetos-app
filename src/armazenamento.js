@@ -7,6 +7,11 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// Cache do usuário autenticado — evita N requests HTTP ao Supabase Auth por
+// ciclo de save (S.set dispara até 9 vezes por interação, cada uma chamava getUser()).
+// Invalidado automaticamente em qualquer mudança de auth (login/logout/expiração).
+let _cachedUser = null;
+
 /* ── Auth helpers ── */
 export const Auth = {
   async signUp(email, password) {
@@ -20,15 +25,21 @@ export const Auth = {
     return data;
   },
   async signOut() {
+    _cachedUser = null;
     await supabase.auth.signOut();
   },
   async getUser() {
+    if (_cachedUser) return _cachedUser;
+    // Primeira chamada (ou após invalidação): valida JWT com o servidor
     const { data: { user } } = await supabase.auth.getUser();
+    _cachedUser = user;
     return user;
   },
   onAuthChange(callback) {
     return supabase.auth.onAuthStateChange((_event, session) => {
-      callback(session?.user ?? null);
+      // Mantém cache sincronizado com o estado real de autenticação
+      _cachedUser = session?.user ?? null;
+      callback(_cachedUser);
     });
   },
 };

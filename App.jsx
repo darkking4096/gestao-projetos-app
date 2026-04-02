@@ -25,6 +25,17 @@ function TabFallback() {
   );
 }
 
+// Definido fora do componente — SVGs usam stroke="currentColor" (sem deps de tema),
+// então nunca precisam ser recriados. Antes eram um array literal recriado a cada render.
+const NAV_TABS = [
+  ["dashboard",   "Início",      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>],
+  ["activities",  "Atividades",  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>],
+  ["reports",     "Relatórios",  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>],
+  ["history",     "Histórico",   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>],
+  ["shop",        "Loja",        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>],
+  ["config",      "Perfil",      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>],
+];
+
 export default function App({ user, onSignOut }) {
   const [tab, setTab] = useState("dashboard");
   const [subTab, setSubTab] = useState("projects");
@@ -422,52 +433,73 @@ export default function App({ user, onSignOut }) {
     }));
   }, []);
 
-  const addProject = (p) => {
+  const addProject = useCallback((p) => {
     const id = uid();
     const newP = { ...p, id, createdAt: td(), status: p.status || "Ativo", xpAccum: 0, progress: 0 };
     setProjects(pr => [...pr, newP]);
     syncObjLinks(id, "project", p.linkedObjectives, []);
     syncPhaseRefs(id, p.phases);
     nav("activities", "projects", "list");
-  };
-  const updProject = (p) => {
-    const old = projects.find(x => x.id === p.id);
-    setProjects(pr => pr.map(x => x.id === p.id ? p : x));
-    syncObjLinks(p.id, "project", p.linkedObjectives, old ? old.linkedObjectives : []);
+  }, [syncObjLinks, syncPhaseRefs, nav]);
+
+  const updProject = useCallback((p) => {
+    // Lê linkedObjectives antigos dentro do updater — elimina dep em `projects`
+    let oldLinkedObjs = [];
+    setProjects(pr => {
+      const old = pr.find(x => x.id === p.id);
+      oldLinkedObjs = old ? (old.linkedObjectives || []) : [];
+      return pr.map(x => x.id === p.id ? p : x);
+    });
+    syncObjLinks(p.id, "project", p.linkedObjectives, oldLinkedObjs);
     syncPhaseRefs(p.id, p.phases);
-  };
-  const addRoutine = (r) => {
+  }, [syncObjLinks, syncPhaseRefs]);
+
+  const addRoutine = useCallback((r) => {
     const id = uid();
     const newR = { ...r, id, createdAt: td(), status: "Ativa", xpAccum: 0, streak: 0, bestStreak: 0, totalCompletions: 0, consecutiveFails: 0, completionLog: [] };
     setRoutines(pr => [...pr, newR]);
     syncObjLinks(id, "routine", r.linkedObjectives, []);
     nav("activities", "routines", "list");
-  };
-  const updRoutine = (r) => {
-    const old = routines.find(x => x.id === r.id);
-    setRoutines(pr => pr.map(x => x.id === r.id ? r : x));
-    syncObjLinks(r.id, "routine", r.linkedObjectives, old ? old.linkedObjectives : []);
-  };
-  const addTask = (t) => {
+  }, [syncObjLinks, nav]);
+
+  const updRoutine = useCallback((r) => {
+    let oldLinkedObjs = [];
+    setRoutines(pr => {
+      const old = pr.find(x => x.id === r.id);
+      oldLinkedObjs = old ? (old.linkedObjectives || []) : [];
+      return pr.map(x => x.id === r.id ? r : x);
+    });
+    syncObjLinks(r.id, "routine", r.linkedObjectives, oldLinkedObjs);
+  }, [syncObjLinks]);
+
+  const addTask = useCallback((t) => {
     const id = uid();
     const newTask = { ...t, id, createdAt: td(), status: "Pendente" };
+    // Captura resultado do updater para disparar side effect fora (StrictMode-safe)
+    let shouldSuggest = false;
     setTasks(pr => {
       const all = [...pr, newTask];
       const similar = all.filter(x => x.name && similarName(x.name, newTask.name) && x.id !== newTask.id);
-      if (similar.length >= 2) {
-        setTimeout(() => setRoutineSuggestion(newTask.name), 100);
-        setTimeout(() => setRoutineSuggestion(null), 6000);
-      }
+      shouldSuggest = similar.length >= 2;
       return all;
     });
+    if (shouldSuggest) {
+      setTimeout(() => setRoutineSuggestion(newTask.name), 100);
+      setTimeout(() => setRoutineSuggestion(null), 6000);
+    }
     syncObjLinks(id, "task", t.linkedObjectives, []);
     nav("activities", "tasks", "list");
-  };
-  const updTask = (t) => {
-    const old = tasks.find(x => x.id === t.id);
-    setTasks(pr => pr.map(x => x.id === t.id ? t : x));
-    syncObjLinks(t.id, "task", t.linkedObjectives, old ? old.linkedObjectives : []);
-  };
+  }, [syncObjLinks, nav]);
+
+  const updTask = useCallback((t) => {
+    let oldLinkedObjs = [];
+    setTasks(pr => {
+      const old = pr.find(x => x.id === t.id);
+      oldLinkedObjs = old ? (old.linkedObjectives || []) : [];
+      return pr.map(x => x.id === t.id ? t : x);
+    });
+    syncObjLinks(t.id, "task", t.linkedObjectives, oldLinkedObjs);
+  }, [syncObjLinks]);
 
   // V2: Objective CRUD
   const syncObjToObjLinks = useCallback((objId, newLinkedObjs, oldLinkedObjs) => {
@@ -679,92 +711,111 @@ export default function App({ user, onSignOut }) {
   };
 
   const completeTask = useCallback((taskId, parentType, parentId, phaseId) => {
-    if (parentType === "project" && parentId) {
-      let _prevProject = null;
-      setProjects(prev => prev.map(p => {
-        if (p.id !== parentId) return p;
-        _prevProject = JSON.parse(JSON.stringify(p));
+    if (parentType === “project” && parentId) {
+      // Objeto mutável captura valores do updater — seguro em StrictMode porque o
+      // updater é determinístico: mesma entrada (prev) → mesmos valores no result.
+      const result = { taskDiff: 1, taskName: “”, didComplete: false, prevProject: null, oldXpAcc: 0, newXpAcc: 0, completionData: null };
+      setProjects(prev => {
+        const proj = prev.find(p => p.id === parentId);
+        if (!proj) return prev;
+        result.prevProject = JSON.parse(JSON.stringify(proj));
         let taskDiff = 1;
-        const phases = (p.phases || []).map(ph => {
+        const phases = (proj.phases || []).map(ph => {
           if (phaseId && ph.id !== phaseId) return ph;
           const updTasks = (ph.tasks || []).map(t => {
-            if (t.id !== taskId || t.status === "Concluída") return t;
+            if (t.id !== taskId || t.status === “Concluída”) return t;
             taskDiff = t.difficulty || 1;
-            earn(getXp(taskDiff), getCoins(taskDiff), t.name, (xpAdded, coinsAdded) => {
-              setLastUndo({ type: 'projectTask', id: taskId, parentId, xpAdded, coinsAdded, prevProject: _prevProject });
-            });
-            return { ...t, status: "Concluída", completedAt: td() };
+            result.taskDiff = taskDiff;
+            result.taskName = t.name;
+            result.didComplete = true;
+            return { ...t, status: “Concluída”, completedAt: td() };
           });
           // V2: Auto-complete phase when all tasks done
-          const allPhaseDone = updTasks.length > 0 && updTasks.every(t => t.status === "Concluída");
-          return { ...ph, tasks: updTasks, status: allPhaseDone ? "Concluída" : (ph.status || "Ativa") };
+          const allPhaseDone = updTasks.length > 0 && updTasks.every(t => t.status === “Concluída”);
+          return { ...ph, tasks: updTasks, status: allPhaseDone ? “Concluída” : (ph.status || “Ativa”) };
         });
-        setProfile(pr => ({ ...pr, tasksCompleted: (pr.tasksCompleted || 0) + 1, tasksToday: (pr.tasksToday || 0) + 1, projTasksToday: (pr.projTasksToday || 0) + 1, hardTaskToday: pr.hardTaskToday || taskDiff >= 11, maxTaskToday: pr.maxTaskToday || taskDiff >= 20, maxTaskEver: pr.maxTaskEver || taskDiff >= 20 }));
         const all = phases.flatMap(ph => ph.tasks || []);
-        const done = all.filter(t => t.status === "Concluída").length;
+        const done = all.filter(t => t.status === “Concluída”).length;
         const progress = all.length ? Math.round(done / all.length * 100) : 0;
-        const oldXpAcc = p.xpAccum || 0;
-        const xpAcc = oldXpAcc + getXp(taskDiff);
-        const mBonus = getMasteryBonus(oldXpAcc, xpAcc);
+        result.oldXpAcc = proj.xpAccum || 0;
+        result.newXpAcc = result.oldXpAcc + getXp(taskDiff);
+        const np = { ...proj, phases, progress, xpAccum: result.newXpAcc };
+        if (checkProjectCompletion(np) && proj.status === “Ativo” && (proj.progress || 0) < 100) {
+          result.completionData = { type: “project”, id: proj.id, name: proj.name };
+        }
+        return prev.map(p => p.id === parentId ? np : p);
+      });
+      // Efeitos colaterais FORA do updater — executam uma vez, após o commit do React
+      if (result.didComplete) {
+        earn(getXp(result.taskDiff), getCoins(result.taskDiff), result.taskName, (xpAdded, coinsAdded) => {
+          setLastUndo({ type: 'projectTask', id: taskId, parentId, xpAdded, coinsAdded, prevProject: result.prevProject });
+        });
+        setProfile(pr => ({ ...pr, tasksCompleted: (pr.tasksCompleted || 0) + 1, tasksToday: (pr.tasksToday || 0) + 1, projTasksToday: (pr.projTasksToday || 0) + 1, hardTaskToday: pr.hardTaskToday || result.taskDiff >= 11, maxTaskToday: pr.maxTaskToday || result.taskDiff >= 20, maxTaskEver: pr.maxTaskEver || result.taskDiff >= 20 }));
+        const mBonus = getMasteryBonus(result.oldXpAcc, result.newXpAcc);
         if (mBonus > 0) {
           setTimeout(() => {
             setProfile(pr2 => ({ ...pr2, coins: pr2.coins + mBonus, totalCoinsEarned: (pr2.totalCoinsEarned || 0) + mBonus }));
-            setRewardPopup({ xp: 0, coins: mBonus, msg: "Maestria! " + getMastery(xpAcc).name });
+            setRewardPopup({ xp: 0, coins: mBonus, msg: “Maestria! “ + getMastery(result.newXpAcc).name });
           }, 800);
         }
-        const np = { ...p, phases, progress, xpAccum: xpAcc };
-        // V2: New completion logic â€” no XP reward for project completion
-        if (checkProjectCompletion(np) && p.status === "Ativo" && (p.progress || 0) < 100) {
-          setTimeout(() => setCompletionConfirm({ type: "project", id: p.id, name: p.name }), 500);
-        }
-        return np;
-      }));
+        if (result.completionData) setTimeout(() => setCompletionConfirm(result.completionData), 500);
+      }
     } else {
-      let _prevTask = null;
+      const result = { taskDiff: 1, taskName: “”, didComplete: false, prevTask: null };
       setTasks(prev => prev.map(t => {
-        if (t.id !== taskId || t.status === "Concluída") return t;
-        _prevTask = { ...t };
-        const d = t.difficulty || 1;
-        earn(getXp(d), getCoins(d), t.name, (xpAdded, coinsAdded) => {
-          setLastUndo({ type: 'task', id: taskId, xpAdded, coinsAdded, prevItem: _prevTask });
-        });
-        setProfile(pr => ({ ...pr, tasksCompleted: (pr.tasksCompleted || 0) + 1, tasksToday: (pr.tasksToday || 0) + 1, hardTaskToday: pr.hardTaskToday || d >= 11, maxTaskToday: pr.maxTaskToday || d >= 20, maxTaskEver: pr.maxTaskEver || d >= 20 }));
-        return { ...t, status: "Concluída", completedAt: td() };
+        if (t.id !== taskId || t.status === “Concluída”) return t;
+        result.prevTask = { ...t };
+        result.taskDiff = t.difficulty || 1;
+        result.taskName = t.name;
+        result.didComplete = true;
+        return { ...t, status: “Concluída”, completedAt: td() };
       }));
+      if (result.didComplete) {
+        earn(getXp(result.taskDiff), getCoins(result.taskDiff), result.taskName, (xpAdded, coinsAdded) => {
+          setLastUndo({ type: 'task', id: taskId, xpAdded, coinsAdded, prevItem: result.prevTask });
+        });
+        setProfile(pr => ({ ...pr, tasksCompleted: (pr.tasksCompleted || 0) + 1, tasksToday: (pr.tasksToday || 0) + 1, hardTaskToday: pr.hardTaskToday || result.taskDiff >= 11, maxTaskToday: pr.maxTaskToday || result.taskDiff >= 20, maxTaskEver: pr.maxTaskEver || result.taskDiff >= 20 }));
+      }
     }
   }, [earn]);
 
   const completeRoutine = useCallback((rid) => {
-    let _prevRoutine = null;
+    const result = { xp: 0, co: 0, isLibre: false, didComplete: false, prevRoutine: null, oldXpAcc: 0, newXpAcc: 0, phaseRef: null, routineName: "" };
     setRoutines(prev => prev.map(r => {
       if (r.id !== rid) return r;
-      _prevRoutine = { ...r };
-      const isLibre = migrateFreq(r).freq === "Livre";
-      const xp = getXp(r.difficulty || 1);
-      const co = getCoins(r.difficulty || 1);
-      earn(xp, co, r.name, (xpAdded, coinsAdded) => {
-        setLastUndo({ type: 'routine', id: rid, xpAdded, coinsAdded, prevItem: _prevRoutine });
+      result.prevRoutine = { ...r };
+      result.isLibre = migrateFreq(r).freq === "Livre";
+      result.xp = getXp(r.difficulty || 1);
+      result.co = getCoins(r.difficulty || 1);
+      result.didComplete = true;
+      result.oldXpAcc = r.xpAccum || 0;
+      result.newXpAcc = result.oldXpAcc + result.xp;
+      result.phaseRef = r.phaseRef;
+      result.routineName = r.name;
+      // V2: Rotina Livre não acumula streak
+      const ns = result.isLibre ? 0 : r.streak + 1;
+      return { ...r, streak: ns, bestStreak: result.isLibre ? r.bestStreak : Math.max(r.bestStreak, ns), totalCompletions: r.totalCompletions + 1, consecutiveFails: 0, xpAccum: result.newXpAcc, completionLog: [...(r.completionLog || []), { date: td(), xp: result.xp, coins: result.co }] };
+    }));
+    // Efeitos colaterais FORA do updater
+    if (result.didComplete) {
+      earn(result.xp, result.co, result.routineName, (xpAdded, coinsAdded) => {
+        setLastUndo({ type: 'routine', id: rid, xpAdded, coinsAdded, prevItem: result.prevRoutine });
       });
-      const oldXpAcc = r.xpAccum || 0;
-      const newXpAcc = oldXpAcc + xp;
-      const mBonus = getMasteryBonus(oldXpAcc, newXpAcc);
+      const mBonus = getMasteryBonus(result.oldXpAcc, result.newXpAcc);
       if (mBonus > 0) {
         setTimeout(() => {
           setProfile(p => ({ ...p, coins: p.coins + mBonus, totalCoinsEarned: (p.totalCoinsEarned || 0) + mBonus }));
-          setRewardPopup({ xp: 0, coins: mBonus, msg: "Maestria! " + getMastery(newXpAcc).name });
+          setRewardPopup({ xp: 0, coins: mBonus, msg: "Maestria! " + getMastery(result.newXpAcc).name });
         }, 800);
       }
-      // V2: Routine XP also accumulates to parent project if linked to a phase
-      if (r.phaseRef && r.phaseRef.projectId) {
+      // V2: XP de rotina acumula no projeto pai se vinculada a uma fase
+      if (result.phaseRef && result.phaseRef.projectId) {
         setProjects(prev => prev.map(p => {
-          if (p.id !== r.phaseRef.projectId) return p;
-          return { ...p, xpAccum: (p.xpAccum || 0) + xp };
+          if (p.id !== result.phaseRef.projectId) return p;
+          return { ...p, xpAccum: (p.xpAccum || 0) + result.xp };
         }));
       }
-      // V2: Rotina Livre nÃ£o acumula streak
-      const ns = isLibre ? 0 : r.streak + 1;
-      return { ...r, streak: ns, bestStreak: isLibre ? r.bestStreak : Math.max(r.bestStreak, ns), totalCompletions: r.totalCompletions + 1, consecutiveFails: 0, xpAccum: newXpAcc, completionLog: [...(r.completionLog || []), { date: td(), xp, coins: co }] };
-    }));
+    }
   }, [earn]);
 
   const undoCompletion = useCallback(() => {
@@ -951,14 +1002,6 @@ export default function App({ user, onSignOut }) {
 
   const isDesktop = winW >= 768;
   const SIDEBAR_W = 220;
-  const navTabs = [
-    ["dashboard", "Início", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>],
-    ["activities", "Atividades", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>],
-    ["reports", "Relatórios", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>],
-    ["history", "Histórico", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>],
-    ["shop", "Loja", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>],
-    ["config", "Perfil", <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>],
-  ];
   // Centro dos popups fixos: metade da Ã¡rea de conteÃºdo (direita da sidebar em desktop)
   const popupLeft = isDesktop ? `calc(50% + ${SIDEBAR_W / 2}px)` : "50%";
 
@@ -972,7 +1015,7 @@ export default function App({ user, onSignOut }) {
             <div style={{ fontSize: 13, fontWeight: 700, color: C.gold, letterSpacing: 1.5, textTransform: "uppercase" }}>Atividades</div>
           </div>
           <div style={{ flex: 1, paddingTop: 8 }}>
-            {navTabs.map(([k, l, icon]) => (
+            {NAV_TABS.map(([k, l, icon]) => (
               <div key={k} onClick={() => { setTab(k); setView("list"); }} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 20px", cursor: "pointer", color: tab === k ? C.gold : C.tx3, background: tab === k ? C.gold + "10" : "transparent", borderLeft: "2.5px solid " + (tab === k ? C.gold : "transparent"), fontSize: 13, fontWeight: tab === k ? 600 : 400, transition: "color .12s, background .12s, border-color .12s" }}>
                 <span style={{ lineHeight: 1, opacity: tab === k ? 1 : 0.65 }}>{icon}</span>
                 <span>{l}</span>
@@ -1025,7 +1068,7 @@ export default function App({ user, onSignOut }) {
       </div>
       {/* Bottom tabs â€” mobile only */}
       {!isDesktop && <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, display: "flex", background: C.bg, borderTop: "0.5px solid " + C.brd, zIndex: 100, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
-        {navTabs.map(([k, l, icon]) => (
+        {NAV_TABS.map(([k, l, icon]) => (
           <div key={k} onClick={() => { setTab(k); setView("list"); }} style={{ flex: 1, minHeight: 56, padding: "8px 2px 6px", textAlign: "center", fontSize: 11, color: tab === k ? C.gold : C.tx3, borderTop: tab === k ? "2px solid " + C.gold : "2px solid transparent", cursor: "pointer", letterSpacing: 0.2, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, transition: "color .12s, border-color .12s" }}>
             <span style={{ lineHeight: 1 }}>{icon}</span>
           </div>
@@ -1055,7 +1098,7 @@ export default function App({ user, onSignOut }) {
             <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 16, marginBottom: rewardPopup.msg ? 6 : 0 }}>
               {rewardPopup.xp > 0 && <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <svg width={iconSz} height={iconSz} viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                <span style={{ fontSize: numSz, fontWeight: 700, color: C.gold }}>+{rewardPopup.xp} ⚡</span>
+                <span style={{ fontSize: numSz, fontWeight: 700, color: C.gold }}>+{rewardPopup.xp}</span>
               </div>}
               {rewardPopup.coins > 0 && <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <svg width={iconSz} height={iconSz} viewBox="0 0 24 24" fill="none" stroke={C.orange} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
@@ -1103,7 +1146,9 @@ export default function App({ user, onSignOut }) {
       {/* V2: Completion confirmation â€” sem recompensa */}
       {completionConfirm && <Modal>
         <div style={{ textAlign: "center", marginBottom: 12 }}>
-          <div style={{ fontSize: 28, marginBottom: 6 }}>{"\ud83c\udfc6"}</div>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="18" width="12" height="4"/></svg>
+          </div>
           <div style={{ fontSize: 14, fontWeight: 600, color: C.gold }}>Projeto concluído!</div>
           <div style={{ fontSize: 12, color: C.tx, margin: "6px 0" }}>{completionConfirm.name}</div>
           <div style={{ fontSize: 11, color: C.tx2 }}>Confirmar que este projeto foi realmente concluído?</div>
@@ -1135,12 +1180,12 @@ export default function App({ user, onSignOut }) {
         <div style={{ position: "fixed", inset: 0, background: C.bg, zIndex: 500, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "28px 24px", ...(isDesktop ? {} : { maxWidth: 430, width: "100%", left: "50%", transform: "translateX(-50%)" }) }}>
           <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: 20 }}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="18" width="12" height="4"/></svg>
           <div style={{ fontSize: 22, fontWeight: 700, color: C.tx, marginBottom: 10, textAlign: "center", letterSpacing: -0.3 }}>Bem-vindo ao Atividades</div>
-          <div style={{ fontSize: 13, color: C.tx3, textAlign: "center", lineHeight: 1.7, marginBottom: 28, maxWidth: 300 }}>Transforme seus objetivos em ENERGIA ⚡. Cada conclusão aumenta seu PODER.</div>
+          <div style={{ fontSize: 13, color: C.tx3, textAlign: "center", lineHeight: 1.7, marginBottom: 28, maxWidth: 300 }}>Transforme seus objetivos em ENERGIA. Cada conclusão aumenta seu PODER.</div>
           <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 8, marginBottom: 28 }}>
             {[
               ["1", C.purple, "Crie um Objetivo", "Sua meta de longo prazo"],
               ["2", C.gold, "Adicione Projetos e Rotinas", "Atividades que te levam lá"],
-              ["3", C.green, "Complete e aumente seu PODER", "ENERGIA ⚡, moedas e conquistas"],
+              ["3", C.green, "Complete e aumente seu PODER", "ENERGIA, moedas e conquistas"],
             ].map(([n, col, title, sub]) => (
               <div key={n} style={{ display: "flex", gap: 12, alignItems: "center", padding: "10px 14px", background: C.card, borderRadius: 10, border: "1px solid " + C.brd }}>
                 <div style={{ width: 24, height: 24, borderRadius: 12, background: col + "22", border: "1.5px solid " + col + "66", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: col, flexShrink: 0 }}>{n}</div>
