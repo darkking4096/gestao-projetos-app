@@ -60,7 +60,7 @@ export default function LoginScreen({ onLogin }) {
       <div style={{ width: "100%", maxWidth: 380 }}>
         <div style={{ textAlign: "center", marginBottom: 28 }}>
           <div style={{ marginBottom: 8, display: "flex", justifyContent: "center" }}><BrandMark /></div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: C_LOGIN.tx, letterSpacing: 0.5 }}>Atividades</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: C_LOGIN.tx, letterSpacing: 0.5 }}>Coofe</div>
           <div style={{ fontSize: 12, color: C_LOGIN.tx3, marginTop: 3 }}>Gamifique seus objetivos</div>
         </div>
 

@@ -9,6 +9,22 @@ export const COINS_TABLE = [0, 1, 2, 3, 4, 5, 6, 8, 9, 11, 12, 14, 16, 17, 19, 2
 /* ── Mapa de migração de dificuldade antiga (1-10) → nova (1-20) ── */
 export const DIFF_MIGRATION_MAP = { 1:2, 2:3, 3:4, 4:6, 5:8, 6:11, 7:13, 8:17, 9:19, 10:20 };
 
+export const DEFAULT_NOTIFICATION_SETTINGS = {
+  notificationsEnabled: false,
+  quietHoursEnabled: false,
+  quietHoursStart: "22:00",
+  quietHoursEnd: "07:00",
+  taskDeadlineNoticeEnabled: true,
+  taskDeadlineNoticeHours: 24,
+  routineDeadlineNoticeEnabled: true,
+  routineDeadlineNoticeHours: 3,
+  missionDeadlineNoticeEnabled: true,
+  missionDeadlineNoticeHours: 3,
+  newMissionNotificationEnabled: true,
+  dayClosingNotificationEnabled: false,
+  dayClosingNotificationTime: "20:00",
+};
+
 /* ── Categorias de dificuldade para seletor em 2 etapas ── */
 export const DIFF_CATEGORIES = [
   { id: "F",   label: "Extremamente Fácil", levels: [1],        subs: null,                    color: "#a0a0a0" },

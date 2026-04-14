@@ -5,7 +5,7 @@ import { uid, td, fmtFreq } from '../utilidades.js';
 /* ══════════════════════════════════════════════════
    PROMPT DO SISTEMA
 ══════════════════════════════════════════════════ */
-const SYSTEM_PROMPT = `Você é o Assistente de Produtividade do app "Atividades" — um sistema gamificado de gestão pessoal.
+const SYSTEM_PROMPT = `Você é o Assistente de Produtividade do app "Coofe" — um sistema gamificado de gestão pessoal.
 
 SEU ÚNICO PROPÓSITO: Sugerir atividades NOVAS e personalizadas, identificando oportunidades que o usuário ainda não explorou.
 

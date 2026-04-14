@@ -1,11 +1,12 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
 import { THEMES, setCurrentTheme, generateThemeTones, C } from './src/temas.js';
 import { uid, td, getLevelInfo, getPoderInfo, getRankInfo, getMastery, getMasteryBonus, getEnergia, getMoedas, getXp, getCoins, migrateDifficulty, getMultiplier, openChest, rollMissionRank, calcObjectiveXp, ACHIEVEMENTS, checkProjectCompletion, removeObjectiveLinksFromActivities, similarName, migrateFreq, isRoutineDueOn } from './src/utilidades.js';
-import { CATEGORIES, FREQUENCIES, WEEK_DAYS, UNITS, DEFAULT_PRESETS, STREAK_RECOVER, CHEST_TYPES, COLORS } from './src/constantes.js';
+import { CATEGORIES, FREQUENCIES, WEEK_DAYS, UNITS, DEFAULT_PRESETS, DEFAULT_NOTIFICATION_SETTINGS, STREAK_RECOVER, CHEST_TYPES, COLORS } from './src/constantes.js';
 import { S, Social } from './src/armazenamento.js';
 import { SHOP_THEMES_LIST, getUpgradeCost, UPGRADE_LABELS } from './src/icones.jsx';
 import { Btn, Modal, ConfirmModal } from './src/componentes-base.jsx';
 import { ProjectForm, RoutineForm, TaskForm, ObjectiveForm } from './src/formularios.jsx';
+import { buildNotificationPlan, clearScheduledNotifications, requestNotificationPermission, scheduleNotificationPlan } from './src/notificacoes.js';
 const DashboardTab = lazy(() => import('./src/abas/dashboard.jsx'));
 const ActivitiesTab = lazy(() => import('./src/abas/atividades.jsx'));
 const ProjectDetail = lazy(() => import('./src/abas/detalhes.jsx').then(m => ({ default: m.ProjectDetail })));
@@ -51,7 +52,7 @@ export default function App({ user, onSignOut }) {
   const [reportNotes, setReportNotes] = useState([]);
   const [reportFolders, setReportFolders] = useState([]);
   const [atributos, setAtributos] = useState([]);
-  const [profile, setProfile] = useState({ totalXp: 0, coins: 0, streak: 0, bestStreak: 0, tasksCompleted: 0, xpToday: 0, coinsToday: 0, lastActiveDate: td(), dailyLog: [], difficultyPresets: DEFAULT_PRESETS, nextActionWeights: { priority: 3, deadline: 2, difficulty: 1 }, dailyMission: null, tasksToday: 0, projTasksToday: 0, hardTaskToday: false, maxTaskToday: false, goalUpdatedToday: false, totalCoinsEarned: 0, bestXpDay: 0, bestXpWeek: 0, maxTaskEver: false, projectsCompleted: 0, masteryGoldCount: 0, achievementsUnlocked: [], pendingChest: null, streakLostDays: 0, purchasedItems: ["t_iniciante", "i_estrela", "obsidiana", "b_simples"], equippedTitle: "t_iniciante", equippedIcon: "i_estrela", equippedTheme: "obsidiana", equippedBorder: "b_simples", upgradeLevels: {} });
+  const [profile, setProfile] = useState({ totalXp: 0, coins: 0, streak: 0, bestStreak: 0, tasksCompleted: 0, xpToday: 0, coinsToday: 0, lastActiveDate: td(), dailyLog: [], difficultyPresets: DEFAULT_PRESETS, nextActionWeights: { priority: 3, deadline: 2, difficulty: 1 }, notificationSettings: DEFAULT_NOTIFICATION_SETTINGS, dailyMission: null, tasksToday: 0, projTasksToday: 0, hardTaskToday: false, maxTaskToday: false, goalUpdatedToday: false, totalCoinsEarned: 0, bestXpDay: 0, bestXpWeek: 0, maxTaskEver: false, projectsCompleted: 0, masteryGoldCount: 0, achievementsUnlocked: [], pendingChest: null, streakLostDays: 0, purchasedItems: ["t_iniciante", "i_estrela", "obsidiana", "b_simples"], equippedTitle: "t_iniciante", equippedIcon: "i_estrela", equippedTheme: "obsidiana", equippedBorder: "b_simples", upgradeLevels: {} });
   const [loaded, setLoaded] = useState(false);
   const [rewardPopup, setRewardPopup] = useState(null);
   const [levelUpNotif, setLevelUpNotif] = useState(null);
@@ -159,7 +160,7 @@ export default function App({ user, onSignOut }) {
         if (data.profile) {
           const pr = data.profile;
           if (!pr.purchasedItems) { pr.purchasedItems = ["t_iniciante", "i_estrela", "obsidiana", "b_simples"]; pr.equippedTitle = "t_iniciante"; pr.equippedIcon = "i_estrela"; pr.equippedTheme = "obsidiana"; pr.equippedBorder = "b_simples"; pr.upgradeLevels = pr.upgradeLevels || {}; }
-          setProfile(pr);
+          setProfile({ ...pr, notificationSettings: { ...DEFAULT_NOTIFICATION_SETTINGS, ...(pr.notificationSettings || {}) } });
           // Suprime notificações de conquistas que já eram válidas ao abrir o app
           // (só notifica conquistas desbloqueadas DURANTE a sessão atual)
           ACHIEVEMENTS.forEach(a => { if (a.check(pr)) shownAchieveIds.current.add(a.id); });
@@ -380,6 +381,25 @@ export default function App({ user, onSignOut }) {
     }
   }, [navHistory]);
 
+  const openNotificationTarget = useCallback((target) => {
+    if (!target) return;
+    if (target.type === "task" && target.id) {
+      nav("activities", "tasks", "detail", target.id, "task");
+      return;
+    }
+    if (target.type === "routine" && target.id) {
+      nav("activities", "routines", "detail", target.id, "routine");
+      return;
+    }
+    if (target.type === "projectTask" && target.projectId) {
+      nav("activities", "projects", "detail", target.projectId, "project");
+      return;
+    }
+    if (target.type === "dayClosing") {
+      nav("activities", "tasks", "list");
+    }
+  }, [nav]);
+
   // Botão voltar do sistema (Android/browser) — navega dentro do app
   // Colocado APÓS navBack ser declarado para evitar TDZ
   useEffect(() => {
@@ -394,6 +414,30 @@ export default function App({ user, onSignOut }) {
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, [navBack]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    const enabled = !!profile.notificationSettings?.notificationsEnabled;
+    if (!enabled) {
+      clearScheduledNotifications();
+      return;
+    }
+    requestNotificationPermission().then(permission => {
+      if (permission !== "granted") {
+        clearScheduledNotifications();
+        return;
+      }
+      const plan = buildNotificationPlan({ profile: profileRef.current, tasks, projects, routines });
+      scheduleNotificationPlan(plan, openNotificationTarget);
+    });
+  }, [loaded, profile.notificationSettings?.notificationsEnabled, openNotificationTarget]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    const plan = buildNotificationPlan({ profile, tasks, projects, routines });
+    scheduleNotificationPlan(plan, openNotificationTarget);
+    return () => clearScheduledNotifications();
+  }, [loaded, profile.notificationSettings, tasks, projects, routines, openNotificationTarget]);
 
   // V2: Bidirectional sync — keeps objective.linkedActivities in sync with activity.linkedObjectives
   const syncObjLinks = useCallback((actId, actType, newLinkedObjs, oldLinkedObjs) => {
@@ -1012,7 +1056,7 @@ export default function App({ user, onSignOut }) {
       {isDesktop && (
         <div style={{ position: "fixed", left: 0, top: 0, bottom: 0, width: SIDEBAR_W, background: C.bg, borderRight: "0.5px solid " + C.brd, zIndex: 100, display: "flex", flexDirection: "column", overflowY: "auto" }}>
           <div style={{ padding: "20px 20px 16px", borderBottom: "0.5px solid " + C.brd }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: C.gold, letterSpacing: 1.5, textTransform: "uppercase" }}>Atividades</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.gold, letterSpacing: 1.5, textTransform: "uppercase" }}>Coofe</div>
           </div>
           <div style={{ flex: 1, paddingTop: 8 }}>
             {NAV_TABS.map(([k, l, icon]) => (
@@ -1179,7 +1223,7 @@ export default function App({ user, onSignOut }) {
       {loaded && !profile.onboardingDone && projects.length === 0 && routines.length === 0 && tasks.length === 0 && objectives.length === 0 && (
         <div style={{ position: "fixed", inset: 0, background: C.bg, zIndex: 500, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "28px 24px", ...(isDesktop ? {} : { maxWidth: 430, width: "100%", left: "50%", transform: "translateX(-50%)" }) }}>
           <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: 20 }}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="18" width="12" height="4"/></svg>
-          <div style={{ fontSize: 22, fontWeight: 700, color: C.tx, marginBottom: 10, textAlign: "center", letterSpacing: -0.3 }}>Bem-vindo ao Atividades</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: C.tx, marginBottom: 10, textAlign: "center", letterSpacing: -0.3 }}>Bem-vindo ao Coofe</div>
           <div style={{ fontSize: 13, color: C.tx3, textAlign: "center", lineHeight: 1.7, marginBottom: 28, maxWidth: 300 }}>Transforme seus objetivos em ENERGIA. Cada conclusão aumenta seu PODER.</div>
           <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 8, marginBottom: 28 }}>
             {[

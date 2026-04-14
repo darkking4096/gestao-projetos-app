@@ -422,7 +422,7 @@ function DashboardTab({ profile, levelInfo, poderInfo, rankInfo, projects, routi
       {/* Welcome card — só aparece quando o app está completamente vazio */}
       {projects.length === 0 && routines.length === 0 && tasks.length === 0 && (objectives || []).length === 0 && (
         <div style={{ background: C.card, borderRadius: 12, padding: 16, marginBottom: 12, border: "1px solid " + C.goldBrd, boxShadow: "0 2px 12px " + C.gold + "18" }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: C.gold, marginBottom: 6 }}>Bem-vindo ao Atividades!</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: C.gold, marginBottom: 6 }}>Bem-vindo ao Coofe!</div>
           <div style={{ fontSize: 11, color: C.tx2, lineHeight: 1.6, marginBottom: 12 }}>Este app gamifica seu progresso pessoal. Cada atividade que você cria e conclui gera ENERGIA ⚡ e moedas — desbloqueie conquistas e aumente seu PODER.</div>
           <div style={{ fontSize: 11, fontWeight: 600, color: C.tx3, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 8 }}>Por onde começar:</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>

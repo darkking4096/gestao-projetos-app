@@ -1,10 +1,10 @@
 import { useState, useMemo } from "react";
 import { C } from '../temas.js';
-import { td, uid, fmtD, fmtFreq, getXp, getCoins, getEnergia, getMoedas, getLevelInfo, getMastery, isRoutineDueToday, calcObjectiveXp, checkProjectCompletion, wouldCreateCycle, removeObjectiveLinksFromActivities, migrateFreq, getProjectRankEstimate, getEnergyRankEstimate } from '../utilidades.js';
+import { td, uid, fmtD, fmtFreq, fmtRoutineNotification, getXp, getCoins, getEnergia, getMoedas, getLevelInfo, getMastery, isRoutineDueToday, calcObjectiveXp, checkProjectCompletion, wouldCreateCycle, removeObjectiveLinksFromActivities, migrateFreq, getProjectRankEstimate, getEnergyRankEstimate } from '../utilidades.js';
 import { PRIORITIES, CATEGORIES, MASTERY_LEVELS, STREAK_MULT } from '../constantes.js';
 import { Btn, Card, Badge, PBar, TopBar, Modal, ConfirmModal, DeleteModal, NotesLog, SLabel, Input, Chk } from '../componentes-base.jsx';
 import { IconSVG, ConsumableSVG, MaestriaSVG } from '../icones.jsx';
-import { ProjectForm, RoutineForm, TaskForm, ObjectiveForm, ActivitySearchModal, ObjectiveSearchModal } from '../formularios.jsx';
+import { ProjectForm, RoutineForm, TaskForm, ProjectTaskForm, ObjectiveForm, ActivitySearchModal, ObjectiveSearchModal } from '../formularios.jsx';
 
 function ProjectDetail({ item, onUpdate, onDelete, onComplete, nav, navBack, objectives, routines: allRoutines, setCompletionConfirm, onValueUpdate }) {
   const [showDel, setShowDel] = useState(false);
@@ -12,6 +12,7 @@ function ProjectDetail({ item, onUpdate, onDelete, onComplete, nav, navBack, obj
   const [showValModal, setShowValModal] = useState(false);
   const [newVal, setNewVal] = useState("");
   const [valNote, setValNote] = useState("");
+  const [editingTask, setEditingTask] = useState(null);
   const allTasks = (item.phases || []).flatMap(ph => ph.tasks || []);
   const doneTasks = allTasks.filter(t => t.status === "Concluída").length;
   const mastery = getMastery(item.xpAccum || 0);
@@ -32,6 +33,32 @@ function ProjectDetail({ item, onUpdate, onDelete, onComplete, nav, navBack, obj
     setNewVal("");
     setValNote("");
   };
+
+  const saveProjectTask = (updatedTask) => {
+    if (!editingTask) return;
+    const phases = (item.phases || []).map(ph => {
+      if (ph.id !== editingTask.phaseId) return ph;
+      return {
+        ...ph,
+        tasks: (ph.tasks || []).map(t => t.id === editingTask.taskId ? { ...t, ...updatedTask } : t),
+      };
+    });
+    const all = phases.flatMap(ph => ph.tasks || []);
+    const done = all.filter(t => t.status === "Concluída").length;
+    onUpdate({ ...item, phases, progress: all.length ? Math.round(done / all.length * 100) : 0 });
+    setEditingTask(null);
+  };
+
+  if (editingTask) {
+    return (
+      <ProjectTaskForm
+        item={editingTask.task}
+        projectColor={item.color}
+        onSave={saveProjectTask}
+        onCancel={() => setEditingTask(null)}
+      />
+    );
+  }
 
   return (
     <div style={{ padding: 14 }}>
@@ -128,8 +155,17 @@ function ProjectDetail({ item, onUpdate, onDelete, onComplete, nav, navBack, obj
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 11, color: t.status === "Concluída" ? C.tx4 : C.tx, textDecoration: t.status === "Concluída" ? "line-through" : "none" }}>{t.name}</div>
                     <div style={{ fontSize: 11, color: C.tx3 }}><span style={{ color: C.gold }}>+{getEnergia(t.difficulty || 1)} ⚡</span></div>
-                    {t.notes && <div style={{ fontSize: 11, color: C.tx4, fontStyle: "italic", marginTop: 2 }}>{t.notes}</div>}
+                    {t.description && <div style={{ fontSize: 11, color: C.tx3, marginTop: 2, lineHeight: 1.4 }}>{t.description}</div>}
+                    {t.notes && <div style={{ fontSize: 11, color: C.tx4, fontStyle: "italic", marginTop: 2 }}>{Array.isArray(t.notes) ? t.notes.map(n => n.text).filter(Boolean).join(" ") : t.notes}</div>}
+                    {(t.priority || t.category || t.deadline || t.color || t.notificationEnabled) && <div style={{ fontSize: 11, color: C.tx3, marginTop: 2, display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>{t.color && <span style={{ width: 7, height: 7, borderRadius: 4, background: t.color }} />}{[t.priority, t.category, t.deadline ? "Prazo: " + fmtD(t.deadline) + (t.deadlineTime ? " " + t.deadlineTime : "") : "", t.notificationEnabled && t.notificationDate && t.notificationTime ? "Lembrete: " + fmtD(t.notificationDate) + " " + t.notificationTime : ""].filter(Boolean).join(" · ")}</div>}
                   </div>
+                  <span
+                    onClick={() => setEditingTask({ phaseId: ph.id, taskId: t.id, task: t })}
+                    title="Editar tarefa"
+                    style={{ cursor: "pointer", display: "flex", alignItems: "center", color: C.tx3, padding: 4, flexShrink: 0 }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  </span>
                 </div>
               ))}
               {/* V2: Rotinas vinculadas à fase */}
@@ -185,6 +221,7 @@ function RoutineDetail({ item, onUpdate, onDelete, onComplete, nav, navBack, obj
   const mastery = getMastery(item.xpAccum || 0);
   const isLibre = migrateFreq(item).freq === "Livre";
   const projRef = item.phaseRef ? (projects || []).find(p => p.id === item.phaseRef.projectId) : null;
+  const notificationText = fmtRoutineNotification(item);
 
   return (
     <div style={{ padding: 14 }}>
@@ -201,6 +238,7 @@ function RoutineDetail({ item, onUpdate, onDelete, onComplete, nav, navBack, obj
         <span style={{ marginLeft: 8 }}>Dif. {item.difficulty} +{getEnergia(item.difficulty)} ⚡ +{getMoedas(item.difficulty)} moedas</span>
       </div>
       {projRef && <div style={{ fontSize: 11, color: C.purple, marginBottom: 8, padding: "4px 8px", background: C.purple + "15", borderRadius: 5 }}>→ {projRef.name}</div>}
+      {notificationText && <div style={{ fontSize: 11, color: C.gold, marginBottom: 8, padding: "4px 8px", background: C.goldDim, borderRadius: 5, border: "1px solid " + C.goldBrd }}>{notificationText}</div>}
       <div style={{ display: "grid", gridTemplateColumns: isLibre ? "1fr" : "1fr 1fr 1fr", gap: 5, marginBottom: !isLibre && item.streak > 0 ? 6 : 10 }}>
         {!isLibre && <div style={{ background: C.card, borderRadius: 6, padding: 8, textAlign: "center" }}><div style={{ fontSize: 16, fontWeight: 600, color: C.orange }}>{item.streak}</div><div style={{ fontSize: 11, color: C.tx3 }}>Streak</div></div>}
         {!isLibre && <div style={{ background: C.card, borderRadius: 6, padding: 8, textAlign: "center" }}><div style={{ fontSize: 16, fontWeight: 600, color: C.tx }}>{item.bestStreak}</div><div style={{ fontSize: 11, color: C.tx3 }}>Melhor</div></div>}
@@ -264,8 +302,9 @@ function TaskDetail({ item, onUpdate, onDelete, onComplete, nav, navBack, object
       {item.description && <div style={{ fontSize: 11, color: C.tx2, marginBottom: 8, lineHeight: 1.5 }}>{item.description}</div>}
       <div style={{ fontSize: 11, color: C.tx2, marginBottom: 10 }}>
         Dif. {item.difficulty || 1} <span style={{ color: C.gold }}>+{getEnergia(item.difficulty || 1)} ⚡</span> +{getMoedas(item.difficulty || 1)} moedas
-        {item.priority && (" " + item.priority)} {item.deadline && ("Prazo: " + fmtD(item.deadline))}
+        {item.priority && (" " + item.priority)} {item.deadline && ("Prazo: " + fmtD(item.deadline) + (item.deadlineTime ? " " + item.deadlineTime : ""))}
       </div>
+      {item.notificationEnabled && item.notificationDate && item.notificationTime && <div style={{ fontSize: 11, color: C.gold, marginBottom: 8, padding: "4px 8px", background: C.goldDim, borderRadius: 5, border: "1px solid " + C.goldBrd }}>Lembrete: {fmtD(item.notificationDate)} {item.notificationTime}</div>}
       {overdueDays > 0 && !doneTask && <div style={{ fontSize: 11, color: C.red, fontWeight: 600, marginBottom: 8, padding: "4px 8px", background: C.red + "15", borderRadius: 5 }}>Vencida há {overdueDays} dia{overdueDays > 1 ? "s" : ""}</div>}
       {!doneTask && <Btn primary onClick={() => onComplete(item.id)} style={{ width: "100%", marginBottom: 10 }}>Concluir tarefa</Btn>}
       {/* V2: Promover a projeto */}

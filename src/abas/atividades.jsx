@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import ChatIA from './chat-ia.jsx';
 import { C } from '../temas.js';
-import { uid, td, fmtD, fmtFreq, getEnergia, getMoedas, getXp, getMastery, isRoutineDueToday, calcObjectiveXp, checkProjectCompletion, migrateFreq } from '../utilidades.js';
+import { uid, td, fmtD, fmtFreq, fmtRoutineNotification, getEnergia, getMoedas, getXp, getMastery, isRoutineDueToday, calcObjectiveXp, checkProjectCompletion, migrateFreq } from '../utilidades.js';
 import { PRIORITIES, CATEGORIES, PRI_ORDER } from '../constantes.js';
 import { Btn, Card, Badge, TopBar, Modal, ConfirmModal, DeleteModal, FilterModal, FilterBtn, NotesLog, PBar, Chk, SLabel, Input, getDiffColor } from '../componentes-base.jsx';
 import { IconSVG, ConsumableSVG } from '../icones.jsx';
@@ -292,6 +292,7 @@ function RoutinesList({ routines, projects, nav, completeRoutine }) {
         const done = (r.completionLog || []).some(l => l.date === today);
         const isLibre = migrateFreq(r).freq === "Livre";
         const projRef = r.phaseRef ? (projects || []).find(p => p.id === r.phaseRef.projectId) : null;
+        const notificationText = fmtRoutineNotification(r);
         return (
           <div key={r.id} className="rl-item" style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 9px", background: C.card, borderRadius: 7, marginBottom: 5, opacity: (due && !done) || isLibre ? 1 : 0.6 }}>
             <Chk done={done} onClick={() => { if (!done) completeRoutine(r.id); }} />
@@ -302,6 +303,7 @@ function RoutinesList({ routines, projects, nav, completeRoutine }) {
                 {!isLibre && <span style={{ color: C.gold }}>{r.streak}</span>}
                 {isLibre && <span>{r.totalCompletions || 0} execuções</span>}
                 <span style={{ color: C.gold }}>+{getEnergia(r.difficulty || 1)} ⚡</span>
+                {notificationText && <span style={{ color: C.gold }}>{notificationText}</span>}
                 {projRef && <span style={{ color: C.tx3 }}>→ {projRef.name}</span>}
               </div>
             </div>

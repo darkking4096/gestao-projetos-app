@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { C } from "../temas.js";
 import { td, getPoderInfo, getRankInfo, getEnergia, clamp } from "../utilidades.js";
-import { DEFAULT_PRESETS, CATEGORIES, DIFF_CATEGORIES } from "../constantes.js";
+import { DEFAULT_PRESETS, DEFAULT_NOTIFICATION_SETTINGS, CATEGORIES, DIFF_CATEGORIES } from "../constantes.js";
 import { Btn, Modal, ConfirmModal, EnergiaBarDupla, RankEmblemSVG, SLabel } from "../componentes-base.jsx";
 import {
   IconSVG,
@@ -13,6 +13,7 @@ import {
   getTitleTargetColor,
 } from "../icones.jsx";
 import { Social } from "../armazenamento.js";
+import { getNotificationPermission } from "../notificacoes.js";
 
 function WrenchMiniIcon() {
   return (
@@ -288,7 +289,7 @@ function ConfigTab(props) {
   const [showReset, setShowReset] = useState(false);
   const [resetInput, setResetInput] = useState("");
   const [confirmDel, setConfirmDel] = useState(null);
-  const [openSections, setOpenSections] = useState({ presets: false, weights: false });
+  const [openSections, setOpenSections] = useState({ notifications: false, presets: false, weights: false });
   const [devOpen, setDevOpen] = useState(false);
   const [usernameEditing, setUsernameEditing] = useState(false);
   const [usernameInput, setUsernameInput] = useState("");
@@ -306,6 +307,7 @@ function ConfigTab(props) {
   const [optimisticSent, setOptimisticSent] = useState(new Set());
   const [viewFriend, setViewFriend] = useState(null);
   const [showGroqTutorial, setShowGroqTutorial] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState(() => getNotificationPermission());
   const searchTimerRef = useRef(null);
 
   const toggleSection = k => setOpenSections(s => ({ ...s, [k]: !s[k] }));
@@ -313,6 +315,11 @@ function ConfigTab(props) {
   const _rankInfo = rankInfoProp || getRankInfo(_poderInfo.poder);
   const presets = profile.difficultyPresets || DEFAULT_PRESETS;
   const weights = profile.nextActionWeights || { priority: 3, deadline: 2, difficulty: 1 };
+  const notificationSettings = { ...DEFAULT_NOTIFICATION_SETTINGS, ...(profile.notificationSettings || {}) };
+
+  useEffect(() => {
+    setNotificationPermission(getNotificationPermission());
+  }, [profile.notificationSettings?.notificationsEnabled]);
 
   const SectionHeader = ({ label, skey }) => (
     <div onClick={() => toggleSection(skey)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", padding: "2px 0", marginBottom: openSections[skey] ? 8 : 0 }}>
@@ -332,6 +339,49 @@ function ConfigTab(props) {
     const v = clamp(parseInt(val) || 0, 0, 5);
     setProfile(p => ({ ...p, nextActionWeights: { ...(p.nextActionWeights || { priority: 3, deadline: 2, difficulty: 1 }), [key]: v } }));
   };
+
+  const setNotificationSetting = (key, val) => {
+    setProfile(p => ({
+      ...p,
+      notificationSettings: { ...DEFAULT_NOTIFICATION_SETTINGS, ...(p.notificationSettings || {}), [key]: val },
+    }));
+  };
+
+  const ToggleRow = ({ label, hint, value, onChange }) => (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, padding: "7px 0", borderBottom: "0.5px solid " + C.brd }}>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 12, color: C.tx2, fontWeight: 500 }}>{label}</div>
+        {hint && <div style={{ fontSize: 11, color: C.tx4, lineHeight: 1.4, marginTop: 2 }}>{hint}</div>}
+      </div>
+      <div onClick={() => onChange(!value)} style={{ width: 42, height: 24, borderRadius: 8, padding: 2, background: value ? C.goldDim : C.bg, border: "1px solid " + (value ? C.goldBrd : C.brd), cursor: "pointer", boxSizing: "border-box", flexShrink: 0 }}>
+        <div style={{ width: 18, height: 18, borderRadius: 6, background: value ? C.gold : C.tx4, transform: value ? "translateX(16px)" : "translateX(0)", transition: "transform .15s, background .15s" }} />
+      </div>
+    </div>
+  );
+
+  const NumberSetting = ({ label, value, onChange, disabled }) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, opacity: disabled ? 0.45 : 1 }}>
+      <span style={{ fontSize: 11, color: C.tx3, flex: 1 }}>{label}</span>
+      <input
+        type="number"
+        min="0"
+        max="168"
+        value={value}
+        disabled={disabled}
+        onChange={e => onChange(clamp(parseInt(e.target.value) || 0, 0, 168))}
+        style={{ width: 72, padding: "6px 8px", background: C.bg, border: "1px solid " + C.brd2, borderRadius: 6, color: C.tx, fontSize: 12, outline: "none", boxSizing: "border-box" }}
+      />
+      <span style={{ fontSize: 11, color: C.tx4 }}>h antes</span>
+    </div>
+  );
+
+  const permissionText = {
+    granted: "Permissao concedida pelo navegador.",
+    denied: "Permissao bloqueada. Reative nas configuracoes do navegador ou do app.",
+    default: "A permissao sera pedida ao ativar.",
+    unsupported: "Este navegador nao suporta notificacoes locais.",
+    native: "Permissao gerenciada pelo sistema do celular.",
+  }[notificationPermission] || "Status de permissao indisponivel.";
 
   const exportB = () => {
     const d = { projects, routines, tasks, objectives, trash, reportNotes, reportFolders, atributos, profile, at: new Date().toISOString() };
@@ -394,6 +444,7 @@ function ConfigTab(props) {
       dailyLog: [],
       difficultyPresets: DEFAULT_PRESETS,
       nextActionWeights: { priority: 3, deadline: 2, difficulty: 1 },
+      notificationSettings: DEFAULT_NOTIFICATION_SETTINGS,
       dailyMission: null,
       tasksToday: 0,
       projTasksToday: 0,
@@ -684,6 +735,56 @@ function ConfigTab(props) {
               </>
             )}
           </div>
+        )}
+      </div>
+
+      <div style={{ background: C.card, borderRadius: 10, marginBottom: 10, border: "1px solid " + C.brd, padding: "10px 12px" }}>
+        <SectionHeader label="Notificações" skey="notifications" />
+        {openSections.notifications && (
+          <>
+            <ToggleRow
+              label="Notificações do app"
+              hint={permissionText}
+              value={notificationSettings.notificationsEnabled}
+              onChange={v => setNotificationSetting("notificationsEnabled", v)}
+            />
+            <ToggleRow
+              label="Horário silencioso"
+              hint="Bloqueia lembretes dentro da janela escolhida."
+              value={notificationSettings.quietHoursEnabled}
+              onChange={v => setNotificationSetting("quietHoursEnabled", v)}
+            />
+            {notificationSettings.quietHoursEnabled && (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, margin: "8px 0 10px" }}>
+                <div>
+                  <div style={{ fontSize: 11, color: C.tx4, marginBottom: 4 }}>Início</div>
+                  <input type="time" value={notificationSettings.quietHoursStart} onChange={e => setNotificationSetting("quietHoursStart", e.target.value)} style={{ width: "100%", padding: "7px 9px", background: C.bg, border: "1px solid " + C.brd2, borderRadius: 6, color: C.tx, fontSize: 12, boxSizing: "border-box" }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: C.tx4, marginBottom: 4 }}>Fim</div>
+                  <input type="time" value={notificationSettings.quietHoursEnd} onChange={e => setNotificationSetting("quietHoursEnd", e.target.value)} style={{ width: "100%", padding: "7px 9px", background: C.bg, border: "1px solid " + C.brd2, borderRadius: 6, color: C.tx, fontSize: 12, boxSizing: "border-box" }} />
+                </div>
+              </div>
+            )}
+
+            <div style={{ fontSize: 11, fontWeight: 600, color: C.tx3, margin: "12px 0 8px", textTransform: "uppercase", letterSpacing: 0.5 }}>Avisos de vencimento</div>
+            <ToggleRow label="Tarefas" hint="Usa o prazo das tarefas isoladas e de projeto." value={notificationSettings.taskDeadlineNoticeEnabled} onChange={v => setNotificationSetting("taskDeadlineNoticeEnabled", v)} />
+            <NumberSetting label="Antecedência de tarefas" value={notificationSettings.taskDeadlineNoticeHours} disabled={!notificationSettings.taskDeadlineNoticeEnabled} onChange={v => setNotificationSetting("taskDeadlineNoticeHours", v)} />
+            <ToggleRow label="Rotinas" hint="Usa a frequência da rotina para calcular o dia." value={notificationSettings.routineDeadlineNoticeEnabled} onChange={v => setNotificationSetting("routineDeadlineNoticeEnabled", v)} />
+            <NumberSetting label="Antecedência de rotinas" value={notificationSettings.routineDeadlineNoticeHours} disabled={!notificationSettings.routineDeadlineNoticeEnabled} onChange={v => setNotificationSetting("routineDeadlineNoticeHours", v)} />
+            <ToggleRow label="Missões" hint="Preparado para o fluxo de missões diárias." value={notificationSettings.missionDeadlineNoticeEnabled} onChange={v => setNotificationSetting("missionDeadlineNoticeEnabled", v)} />
+            <NumberSetting label="Antecedência de missões" value={notificationSettings.missionDeadlineNoticeHours} disabled={!notificationSettings.missionDeadlineNoticeEnabled} onChange={v => setNotificationSetting("missionDeadlineNoticeHours", v)} />
+
+            <div style={{ fontSize: 11, fontWeight: 600, color: C.tx3, margin: "12px 0 8px", textTransform: "uppercase", letterSpacing: 0.5 }}>Missões e fechamento</div>
+            <ToggleRow label="Nova missão disponível" hint="Permite avisar quando uma nova missão puder ser gerada." value={notificationSettings.newMissionNotificationEnabled} onChange={v => setNotificationSetting("newMissionNotificationEnabled", v)} />
+            <ToggleRow label="Fechamento do dia" hint="Lembra atividades pendentes no horário escolhido." value={notificationSettings.dayClosingNotificationEnabled} onChange={v => setNotificationSetting("dayClosingNotificationEnabled", v)} />
+            {notificationSettings.dayClosingNotificationEnabled && (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ fontSize: 11, color: C.tx4, marginBottom: 4 }}>Horário do fechamento</div>
+                <input type="time" value={notificationSettings.dayClosingNotificationTime} onChange={e => setNotificationSetting("dayClosingNotificationTime", e.target.value)} style={{ width: 120, padding: "7px 9px", background: C.bg, border: "1px solid " + C.brd2, borderRadius: 6, color: C.tx, fontSize: 12, boxSizing: "border-box" }} />
+              </div>
+            )}
+          </>
         )}
       </div>
 

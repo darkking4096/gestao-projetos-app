@@ -488,6 +488,9 @@ function RoutineForm({ item, onSave, onCancel, presets, objectives }) {
   const [pri, setPri] = useState(item ? item.priority || "" : "");
   const [cat, setCat] = useState(item ? item.category || "" : "");
   const [desc, setDesc] = useState(item ? item.description || "" : "");
+  const [notifEnabled, setNotifEnabled] = useState(item ? !!item.notificationEnabled : false);
+  const [notifTime, setNotifTime] = useState(item ? item.notificationTime || "" : "");
+  const [notifError, setNotifError] = useState("");
   const [notes, setNotes] = useState("");
   const [mods, setMods] = useState(item ? (item.modulars || { description: false, category: false, priority: false, notes: false }) : { description: false, category: false, priority: false, notes: false });
   const [linkedObj, setLinkedObj] = useState(item ? (item.linkedObjectives || []) : []);
@@ -512,10 +515,14 @@ function RoutineForm({ item, onSave, onCancel, presets, objectives }) {
     if (!name.trim()) return;
     if (freq === "Semanal" && freqDays.length === 0) return;
     if (freq === "Personalizado" && freqDays.length === 0) return;
+    if (notifEnabled && !notifTime) {
+      setNotifError("Escolha um horario para o lembrete");
+      return;
+    }
     let finalNotes = item ? (item.notes || []) : [];
     if (notes.trim()) { const ex = Array.isArray(finalNotes) ? finalNotes : []; finalNotes = [...ex, { id: uid(), text: notes.trim(), date: td() }]; }
     // V2: streak NÃO é zerado ao mudar frequência
-    onSave({ ...(item || {}), name, difficulty: diff, frequency: freq, frequencyDays: freqDays, color, priority: pri, category: cat, description: desc, notes: finalNotes, modulars: mods, linkedObjectives: linkedObj });
+    onSave({ ...(item || {}), name, difficulty: diff, frequency: freq, frequencyDays: freqDays, color, priority: pri, category: cat, description: desc, notificationEnabled: notifEnabled, notificationTime: notifEnabled ? notifTime : "", notes: finalNotes, modulars: mods, linkedObjectives: linkedObj });
   };
 
   const needsDays = freq === "Semanal" || freq === "Personalizado";
@@ -560,6 +567,14 @@ function RoutineForm({ item, onSave, onCancel, presets, objectives }) {
           {mods.priority && <SelBtns options={PRIORITIES} value={pri} onChange={setPri} />}
           <Toggle on={mods.category} onToggle={() => tMod("category")} label="Categoria" />
           {mods.category && <SelBtns options={CATEGORIES} value={cat} onChange={handleCat} />}
+          <Toggle on={notifEnabled} onToggle={() => { setNotifError(""); setNotifEnabled(v => !v); }} label="Lembrete" />
+          {notifEnabled && <div style={{ marginBottom: 8 }}>
+            <Input type="time" value={notifTime} onChange={(v) => { setNotifError(""); setNotifTime(v); }} />
+            <div style={{ fontSize: 11, color: freq === "Livre" ? C.orange : C.tx4, marginTop: 4 }}>
+              {freq === "Livre" ? "Rotina livre salva o horario, mas nao entra no agendamento automatico por frequencia." : "O agendamento usara a frequencia da rotina."}
+            </div>
+            {notifError && <div style={{ fontSize: 11, color: C.orange, marginTop: 4 }}>{notifError}</div>}
+          </div>}
           <Toggle on={mods.description} onToggle={() => tMod("description")} label="Descrição" />
           {mods.description && <Input value={desc} onChange={setDesc} multiline />}
           {!item && <Toggle on={mods.notes} onToggle={() => tMod("notes")} label="Nota inicial" />}
@@ -594,6 +609,10 @@ function TaskForm({ item, onSave, onCancel, presets, objectives }) {
   const [pri, setPri] = useState(item ? item.priority || "" : "");
   const [cat, setCat] = useState(item ? item.category || "" : "");
   const [dl, setDl] = useState(item ? item.deadline || "" : "");
+  const [dlTime, setDlTime] = useState(item ? item.deadlineTime || "" : "");
+  const [notifEnabled, setNotifEnabled] = useState(item ? !!item.notificationEnabled : false);
+  const [notifDate, setNotifDate] = useState(item ? item.notificationDate || "" : "");
+  const [notifTime, setNotifTime] = useState(item ? item.notificationTime || "" : "");
   const [desc, setDesc] = useState(item ? item.description || "" : "");
   const [notes, setNotes] = useState("");
   const [mods, setMods] = useState(item ? (item.modulars || { description: false, category: false, priority: false, deadline: true, notes: false }) : { description: false, category: false, priority: false, deadline: true, notes: false });
@@ -608,7 +627,7 @@ function TaskForm({ item, onSave, onCancel, presets, objectives }) {
     if (!name.trim()) return;
     let finalNotes = item ? (item.notes || []) : [];
     if (notes.trim()) { const ex = Array.isArray(finalNotes) ? finalNotes : []; finalNotes = [...ex, { id: uid(), text: notes.trim(), date: td() }]; }
-    onSave({ ...(item || {}), name, difficulty: diff, color, priority: pri, category: cat, deadline: dl, description: desc, notes: finalNotes, modulars: mods, linkedObjectives: linkedObj });
+    onSave({ ...(item || {}), name, difficulty: diff, color, priority: pri, category: cat, deadline: mods.deadline ? dl : "", deadlineTime: mods.deadline ? dlTime : "", notificationEnabled: notifEnabled, notificationDate: notifEnabled ? notifDate : "", notificationTime: notifEnabled ? notifTime : "", description: desc, notes: finalNotes, modulars: mods, linkedObjectives: linkedObj });
   };
 
   return (
@@ -631,7 +650,15 @@ function TaskForm({ item, onSave, onCancel, presets, objectives }) {
           <Toggle on={mods.category} onToggle={() => tMod("category")} label="Categoria" />
           {mods.category && <SelBtns options={CATEGORIES} value={cat} onChange={handleCat} />}
           <Toggle on={mods.deadline} onToggle={() => tMod("deadline")} label="Prazo" />
-          {mods.deadline && <Input type="date" value={dl} onChange={setDl} min={td()} />}
+          {mods.deadline && <div style={{ display: "grid", gridTemplateColumns: "1fr 110px", gap: 8, marginBottom: 8 }}>
+            <Input type="date" value={dl} onChange={setDl} min={td()} />
+            <Input type="time" value={dlTime} onChange={setDlTime} />
+          </div>}
+          <Toggle on={notifEnabled} onToggle={() => setNotifEnabled(v => !v)} label="Lembrete" />
+          {notifEnabled && <div style={{ display: "grid", gridTemplateColumns: "1fr 110px", gap: 8, marginBottom: 8 }}>
+            <Input type="date" value={notifDate} onChange={setNotifDate} min={td()} />
+            <Input type="time" value={notifTime} onChange={setNotifTime} />
+          </div>}
           <Toggle on={mods.description} onToggle={() => tMod("description")} label="Descrição" />
           {mods.description && <Input value={desc} onChange={setDesc} multiline placeholder="Detalhes..." />}
           {!item && <Toggle on={mods.notes} onToggle={() => tMod("notes")} label="Nota inicial" />}
@@ -659,6 +686,93 @@ function TaskForm({ item, onSave, onCancel, presets, objectives }) {
 }
 
 /* ═══ V2: OBJECTIVE FORM ═══ */
+function ProjectTaskForm({ item, onSave, onCancel, presets, projectColor }) {
+  const [name, setName] = useState(item ? item.name || "" : "");
+  const [diff, setDiff] = useState(item ? item.difficulty || 5 : 5);
+  const [color, setColor] = useState(item ? item.color || projectColor || COLORS[3] : projectColor || COLORS[3]);
+  const [pri, setPri] = useState(item ? item.priority || "" : "");
+  const [cat, setCat] = useState(item ? item.category || "" : "");
+  const [dl, setDl] = useState(item ? item.deadline || "" : "");
+  const [dlTime, setDlTime] = useState(item ? item.deadlineTime || "" : "");
+  const [notifEnabled, setNotifEnabled] = useState(item ? !!item.notificationEnabled : false);
+  const [notifDate, setNotifDate] = useState(item ? item.notificationDate || "" : "");
+  const [notifTime, setNotifTime] = useState(item ? item.notificationTime || "" : "");
+  const [desc, setDesc] = useState(item ? item.description || "" : "");
+  const [notes, setNotes] = useState(() => {
+    if (!item) return "";
+    if (Array.isArray(item.notes)) return item.notes.map(n => n.text || "").join("\n");
+    return item.notes || "";
+  });
+  const [mods, setMods] = useState(item ? (item.modulars || { description: !!item.description, category: !!item.category, priority: !!item.priority, deadline: !!item.deadline, notes: !!item.notes }) : { description: false, category: false, priority: false, deadline: false, notes: false });
+  const [showAdvanced, setShowAdvanced] = useState(true);
+
+  const tMod = (k) => setMods(m => ({ ...m, [k]: !m[k] }));
+  const handleCat = (c) => { setCat(c); if (!item && c && presets && presets[c]) setDiff(presets[c]); };
+
+  const save = () => {
+    if (!name.trim()) return;
+    onSave({
+      ...(item || {}),
+      name,
+      difficulty: diff,
+      color,
+      priority: pri,
+      category: cat,
+      deadline: mods.deadline ? dl : "",
+      deadlineTime: mods.deadline ? dlTime : "",
+      notificationEnabled: notifEnabled,
+      notificationDate: notifEnabled ? notifDate : "",
+      notificationTime: notifEnabled ? notifTime : "",
+      description: desc,
+      notes,
+      modulars: mods,
+    });
+  };
+
+  return (
+    <div style={{ padding: 14 }}>
+      <TopBar title="Editar tarefa do projeto" onBack={onCancel} />
+      <Field label="Nome" req><Input value={name} onChange={setName} placeholder="O que precisa ser feito?" /></Field>
+      <Field label="Dificuldade" req><DiffPick value={diff} onChange={setDiff} /></Field>
+      <div style={{ fontSize: 11, color: C.gold, marginBottom: 8 }}>+{getEnergia(diff)} energia / +{getMoedas(diff)} moedas</div>
+      <Field label="Cor"><ColorPick value={color} onChange={setColor} /></Field>
+
+      <div style={{ background: C.card, borderRadius: 10, marginBottom: 10, border: "1px solid " + C.brd, padding: "10px 12px" }}>
+        <div onClick={() => setShowAdvanced(v => !v)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: C.tx3, letterSpacing: 0.5, textTransform: "uppercase" }}>Detalhes</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.tx4} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: showAdvanced ? "rotate(180deg)" : "rotate(0deg)", transition: "transform .2s", flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        {showAdvanced && <div style={{ marginTop: 10 }}>
+          <Toggle on={mods.priority} onToggle={() => tMod("priority")} label="Prioridade" />
+          {mods.priority && <SelBtns options={PRIORITIES} value={pri} onChange={setPri} />}
+          <Toggle on={mods.category} onToggle={() => tMod("category")} label="Categoria" />
+          {mods.category && <SelBtns options={CATEGORIES} value={cat} onChange={handleCat} />}
+          <Toggle on={mods.deadline} onToggle={() => tMod("deadline")} label="Prazo" />
+          {mods.deadline && <div style={{ display: "grid", gridTemplateColumns: "1fr 110px", gap: 8, marginBottom: 8 }}>
+            <Input type="date" value={dl} onChange={setDl} min={td()} />
+            <Input type="time" value={dlTime} onChange={setDlTime} />
+          </div>}
+          <Toggle on={notifEnabled} onToggle={() => setNotifEnabled(v => !v)} label="Lembrete" />
+          {notifEnabled && <div style={{ display: "grid", gridTemplateColumns: "1fr 110px", gap: 8, marginBottom: 8 }}>
+            <Input type="date" value={notifDate} onChange={setNotifDate} min={td()} />
+            <Input type="time" value={notifTime} onChange={setNotifTime} />
+          </div>}
+          <Toggle on={mods.description} onToggle={() => tMod("description")} label="Descricao" />
+          {mods.description && <Input value={desc} onChange={setDesc} multiline placeholder="Detalhes..." />}
+          <Toggle on={mods.notes} onToggle={() => tMod("notes")} label="Notas" />
+          {mods.notes && <Input value={notes} onChange={setNotes} multiline placeholder="Notas da tarefa..." style={{ minHeight: 80 }} />}
+        </div>}
+      </div>
+
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <Btn onClick={onCancel} style={{ flex: 1 }}>Cancelar</Btn>
+        <Btn primary onClick={save} style={{ flex: 1 }}>Salvar</Btn>
+      </div>
+    </div>
+  );
+}
+
+/* Objective form */
 function ObjectiveForm({ item, onSave, onCancel, objectives }) {
   const [name, setName] = useState(item ? item.name : "");
   const [purpose, setPurpose] = useState(item ? item.purpose || "" : "");
@@ -797,6 +911,6 @@ function ActivitySearchModal({ projects, routines, tasks, objectives, onSelect, 
 
 
 export {
-  ProjectForm, RoutineForm, TaskForm, ObjectiveForm,
+  ProjectForm, RoutineForm, TaskForm, ProjectTaskForm, ObjectiveForm,
   ObjectiveSearchModal, ActivitySearchModal,
 };

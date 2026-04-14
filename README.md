@@ -1,4 +1,4 @@
-# Gestao Projetos
+# Coofe
 
 SPA React 18 + Vite para produtividade gamificada. O app permite gerenciar projetos, fases, tarefas, rotinas, objetivos, historico, loja, relatorios, perfil e recursos sociais. O backend usado pelo app e Supabase.
 
@@ -18,6 +18,16 @@ npm install
 npm run dev
 npm run build
 npm run preview
+```
+
+Comandos mobile:
+
+```bash
+npm run mobile:android:sync
+npm run mobile:android:open
+npm run mobile:ios:sync
+npm run mobile:ios:open
+npm run mobile:assets
 ```
 
 Variaveis de ambiente:
@@ -42,6 +52,10 @@ Use `.env.example` como referencia. O arquivo `.env` e local, contem segredo/con
 - `src/icones.jsx`: icones SVG inline, loja visual e dados de upgrades.
 - `src/abas/`: telas carregadas sob demanda por `React.lazy`.
 - `public/`: manifest, favicon e icones PWA.
+- `capacitor.config.json`: configuracao mobile Capacitor.
+- `assets/`: fontes para geracao de icones e splash mobile.
+- `android/`: projeto Android gerado pelo Capacitor.
+- `ios/`: projeto iOS gerado pelo Capacitor.
 - `*.sql`: carga, schema social e politicas Supabase.
 - `docs/`: documentos vivos, auditorias, stories e arquivo historico.
 
@@ -53,6 +67,9 @@ Fonte de verdade atual:
 - `docs/PROJECT_MAP.md`: mapa tecnico do sistema atual.
 - `docs/CLEANUP_AUDIT_2026-04-14.md`: auditoria de limpeza, quarentena e riscos.
 - `docs/stories/2026-04-14-organizacao-base.md`: story ativa da reorganizacao.
+- `docs/stories/2026-04-14-mobile-notificacoes.md`: story de mobile e notificacoes.
+- `docs/MOBILE_RELEASE_CHECKLIST_2026-04-14.md`: requisitos Android/iOS e checklist de publicacao.
+- `docs/PRIVACY_POLICY_COOFE.md`: base de politica de privacidade para publicacao.
 - `AGENTS.md` e `CLAUDE.md`: instrucoes para agentes trabalharem no projeto.
 
 Documentos em `docs/archive/` sao historico. Eles podem conter ideias uteis, mas nao devem ser tratados como requisito atual sem revisao.
@@ -64,6 +81,11 @@ Scripts existentes hoje em `package.json`:
 - `npm run dev`
 - `npm run build`
 - `npm run preview`
+- `npm run mobile:android:sync`
+- `npm run mobile:android:open`
+- `npm run mobile:ios:sync`
+- `npm run mobile:ios:open`
+- `npm run mobile:assets`
 
 Gate confiavel atual:
 

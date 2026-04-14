@@ -10,6 +10,9 @@ vite.config.js.timestamp-*.mjs
 .env.*.local
 *.key
 *.pem
+*.jks
+*.keystore
+android/key.properties
 
 # Dependencies (AIOX)
 node_modules

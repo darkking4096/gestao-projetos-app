@@ -1,4 +1,4 @@
-import { ENERGIA_TABLE, COINS_TABLE, RANKS, MASTERY_LEVELS, STREAK_MULT, CHEST_TYPES, DIFF_MIGRATION_MAP } from './constantes.js';
+import { ENERGIA_TABLE, COINS_TABLE, RANKS, MASTERY_LEVELS, STREAK_MULT, CHEST_TYPES, DIFF_MIGRATION_MAP, WEEK_DAYS } from './constantes.js';
 
 /* ── Recompensas de missão por rank principal ── */
 export const MISSION_REWARDS = {
@@ -119,6 +119,28 @@ export function isRoutineDueOn(routine, dateStr) {
 
 export function isRoutineDueToday(routine) {
   return isRoutineDueOn(routine, td());
+}
+
+export function getRoutineNotificationDays(routine) {
+  if (!routine?.notificationEnabled || !routine.notificationTime) return [];
+  const m = migrateFreq(routine);
+  if (m.freq === "Diário") return WEEK_DAYS;
+  if (m.freq === "Semanal" || m.freq === "Personalizado") return m.days;
+  if (m.freq === "Mensal") return ["Mensal"];
+  return [];
+}
+
+export function fmtRoutineNotification(routine) {
+  if (!routine?.notificationEnabled || !routine.notificationTime) return "";
+  const m = migrateFreq(routine);
+  const time = routine.notificationTime;
+  if (m.freq === "Livre") return "Lembrete manual: " + time;
+  const days = getRoutineNotificationDays(routine);
+  if (m.freq === "Diário") return "Lembrete diário: " + time;
+  if (m.freq === "Semanal" && days.length > 0) return "Lembrete " + days[0] + ": " + time;
+  if (m.freq === "Personalizado" && days.length > 0) return "Lembrete " + days.join(", ") + ": " + time;
+  if (m.freq === "Mensal") return "Lembrete mensal: " + time;
+  return "Lembrete: " + time;
 }
 
 /* ═══ SISTEMA DE PODER / RANKS ═══ */
