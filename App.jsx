@@ -711,10 +711,10 @@ export default function App({ user, onSignOut }) {
   };
 
   const completeTask = useCallback((taskId, parentType, parentId, phaseId) => {
-    if (parentType === “project” && parentId) {
+    if (parentType === "project" && parentId) {
       // Objeto mutável captura valores do updater — seguro em StrictMode porque o
       // updater é determinístico: mesma entrada (prev) → mesmos valores no result.
-      const result = { taskDiff: 1, taskName: “”, didComplete: false, prevProject: null, oldXpAcc: 0, newXpAcc: 0, completionData: null };
+      const result = { taskDiff: 1, taskName: "", didComplete: false, prevProject: null, oldXpAcc: 0, newXpAcc: 0, completionData: null };
       setProjects(prev => {
         const proj = prev.find(p => p.id === parentId);
         if (!proj) return prev;
@@ -723,25 +723,25 @@ export default function App({ user, onSignOut }) {
         const phases = (proj.phases || []).map(ph => {
           if (phaseId && ph.id !== phaseId) return ph;
           const updTasks = (ph.tasks || []).map(t => {
-            if (t.id !== taskId || t.status === “Concluída”) return t;
+            if (t.id !== taskId || t.status === "Concluída") return t;
             taskDiff = t.difficulty || 1;
             result.taskDiff = taskDiff;
             result.taskName = t.name;
             result.didComplete = true;
-            return { ...t, status: “Concluída”, completedAt: td() };
+            return { ...t, status: "Concluída", completedAt: td() };
           });
           // V2: Auto-complete phase when all tasks done
-          const allPhaseDone = updTasks.length > 0 && updTasks.every(t => t.status === “Concluída”);
-          return { ...ph, tasks: updTasks, status: allPhaseDone ? “Concluída” : (ph.status || “Ativa”) };
+          const allPhaseDone = updTasks.length > 0 && updTasks.every(t => t.status === "Concluída");
+          return { ...ph, tasks: updTasks, status: allPhaseDone ? "Concluída" : (ph.status || "Ativa") };
         });
         const all = phases.flatMap(ph => ph.tasks || []);
-        const done = all.filter(t => t.status === “Concluída”).length;
+        const done = all.filter(t => t.status === "Concluída").length;
         const progress = all.length ? Math.round(done / all.length * 100) : 0;
         result.oldXpAcc = proj.xpAccum || 0;
         result.newXpAcc = result.oldXpAcc + getXp(taskDiff);
         const np = { ...proj, phases, progress, xpAccum: result.newXpAcc };
-        if (checkProjectCompletion(np) && proj.status === “Ativo” && (proj.progress || 0) < 100) {
-          result.completionData = { type: “project”, id: proj.id, name: proj.name };
+        if (checkProjectCompletion(np) && proj.status === "Ativo" && (proj.progress || 0) < 100) {
+          result.completionData = { type: "project", id: proj.id, name: proj.name };
         }
         return prev.map(p => p.id === parentId ? np : p);
       });
@@ -755,20 +755,20 @@ export default function App({ user, onSignOut }) {
         if (mBonus > 0) {
           setTimeout(() => {
             setProfile(pr2 => ({ ...pr2, coins: pr2.coins + mBonus, totalCoinsEarned: (pr2.totalCoinsEarned || 0) + mBonus }));
-            setRewardPopup({ xp: 0, coins: mBonus, msg: “Maestria! “ + getMastery(result.newXpAcc).name });
+            setRewardPopup({ xp: 0, coins: mBonus, msg: "Maestria! " + getMastery(result.newXpAcc).name });
           }, 800);
         }
         if (result.completionData) setTimeout(() => setCompletionConfirm(result.completionData), 500);
       }
     } else {
-      const result = { taskDiff: 1, taskName: “”, didComplete: false, prevTask: null };
+      const result = { taskDiff: 1, taskName: "", didComplete: false, prevTask: null };
       setTasks(prev => prev.map(t => {
-        if (t.id !== taskId || t.status === “Concluída”) return t;
+        if (t.id !== taskId || t.status === "Concluída") return t;
         result.prevTask = { ...t };
         result.taskDiff = t.difficulty || 1;
         result.taskName = t.name;
         result.didComplete = true;
-        return { ...t, status: “Concluída”, completedAt: td() };
+        return { ...t, status: "Concluída", completedAt: td() };
       }));
       if (result.didComplete) {
         earn(getXp(result.taskDiff), getCoins(result.taskDiff), result.taskName, (xpAdded, coinsAdded) => {
@@ -1203,4 +1203,3 @@ export default function App({ user, onSignOut }) {
     </div>
   );
 }
-

@@ -4,3 +4,34 @@ dist/
 *.local
 .env
 vite.config.js.timestamp-*.mjs
+
+# Environment & Secrets (AIOX)
+.env.local
+.env.*.local
+*.key
+*.pem
+
+# Dependencies (AIOX)
+node_modules
+
+# Build & Logs (AIOX)
+build/
+*.log
+logs/
+
+# IDE & OS (AIOX)
+Thumbs.db
+.idea/
+*.swp
+
+# AIOX Local (AIOX)
+.aiox-core/local/
+.aiox-core/node_modules/
+.claude/settings.local.json
+.aiox/install-log.txt
+
+# Local duplicate scaffolds / generated backups
+/meu-projeto/
+/Gestão Projetos/
+AGENTS.md.backup.*
+/_quarantine/

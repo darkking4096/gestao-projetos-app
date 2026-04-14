@@ -1,61 +1,91 @@
-# AGENTS.md
+# AGENTS.md - Codex
 
-Instrucoes operacionais para agentes trabalhando neste projeto.
+Instrucoes para o Codex trabalhar neste projeto.
 
 ## Projeto
 
-Aplicativo web pessoal de gestao de projetos gamificado com tema RPG.
+Este repositorio contem uma SPA React 18 + Vite de produtividade gamificada. O usuario gerencia projetos, rotinas, tarefas, objetivos, historico, loja, relatorios e perfil. O backend e Supabase.
 
-- Stack: React 18 + Vite + Supabase
-- Entrada principal: `App.jsx`
-- Modulos principais: `src/`
-- Persistencia: `src/armazenamento.js`
-- Regras de gamificacao: `src/utilidades.js` e `src/constantes.js`
-- UI por abas: `src/abas/`
+## Regras de trabalho
 
-## Regras de implementacao
+1. Entenda o codigo antes de editar.
+2. Prefira mudancas pequenas, verificaveis e alinhadas ao padrao existente.
+3. Nao invente funcionalidades fora do pedido ou dos documentos ativos.
+4. Nao apague dados, documentos ou pastas sem criterio claro. Para limpeza, use quarentena antes de delecao definitiva.
+5. Preserve compatibilidade com dados existentes do Supabase.
+6. Sempre atualize a story em `docs/stories/` quando a mudanca fizer parte de uma story aberta.
+7. Nao reverta alteracoes do usuario sem pedido explicito.
 
-- Nao use TypeScript.
-- Nao crie arquivos CSS nem Tailwind.
-- Use estilos inline.
-- Use cores via `C.{token}` de `src/temas.js`.
-- Nao use emojis na interface.
-- Use SVG inline para icones.
-- Preserve retrocompatibilidade do campo `totalXp`.
+## Fonte de verdade
 
-## Squad Operacional
+- `README.md`: visao rapida, comandos e mapa inicial.
+- `docs/PROJECT_MAP.md`: mapa tecnico do sistema atual.
+- `docs/CLEANUP_AUDIT_2026-04-14.md`: auditoria de limpeza e candidatos a quarentena.
+- `docs/stories/`: trabalho planejado e checklist.
+- `CLAUDE.md`: instrucoes equivalentes para Claude.
 
-Quando o pedido envolver mudancas, trate como um squad coordenado por um orquestrador:
+Documentos antigos ficam em `docs/archive/` e nao devem ser tratados como fonte de verdade sem revisao.
 
-1. `product-owner`
-Responsavel por interpretar o pedido, alinhar com o PRD e definir criterio de aceite.
+## Arquivos centrais
 
-2. `frontend-react`
-Responsavel por `App.jsx`, componentes base, formularios e abas.
+- `main.jsx`: bootstrap React, auth inicial e selecao login/app.
+- `App.jsx`: estado principal, navegacao, integracao entre entidades e fluxo de recompensas.
+- `src/armazenamento.js`: Supabase, Auth, persistencia e social.
+- `src/utilidades.js`: regras de dominio, datas, energia, moedas, ranks e maestria.
+- `src/constantes.js`: tabelas fixas e presets.
+- `src/temas.js`: temas e tokens de cor.
+- `src/componentes-base.jsx`: componentes compartilhados.
+- `src/formularios.jsx`: formularios de entidades.
+- `src/abas/`: telas principais carregadas por lazy loading.
+- `public/`: manifest, favicon e icones PWA.
+- `*.sql`: schema, carga e politicas Supabase.
 
-3. `gamification-engineer`
-Responsavel por ENERGIA, PODER, ranks, streak, missoes, loja e progresso.
+## Convencoes do app
 
-4. `supabase-data`
-Responsavel por auth, sync, persistencia e SQL.
+- Use JavaScript e JSX. Nao introduza TypeScript sem decisao explicita.
+- Use estilos inline, seguindo o padrao atual.
+- Use tokens de tema `C.*` para cores de interface.
+- Use SVG inline para icones. Nao use emoji na interface.
+- Mantenha o campo `totalXp` por retrocompatibilidade, mesmo quando o texto do produto fala em ENERGIA.
+- Evite bibliotecas novas quando uma solucao local simples e consistente resolver.
 
-5. `ux-guardian`
-Responsavel por consistencia visual, tema e padroes da interface.
+## Qualidade
 
-6. `qa-guard`
-Responsavel por regressao, build e checagens finais.
+Gate executavel atual:
 
-## Roteamento
+```bash
+npm run build
+```
 
-- Pedidos com UI, layout, tela, card, botao, aba, modal: acione `frontend-react` e `ux-guardian`.
-- Pedidos com XP, ENERGIA, rank, streak, missao, recompensa, moedas, loja: acione `gamification-engineer`.
-- Pedidos com login, usuario, sync, Supabase, banco, social, SQL: acione `supabase-data`.
-- Todo pedido de mudanca real termina com `qa-guard`.
+O projeto ainda nao possui scripts reais para:
 
-## Execucao
+```bash
+npm run lint
+npm run typecheck
+npm test
+```
 
-- Analise primeiro o impacto do pedido.
-- Liste arquivos provaveis de mudanca.
-- Faca as alteracoes.
-- Rode `npm run build` quando a mudanca tocar comportamento da aplicacao.
-- Resuma o que mudou, riscos residuais e como validar.
+Se uma tarefa exigir esses gates, primeiro adicione a infraestrutura ou registre explicitamente que eles ainda nao existem.
+
+## Fluxo recomendado
+
+1. Leia a story ativa em `docs/stories/`, se existir.
+2. Localize os arquivos com `rg` antes de abrir arquivos grandes.
+3. Edite o menor conjunto possivel.
+4. Rode `npm run build`.
+5. Atualize checklist e file list da story.
+6. Resuma o que mudou, os testes rodados e qualquer risco restante.
+
+## Limpeza e organizacao
+
+- Nao delete direto quando houver duvida.
+- Use `_quarantine/` ou `docs/archive/` para separar itens antigos.
+- `node_modules/`, `dist/`, timestamps do Vite, backups e instalacoes duplicadas nao fazem parte do codigo fonte.
+- `.env` e qualquer segredo nunca entram no Git.
+- Pastas de ferramentas de agente devem ser versionadas apenas se forem fonte de verdade do projeto.
+
+## Git
+
+- Nao rode `git push` sem pedido explicito.
+- Nao use `git reset --hard` nem `git checkout --` para limpar trabalho alheio.
+- Antes de finalizar, consulte `git status --short`.
