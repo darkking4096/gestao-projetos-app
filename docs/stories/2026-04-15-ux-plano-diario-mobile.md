@@ -213,6 +213,21 @@ Impedir perda de texto em andamento por navegacao, gesto acidental, voltar do An
 - Validacao: `npm run build` e `npm run mobile:android:sync` passaram.
 - Android: `gradlew.bat assembleDebug --no-daemon` gerou APK debug e `adb install -r` instalou a versao atualizada no aparelho conectado.
 
+## Implementacao 2026-04-15 - Ajuste de Chat e Pendencias
+
+- `src/abas/relatorios.jsx`: no desktop, os cards aprovaveis agora aparecem apenas com o chat aberto; ao fechar o chat, o documento fica livre da tela de pendencias.
+- `src/abas/relatorios.jsx`: aceitar ou recusar um card registra a decisao como mensagem `Registro` no historico do plano e remove o card da lista ativa de pendencias.
+- `src/abas/relatorios.jsx`: o modo documento do plano diario agora mostra um relatorio com mensagens, respostas da IA e decisoes registradas, mais uma area menor de notas livres.
+- `src/abas/relatorios.jsx`: no mobile, a aba `Acoes` considera somente cards ainda decidiveis; cards aceitos ou recusados deixam de manter a tela ocupada.
+- Validacao: `npm run build` passou em 2026-04-15 apos este ajuste.
+
+## Implementacao 2026-04-15 - Ditado no Chat
+
+- `src/abas/relatorios.jsx`: o compositor do chat do plano diario ganhou botao de microfone quando a Web Speech API esta disponivel.
+- `src/abas/relatorios.jsx`: a transcricao preenche o rascunho do chat e preserva o fluxo de revisao antes do envio.
+- `src/abas/relatorios.jsx`: o ditado nao envia texto automaticamente e nao altera a pipeline de cards/pendencias.
+- Validacao pendente nesta secao: testar suporte real no navegador desktop e no Android/WebView.
+
 ## Validacao Recomendada
 
 - `npm run build`

@@ -117,6 +117,9 @@ export default function ReportsTab({
   const [reportListCollapsed, setReportListCollapsed] = useState(null);
   const [plannerChatOpen, setPlannerChatOpen] = useState(false);
   const [plannerMobileMode, setPlannerMobileMode] = useState("document"); // document | actions | chat
+  const [plannerSpeechSupported, setPlannerSpeechSupported] = useState(false);
+  const [plannerListeningNoteId, setPlannerListeningNoteId] = useState(null);
+  const [plannerSpeechError, setPlannerSpeechError] = useState("");
 
   /* ── Drag Desktop (mouse / HTML5) ── */
   const [deskDrag, setDeskDrag]   = useState(null);  // { id, type: "note"|"folder" }
@@ -125,6 +128,7 @@ export default function ReportsTab({
   /* ── Drag Mobile (touch) ── */
   const touchRef     = useRef(null); // { id, type, label, startX, startY, active }
   const acceptingCardsRef = useRef(new Set());
+  const plannerRecognitionRef = useRef(null);
   const [dragPos, setDragPos] = useState(null); // { x, y }
   const sidebarRef   = useRef(null); // para registrar listener não-passivo
 
@@ -146,6 +150,16 @@ export default function ReportsTab({
     const onResize = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  useEffect(() => {
+    setPlannerSpeechSupported(!!(window.SpeechRecognition || window.webkitSpeechRecognition));
+    return () => {
+      if (plannerRecognitionRef.current) {
+        plannerRecognitionRef.current.abort();
+        plannerRecognitionRef.current = null;
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -252,6 +266,63 @@ export default function ReportsTab({
     });
   }, []);
 
+  const startPlannerDictation = useCallback((noteId) => {
+    if (!noteId) return;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setPlannerSpeechSupported(false);
+      setPlannerSpeechError("Ditado nao disponivel neste navegador.");
+      return;
+    }
+
+    if (plannerRecognitionRef.current) {
+      plannerRecognitionRef.current.stop();
+      plannerRecognitionRef.current = null;
+      setPlannerListeningNoteId(null);
+      return;
+    }
+
+    setPlannerSpeechError("");
+    const recognition = new SpeechRecognition();
+    recognition.lang = "pt-BR";
+    recognition.interimResults = false;
+    recognition.continuous = false;
+
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results || [])
+        .map(result => result?.[0]?.transcript || "")
+        .join(" ")
+        .trim();
+      if (!transcript) return;
+      setPlannerDrafts(prev => {
+        const current = String(prev[noteId] || "").trim();
+        return { ...prev, [noteId]: [current, transcript].filter(Boolean).join(" ") };
+      });
+    };
+    recognition.onerror = (event) => {
+      const error = event?.error === "not-allowed"
+        ? "Permissao de microfone negada."
+        : "Nao foi possivel ouvir agora. Tente novamente.";
+      setPlannerSpeechError(error);
+    };
+    recognition.onend = () => {
+      if (plannerRecognitionRef.current === recognition) {
+        plannerRecognitionRef.current = null;
+        setPlannerListeningNoteId(null);
+      }
+    };
+
+    plannerRecognitionRef.current = recognition;
+    setPlannerListeningNoteId(noteId);
+    try {
+      recognition.start();
+    } catch {
+      plannerRecognitionRef.current = null;
+      setPlannerListeningNoteId(null);
+      setPlannerSpeechError("Nao foi possivel iniciar o ditado agora.");
+    }
+  }, []);
+
   const updateActionCard = useCallback((noteId, cardId, updater) => {
     updateNoteById(noteId, n => ({
       ...n,
@@ -268,6 +339,68 @@ export default function ReportsTab({
       decidedAt: new Date().toISOString(),
     }));
   }, [updateActionCard]);
+
+  const buildDecisionMessage = useCallback((card, status, createdRef = null) => {
+    const label = status === "accepted" ? "Aceito" : "Recusado";
+    const name = String(card?.name || "Acao sem nome").trim();
+    const type = actionLabels[card?.action] || card?.action || "Acao";
+    const destination = getCardDestination(card);
+    const createdText = createdRef
+      ? createdRef.existing
+        ? "Referencia existente registrada."
+        : "Item criado no app."
+      : "";
+    return [label + ": " + name, "Tipo: " + type, destination ? "Destino: " + destination : "", createdText]
+      .filter(Boolean)
+      .join("\n");
+  }, []);
+
+  const appendDecisionMessage = useCallback((noteId, card, status, createdRef = null) => {
+    const now = new Date().toISOString();
+    const decisionMessage = {
+      id: uid(),
+      role: "system",
+      content: buildDecisionMessage(card, status, createdRef),
+      createdAt: now,
+      decision: {
+        cardId: card.id,
+        status,
+        action: card.action || "",
+        createdRef,
+      },
+    };
+    updateNoteById(noteId, n => ({
+      ...n,
+      messages: [...(n.messages || []), decisionMessage],
+    }));
+  }, [buildDecisionMessage, updateNoteById]);
+
+  const rejectActionCard = useCallback((note, card) => {
+    if (!note || !card) return;
+    const status = card.status || "pending";
+    if (status === "accepted" || status === "rejected") return;
+    const now = new Date().toISOString();
+    const decisionMessage = {
+      id: uid(),
+      role: "system",
+      content: buildDecisionMessage(card, "rejected"),
+      createdAt: now,
+      decision: {
+        cardId: card.id,
+        status: "rejected",
+        action: card.action || "",
+      },
+    };
+    updateNoteById(note.id, n => ({
+      ...n,
+      actionCards: (n.actionCards || []).map(item =>
+        item.id === card.id
+          ? { ...item, status: "rejected", decidedAt: now, updatedAt: now }
+          : item
+      ),
+      messages: [...(n.messages || []), decisionMessage],
+    }));
+  }, [buildDecisionMessage, updateNoteById]);
 
   const getCreatedRefId = useCallback((card, type) => {
     if (!card?.createdRef) return "";
@@ -415,6 +548,7 @@ export default function ReportsTab({
     const creatableActions = new Set(["create_task", "create_project_task", "create_routine", "suggest_routine", "create_project", "suggest_project"]);
     if (!creatableActions.has(card.action)) {
       setCardStatus(note.id, card.id, "accepted");
+      appendDecisionMessage(note.id, card, "accepted");
       return;
     }
 
@@ -445,6 +579,7 @@ export default function ReportsTab({
       : null;
     if (existingTask || existingProjectTask || existingRoutine || existingProject) {
       setCardStatus(note.id, card.id, "accepted");
+      appendDecisionMessage(note.id, card, "accepted", card.createdRef || null);
       return;
     }
 
@@ -532,6 +667,18 @@ export default function ReportsTab({
 
       updateNoteById(note.id, n => {
         const alreadyRegistered = (n.createdItemRefs || []).some(ref => ref && ref.type === createdRef.type && ref.id === createdRef.id);
+        const decisionMessage = {
+          id: uid(),
+          role: "system",
+          content: buildDecisionMessage(card, "accepted", createdRef),
+          createdAt: now,
+          decision: {
+            cardId: card.id,
+            status: "accepted",
+            action: card.action || "create_task",
+            createdRef,
+          },
+        };
         return {
           ...n,
           actionCards: (n.actionCards || []).map(item =>
@@ -542,13 +689,14 @@ export default function ReportsTab({
           createdItemRefs: alreadyRegistered
             ? (n.createdItemRefs || [])
             : [...(n.createdItemRefs || []), { ...createdRef, cardId: card.id, action: card.action || "create_task" }],
+          messages: [...(n.messages || []), decisionMessage],
         };
       });
     } catch (e) {
       acceptingCardsRef.current.delete(card.id);
       setPlannerError("Nao foi possivel criar este item agora. Tente novamente depois.");
     }
-  }, [cardToProject, cardToProjectTask, cardToRoutine, cardToTask, findProjectForCard, getCreatedRefId, getDefaultPhaseId, onCreateProject, onCreateProjectTask, onCreateRoutine, onCreateTask, projects, routines, setCardStatus, tasks, updateNoteById]);
+  }, [appendDecisionMessage, buildDecisionMessage, cardToProject, cardToProjectTask, cardToRoutine, cardToTask, findProjectForCard, getCreatedRefId, getDefaultPhaseId, onCreateProject, onCreateProjectTask, onCreateRoutine, onCreateTask, projects, routines, setCardStatus, tasks, updateNoteById]);
 
   const startEditCard = useCallback((card) => {
     setEditingCardId(card.id);
@@ -1329,7 +1477,7 @@ export default function ReportsTab({
             )}
             {canDecide && (
               <div style={{ display: "flex", gap: 7, justifyContent: "flex-end", flexWrap: "wrap" }}>
-                <button onClick={() => setCardStatus(note.id, card.id, "rejected")} style={{ border: "1px solid " + C.red + "55", background: C.red + "10", color: C.red, borderRadius: 6, padding: "7px 10px", fontSize: 11, cursor: "pointer" }}>
+                <button onClick={() => rejectActionCard(note, card)} style={{ border: "1px solid " + C.red + "55", background: C.red + "10", color: C.red, borderRadius: 6, padding: "7px 10px", fontSize: 11, cursor: "pointer" }}>
                   Recusar
                 </button>
                 <button onClick={() => acceptActionCard(note, card)} style={{ border: "1px solid " + C.green + "55", background: C.green + "12", color: C.green, borderRadius: 6, padding: "7px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
@@ -1356,7 +1504,10 @@ export default function ReportsTab({
   };
 
   const renderActionCards = (note, options = {}) => {
-    const actionCards = note.actionCards || [];
+    const actionCards = (note.actionCards || []).filter(card => {
+      const status = card.status || "pending";
+      return status !== "accepted" && status !== "rejected";
+    });
     if (!actionCards.length) return null;
     const groups = groupActionCards(actionCards, note.planDate || today);
     return (
@@ -1588,9 +1739,13 @@ export default function ReportsTab({
   const renderPlannerChat = (note) => {
     const messages = note.messages || [];
     const actionCards = note.actionCards || [];
-    const pendingCount = actionCards.filter(c => (c.status || "pending") === "pending").length;
+    const openActionCount = actionCards.filter(c => {
+      const status = c.status || "pending";
+      return status !== "accepted" && status !== "rejected";
+    }).length;
     const draftOpenLabel = plannerInput.trim() ? "Continuar conversa" : "Abrir chat";
     const mobileFullChat = !isDesktop && plannerChatOpen;
+    const isListening = plannerListeningNoteId === note.id;
 
     return (
       <div data-no-tab-swipe={plannerChatOpen ? "true" : undefined} style={{
@@ -1610,9 +1765,9 @@ export default function ReportsTab({
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-            {actionCards.length > 0 && (
+            {openActionCount > 0 && (
               <div style={{ fontSize: 10, color: C.gold, border: "1px solid " + C.goldBrd, borderRadius: 6, padding: "4px 7px", flexShrink: 0 }}>
-                {pendingCount} pendentes
+                {openActionCount} pendentes
               </div>
             )}
             <button
@@ -1674,8 +1829,8 @@ export default function ReportsTab({
                       whiteSpace: "pre-wrap",
                       overflowWrap: "anywhere",
                     }}>
-                      <div style={{ color: msg.role === "user" ? C.gold : C.tx4, fontSize: 9, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>
-                        {msg.role === "user" ? "Voce" : "IA"}
+                      <div style={{ color: msg.role === "user" ? C.gold : msg.role === "system" ? C.green : C.tx4, fontSize: 9, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>
+                        {msg.role === "user" ? "Voce" : msg.role === "system" ? "Registro" : "IA"}
                       </div>
                       {msg.content}
                       {msg.parsed?.acoes?.length > 0 && (
@@ -1699,6 +1854,12 @@ export default function ReportsTab({
             {plannerError && (
               <div style={{ margin: "0 14px 8px", padding: "7px 9px", borderRadius: 6, border: "1px solid " + C.orange + "55", background: C.orange + "12", color: C.orange, fontSize: 11, lineHeight: 1.4 }}>
                 {plannerError}
+              </div>
+            )}
+
+            {plannerSpeechError && (
+              <div style={{ margin: "0 14px 8px", padding: "7px 9px", borderRadius: 6, border: "1px solid " + C.orange + "55", background: C.orange + "12", color: C.orange, fontSize: 11, lineHeight: 1.4 }}>
+                {plannerSpeechError}
               </div>
             )}
 
@@ -1739,37 +1900,164 @@ export default function ReportsTab({
                   fontFamily: "'Segoe UI', 'Helvetica Neue', system-ui, sans-serif",
                 }}
               />
-              <button
-                type="submit"
-                disabled={plannerLoading || !plannerInput.trim()}
-                style={{
-                  minHeight: 38,
-                  padding: "0 12px",
-                  width: isDesktop ? "auto" : "100%",
-                  borderRadius: 8,
-                  border: "1px solid " + C.goldBrd,
-                  background: plannerLoading || !plannerInput.trim() ? C.card : C.gold + "18",
-                  color: plannerLoading || !plannerInput.trim() ? C.tx4 : C.gold,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: plannerLoading || !plannerInput.trim() ? "default" : "pointer",
-                  flexShrink: 0,
-                }}
-              >
-                {plannerLoading ? "Enviando" : "Enviar"}
-              </button>
+              <div style={{ display: "flex", gap: 8, width: isDesktop ? "auto" : "100%", flexShrink: 0 }}>
+                {plannerSpeechSupported && (
+                  <button
+                    type="button"
+                    onClick={() => startPlannerDictation(note.id)}
+                    disabled={plannerLoading}
+                    title={isListening ? "Parar ditado" : "Ditar texto"}
+                    style={{
+                      minHeight: 38,
+                      width: 42,
+                      borderRadius: 8,
+                      border: "1px solid " + (isListening ? C.goldBrd : C.brd2),
+                      background: isListening ? C.gold + "18" : C.card,
+                      color: isListening ? C.gold : C.tx3,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: plannerLoading ? "default" : "pointer",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                      <path d="M12 19v3"/>
+                      <path d="M8 22h8"/>
+                    </svg>
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  disabled={plannerLoading || !plannerInput.trim()}
+                  style={{
+                    minHeight: 38,
+                    padding: "0 12px",
+                    width: isDesktop ? "auto" : "100%",
+                    borderRadius: 8,
+                    border: "1px solid " + C.goldBrd,
+                    background: plannerLoading || !plannerInput.trim() ? C.card : C.gold + "18",
+                    color: plannerLoading || !plannerInput.trim() ? C.tx4 : C.gold,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: plannerLoading || !plannerInput.trim() ? "default" : "pointer",
+                    flex: isDesktop ? "0 0 auto" : 1,
+                  }}
+                >
+                  {plannerLoading ? "Enviando" : "Enviar"}
+                </button>
+              </div>
             </form>
           </div>
         )}
 
-        {isDesktop && renderActionCards(note)}
+        {isDesktop && plannerChatOpen && renderActionCards(note)}
+      </div>
+    );
+  };
+
+  const renderPlannerDocument = (note) => {
+    const messages = note.messages || [];
+    const decidedCards = (note.actionCards || []).filter(card => {
+      const status = card.status || "pending";
+      return status === "accepted" || status === "rejected";
+    });
+    const decisionMessageIds = new Set(messages.map(msg => msg.decision?.cardId).filter(Boolean));
+    const legacyDecisions = decidedCards.filter(card => !decisionMessageIds.has(card.id));
+
+    return (
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "14px 16px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ color: C.tx, fontSize: 15, fontWeight: 700 }}>
+          Plano de {note.planDate ? fmtD(note.planDate) : "hoje"}
+        </div>
+
+        {messages.length > 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+            {messages.map(msg => {
+              const isUser = msg.role === "user";
+              const isDecision = msg.role === "system" || msg.decision;
+              return (
+                <div key={msg.id || msg.createdAt} style={{
+                  border: "1px solid " + (isDecision ? C.green + "45" : isUser ? C.goldBrd : C.brd2),
+                  borderLeft: "3px solid " + (isDecision ? C.green : isUser ? C.gold : C.blue),
+                  background: isDecision ? C.green + "0d" : C.card,
+                  borderRadius: 8,
+                  padding: "9px 10px",
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 5, color: isDecision ? C.green : isUser ? C.gold : C.tx4, fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                    <span>{isUser ? "Voce" : isDecision ? "Registro" : "IA"}</span>
+                    <span style={{ color: C.tx4, textTransform: "none", letterSpacing: 0 }}>{msg.createdAt ? fmtD(msg.createdAt) : ""}</span>
+                  </div>
+                  <div style={{ color: C.tx2, fontSize: 12, lineHeight: 1.55, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+                    {msg.content}
+                  </div>
+                  {msg.parsed?.acoes?.length > 0 && (
+                    <div style={{ marginTop: 6, color: C.tx4, fontSize: 11 }}>
+                      {msg.parsed.acoes.length} acao{msg.parsed.acoes.length === 1 ? "" : "es"} enviada{msg.parsed.acoes.length === 1 ? "" : "s"} para revisao.
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div style={{ border: "1px solid " + C.brd2, background: C.card, borderRadius: 8, padding: 12, color: C.tx4, fontSize: 12, lineHeight: 1.5 }}>
+            Abra o chat para organizar o dia. Quando voce aceitar ou recusar algo, o registro aparece aqui.
+          </div>
+        )}
+
+        {legacyDecisions.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={sectionTitleStyle}>Decisoes registradas</div>
+            {legacyDecisions.map(card => {
+              const status = card.status || "pending";
+              return (
+                <div key={card.id} style={{ border: "1px solid " + (statusColors[status] || C.brd2), background: C.card, borderRadius: 8, padding: "8px 10px", color: C.tx2, fontSize: 12, lineHeight: 1.45 }}>
+                  <strong style={{ color: statusColors[status] || C.tx }}>{statusLabels[status] || status}:</strong> {card.name || "Acao sem nome"}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={sectionTitleStyle}>Notas livres</div>
+          <textarea
+            key={note.id + "_planner_content"}
+            defaultValue={note.content || ""}
+            onBlur={(e) => updateNoteField(note.id, "content", e.target.value)}
+            placeholder="Anotacoes manuais do plano..."
+            rows={4}
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              minHeight: 96,
+              maxHeight: 180,
+              resize: "vertical",
+              background: C.card,
+              border: "1px solid " + C.brd2,
+              borderRadius: 8,
+              color: C.tx,
+              fontSize: 12,
+              lineHeight: 1.6,
+              outline: "none",
+              padding: "9px 10px",
+              fontFamily: "'Segoe UI', 'Helvetica Neue', system-ui, sans-serif",
+            }}
+          />
+        </div>
       </div>
     );
   };
 
   const renderPlannerMobileTabs = (note) => {
     if (isDesktop || note.kind !== "daily-plan") return null;
-    const pendingCount = (note.actionCards || []).filter(c => (c.status || "pending") === "pending").length;
+    const pendingCount = (note.actionCards || []).filter(c => {
+      const status = c.status || "pending";
+      return status !== "accepted" && status !== "rejected";
+    }).length;
     const modes = [
       ["document", "Plano"],
       ["actions", pendingCount ? `Acoes ${pendingCount}` : "Acoes"],
@@ -1895,7 +2183,10 @@ export default function ReportsTab({
         {isDailyPlan && !isDesktop && plannerMobileMode === "chat" && renderPlannerChat(selNote)}
 
         {isDailyPlan && !isDesktop && plannerMobileMode === "actions" && (
-          (selNote.actionCards || []).length > 0 ? renderActionCards(selNote, { fill: true, paddedTop: true }) : (
+          (selNote.actionCards || []).some(card => {
+            const status = card.status || "pending";
+            return status !== "accepted" && status !== "rejected";
+          }) ? renderActionCards(selNote, { fill: true, paddedTop: true }) : (
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, color: C.tx4, fontSize: 12, textAlign: "center", lineHeight: 1.5 }}>
               Nenhuma acao para aprovar agora.
             </div>
@@ -1904,7 +2195,9 @@ export default function ReportsTab({
 
         {isDailyPlan && (isDesktop || plannerMobileMode === "document") && renderPlannerChat(selNote)}
 
-        {(!isDailyPlan || isDesktop || plannerMobileMode === "document") && (
+        {isDailyPlan && (isDesktop || plannerMobileMode === "document") && renderPlannerDocument(selNote)}
+
+        {!isDailyPlan && (
           <textarea
             key={selNote.id + "_content"}
             defaultValue={selNote.content || ""}
@@ -1921,7 +2214,7 @@ export default function ReportsTab({
         )}
 
         {/* Rodapé */}
-        {(!isDailyPlan || isDesktop || plannerMobileMode === "document") && (
+        {!isDailyPlan && (
           <div style={{ padding: "5px 14px", borderTop: "0.5px solid " + C.brd, display: "flex", justifyContent: "space-between", fontSize: 10, color: C.tx4, flexShrink: 0 }}>
             <span>{(selNote.content || "").length} caracteres</span>
             <span>{selNote.updatedAt ? fmtD(selNote.updatedAt) : ""}</span>

@@ -575,28 +575,46 @@ Evitar duplicidade quando o usuario mencionar algo que ja existe no app.
 
 ### Objetivo
 
-Preparar a arquitetura para entrada por audio sem implementar transcricao na primeira entrega.
+Preparar e iniciar a entrada por audio sem criar uma pipeline paralela de planejamento.
 
 ### Escopo
 
 - isolar funcao `handlePlannerText(text)`;
 - garantir que texto digitado e texto transcrito usem a mesma pipeline;
-- reservar ponto de UI para microfone desativado ou escondido;
+- adicionar ponto de UI para microfone quando houver suporte do navegador;
 - documentar opcoes futuras de transcricao;
-- nao adicionar dependencia de audio nesta etapa.
+- nao adicionar dependencia de audio nesta etapa;
+- nao enviar audio bruto automaticamente.
 
 ### Acceptance Criteria
 
-- [ ] Pipeline de texto fica isolada e reutilizavel.
-- [ ] Nao ha dependencia de audio na primeira entrega.
-- [ ] Story documenta opcoes para Web Speech API, plugin Capacitor ou API externa.
-- [ ] Build passa.
+- [x] Pipeline de texto fica isolada e reutilizavel.
+- [x] Texto transcrito entra no mesmo rascunho usado por `handlePlannerText(text)`.
+- [x] O usuario revisa o texto antes de enviar.
+- [x] Nao ha dependencia de audio na primeira entrega.
+- [x] Story documenta opcoes para Web Speech API, plugin Capacitor ou API externa.
+- [x] Build passa.
 
 ### Arquivos Provaveis
 
 - `src/abas/relatorios.jsx`
 - `src/planejamento-ia.js`
 - `docs/stories/2026-04-15-planejamento-diario-ia.md`
+
+### Nota de Produto
+
+- O usuario quer evoluir o planejamento para entrada por audio, transcrevendo fala para texto e reutilizando a mesma funcao `handlePlannerText(text)`.
+- A primeira opcao a avaliar e Web Speech API para navegador quando disponivel; no Android/Capacitor, avaliar plugin nativo de speech-to-text ou uma API externa de transcricao.
+- A UI deve tratar audio como uma forma de preencher/enviar texto para o chat, sem criar uma pipeline separada de planejamento.
+
+### Implementacao 2026-04-15 - Ditado Web Speech
+
+- `src/abas/relatorios.jsx`: o chat do plano diario detecta `window.SpeechRecognition || window.webkitSpeechRecognition`.
+- `src/abas/relatorios.jsx`: quando houver suporte, o compositor mostra um botao de microfone ao lado de `Enviar`.
+- `src/abas/relatorios.jsx`: o ditado usa `pt-BR`, captura a transcricao e concatena o texto no rascunho local do plano.
+- `src/abas/relatorios.jsx`: o texto transcrito nao e enviado automaticamente; o usuario revisa e envia pelo mesmo `handlePlannerText(text)`.
+- `src/abas/relatorios.jsx`: erros de permissao ou suporte aparecem como aviso curto no chat.
+- Nenhuma dependencia nova foi adicionada.
 
 ## Prompt Base Sugerido
 
