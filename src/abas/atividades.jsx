@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import ChatIA from './chat-ia.jsx';
 import { C } from '../temas.js';
-import { uid, td, fmtD, fmtFreq, fmtRoutineNotification, getEnergia, getMoedas, getXp, getMastery, isRoutineDueToday, calcObjectiveXp, checkProjectCompletion, migrateFreq } from '../utilidades.js';
+import { uid, td, fmtD, fmtFreq, fmtRoutineNotification, getEnergia, getMoedas, getXp, getMastery, isRoutineDueToday, getTodayAgendaItems, calcObjectiveXp, checkProjectCompletion, migrateFreq } from '../utilidades.js';
 import { PRIORITIES, CATEGORIES, PRI_ORDER } from '../constantes.js';
 import { Btn, Card, Badge, TopBar, Modal, ConfirmModal, DeleteModal, FilterModal, FilterBtn, NotesLog, PBar, Chk, SLabel, Input, getDiffColor } from '../componentes-base.jsx';
 import { IconSVG, ConsumableSVG } from '../icones.jsx';
@@ -12,11 +12,12 @@ function ActivitiesTab({ subTab, setSubTab, projects, routines, tasks, objective
   return (
     <div style={{ position: "relative", minHeight: "100%" }}>
       <div style={{ display: "flex", background: C.card2, borderBottom: "0.5px solid " + C.brd }}>
-        {[["projects", "Projetos"], ["routines", "Rotinas"], ["tasks", "Tarefas"], ["objectives", "Objetivos"]].map(([k, l]) => (
+        {[["today", "Hoje"], ["projects", "Projetos"], ["routines", "Rotinas"], ["tasks", "Tarefas"], ["objectives", "Objetivos"]].map(([k, l]) => (
           <div key={k} onClick={() => setSubTab(k)} style={{ flex: 1, minHeight: 46, display: "flex", alignItems: "center", justifyContent: "center", padding: "10px 4px", textAlign: "center", fontSize: 11, cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.4, color: subTab === k ? C.gold : C.tx4, borderBottom: subTab === k ? "2px solid " + C.gold : "2px solid transparent", transition: "color .12s, border-color .12s" }}>{l}</div>
         ))}
       </div>
       <div style={{ padding: 14, paddingBottom: 80 }}>
+        {subTab === "today" && <TodayAgenda projects={projects} routines={routines} tasks={tasks} nav={nav} completeTask={completeTask} completeRoutine={completeRoutine} />}
         {subTab === "projects" && <ProjectsList projects={projects} nav={nav} completeTask={completeTask} updProject={updProject} setProfile={setProf} setCompletionConfirm={setCompletionConfirm} />}
         {subTab === "routines" && <RoutinesList routines={routines} projects={projects} nav={nav} completeRoutine={completeRoutine} />}
         {subTab === "tasks" && <TasksList tasks={tasks} nav={nav} completeTask={completeTask} />}
@@ -64,6 +65,92 @@ function ActivitiesTab({ subTab, setSubTab, projects, routines, tasks, objective
         />
       )}
     </div>
+  );
+}
+
+function TodayAgenda({ projects, routines, tasks, nav, completeTask, completeRoutine }) {
+  const agenda = useMemo(() => getTodayAgendaItems({ tasks, projects, routines }), [tasks, projects, routines]);
+  const total = agenda.pending.length;
+  const overdue = agenda.pending.filter(item => item.overdue).length;
+
+  const openItem = (item) => {
+    if (item.type === "task") nav("activities", "tasks", "detail", item.id, "task");
+    if (item.type === "routine") nav("activities", "routines", "detail", item.id, "routine");
+    if (item.type === "projectTask") nav("activities", "projects", "detail", item.projectId, "project");
+  };
+
+  const completeItem = (item) => {
+    if (item.type === "task") completeTask(item.id);
+    if (item.type === "routine") completeRoutine(item.id);
+    if (item.type === "projectTask") completeTask(item.id, "project", item.projectId, item.phaseId || null);
+  };
+
+  return (
+    <div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 10 }}>
+        <div style={{ background: C.card, borderRadius: 8, padding: 10, textAlign: "center", border: "1px solid " + C.brd }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: C.tx }}>{total}</div>
+          <div style={{ fontSize: 11, color: C.tx3 }}>Pendentes</div>
+        </div>
+        <div style={{ background: C.card, borderRadius: 8, padding: 10, textAlign: "center", border: "1px solid " + (overdue ? C.red + "45" : C.brd) }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: overdue ? C.red : C.tx }}>{overdue}</div>
+          <div style={{ fontSize: 11, color: C.tx3 }}>Vencidas</div>
+        </div>
+        <div style={{ background: C.card, borderRadius: 8, padding: 10, textAlign: "center", border: "1px solid " + C.brd }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: C.green }}>{agenda.completedToday.length}</div>
+          <div style={{ fontSize: 11, color: C.tx3 }}>Feitas hoje</div>
+        </div>
+      </div>
+
+      {agenda.pending.length > 0 && <SLabel>Agenda de hoje</SLabel>}
+      {agenda.pending.map(item => (
+        <AgendaItem key={item.type + item.id} item={item} onOpen={() => openItem(item)} onComplete={() => completeItem(item)} />
+      ))}
+
+      {agenda.pending.length === 0 && (
+        <div style={{ textAlign: "center", padding: "34px 16px", background: C.card, borderRadius: 8, border: "1px dashed " + C.brd2 }}>
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={C.tx4} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: "block", margin: "0 auto 10px" }}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="m9 16 2 2 4-5"/></svg>
+          <div style={{ fontSize: 12, fontWeight: 600, color: C.tx3, marginBottom: 4 }}>Nada pendente para hoje</div>
+          <div style={{ fontSize: 11, color: C.tx4, lineHeight: 1.5 }}>Tarefas com prazo futuro ficam fora da agenda ate chegar a data.</div>
+        </div>
+      )}
+
+      {agenda.completedToday.length > 0 && <SLabel>Concluidas hoje</SLabel>}
+      {agenda.completedToday.map(item => (
+        <AgendaItem key={"done-" + item.type + item.id} item={item} done onOpen={() => openItem(item)} />
+      ))}
+    </div>
+  );
+}
+
+function AgendaItem({ item, done, onOpen, onComplete }) {
+  const color = item.type === "projectTask" ? C.gold : item.type === "routine" ? C.purple : C.orange;
+  const label = item.type === "projectTask" ? "Projeto" : item.type === "routine" ? "Rotina" : "Tarefa";
+  const meta = [
+    item.time ? item.time : "",
+    item.deadline ? (item.overdue ? "Venceu em " : "Prazo ") + fmtD(item.deadline) : "",
+    item.projectName ? item.projectName : "",
+    item.phaseName ? item.phaseName : "",
+    item.priority || "",
+    item.category || "",
+    "Dif. " + (item.difficulty || 1),
+    "+" + getEnergia(item.difficulty || 1) + " energia",
+  ].filter(Boolean);
+
+  return (
+    <Card onClick={onOpen} style={{ borderLeft: "3px solid " + (item.overdue ? C.red : color), opacity: done ? 0.45 : 1, marginBottom: 6 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+        <Chk done={!!done} onClick={done ? onOpen : onComplete} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
+            <Badge color={item.overdue ? C.red : color}>{label}</Badge>
+            {item.overdue && <span style={{ fontSize: 11, color: C.red, fontWeight: 600 }}>Vencida</span>}
+          </div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: done ? C.tx4 : C.tx, textDecoration: done ? "line-through" : "none", lineHeight: 1.35 }}>{item.name}</div>
+          <div style={{ fontSize: 11, color: C.tx3, lineHeight: 1.5, marginTop: 3 }}>{meta.join(" · ")}</div>
+        </div>
+      </div>
+    </Card>
   );
 }
 

@@ -39,7 +39,7 @@ const NAV_TABS = [
 
 export default function App({ user, onSignOut }) {
   const [tab, setTab] = useState("dashboard");
-  const [subTab, setSubTab] = useState("projects");
+  const [subTab, setSubTab] = useState("today");
   const [view, setView] = useState("list");
   const [selId, setSelId] = useState(null);
   const [selType, setSelType] = useState(null);
@@ -534,6 +534,115 @@ export default function App({ user, onSignOut }) {
     syncObjLinks(id, "task", t.linkedObjectives, []);
     nav("activities", "tasks", "list");
   }, [syncObjLinks, nav]);
+
+  const createPlannedTask = useCallback((t) => {
+    const id = uid();
+    const newTask = { ...t, id, createdAt: td(), status: "Pendente" };
+    setTasks(pr => [...pr, newTask]);
+    syncObjLinks(id, "task", t.linkedObjectives, []);
+    return newTask;
+  }, [syncObjLinks]);
+
+  const createPlannedRoutine = useCallback((r) => {
+    const nameKey = String(r?.name || "").trim();
+    const existing = (routines || []).find(item => item.name && similarName(item.name, nameKey));
+    if (existing) return { item: existing, existing: true };
+
+    const id = uid();
+    const newRoutine = {
+      ...r,
+      id,
+      createdAt: td(),
+      status: "Ativa",
+      xpAccum: 0,
+      streak: 0,
+      bestStreak: 0,
+      totalCompletions: 0,
+      consecutiveFails: 0,
+      completionLog: [],
+    };
+    setRoutines(pr => [...pr, newRoutine]);
+    syncObjLinks(id, "routine", r.linkedObjectives, []);
+    return { item: newRoutine, existing: false };
+  }, [routines, syncObjLinks]);
+
+  const createPlannedProject = useCallback((p) => {
+    const nameKey = String(p?.name || "").trim();
+    const existing = (projects || []).find(item => item.name && similarName(item.name, nameKey));
+    if (existing) return { item: existing, existing: true };
+
+    const id = uid();
+    const newProject = { ...p, id, createdAt: td(), status: p.status || "Ativo", xpAccum: 0, progress: 0 };
+    setProjects(pr => [...pr, newProject]);
+    syncObjLinks(id, "project", p.linkedObjectives, []);
+    syncPhaseRefs(id, p.phases);
+    return { item: newProject, existing: false };
+  }, [projects, syncObjLinks, syncPhaseRefs]);
+
+  const createPlannedProjectTask = useCallback(({ projectId, phaseId, task }) => {
+    const project = projects.find(p => p.id === projectId);
+    if (!project) throw new Error("Projeto nao encontrado.");
+
+    const defaultPhase = { id: uid(), name: "Planejamento", order: 1, tasks: [], linkedRoutines: [], status: "Ativa" };
+    const initialPhases = (project.phases || []).length ? (project.phases || []) : [defaultPhase];
+    const initialTargetPhase = initialPhases.find(ph => ph.id === phaseId)
+      || initialPhases.find(ph => (ph.status || "Ativa") === "Ativa")
+      || initialPhases[0];
+    const resolvedPhaseId = initialTargetPhase.id;
+    const taskNameKey = String(task?.name || "").trim().toLowerCase();
+    const taskDeadline = task?.deadline || "";
+    const taskDeadlineTime = task?.deadlineTime || "";
+    const existingInitialTask = initialPhases
+      .flatMap(ph => (ph.tasks || []).map(item => ({ ...item, phaseId: ph.id })))
+      .find(item => {
+        const sameName = String(item.name || "").trim().toLowerCase() === taskNameKey;
+        const sameDeadline = (item.deadline || "") === taskDeadline;
+        const sameTime = (item.deadlineTime || "") === taskDeadlineTime;
+        return sameName && sameDeadline && sameTime;
+      });
+
+    if (existingInitialTask) {
+      return { task: existingInitialTask, projectId: project.id, phaseId: existingInitialTask.phaseId || resolvedPhaseId };
+    }
+
+    const id = uid();
+    const newTask = { ...(task || {}), id, createdAt: td(), status: "Pendente" };
+
+    setProjects(prev => prev.map(project => {
+      if (project.id !== projectId) return project;
+
+      let phases = (project.phases || []).length
+        ? (project.phases || [])
+        : [defaultPhase];
+      const targetPhase = phases.find(ph => ph.id === resolvedPhaseId)
+        || phases.find(ph => (ph.status || "Ativa") === "Ativa")
+        || phases[0];
+
+      const existingTask = phases
+        .flatMap(ph => (ph.tasks || []).map(item => ({ ...item, phaseId: ph.id })))
+        .find(item => {
+          const sameName = String(item.name || "").trim().toLowerCase() === taskNameKey;
+          const sameDeadline = (item.deadline || "") === taskDeadline;
+          const sameTime = (item.deadlineTime || "") === taskDeadlineTime;
+          return sameName && sameDeadline && sameTime;
+        });
+
+      if (existingTask) {
+        return project;
+      }
+
+      phases = phases.map(phase => (
+        phase.id === targetPhase.id
+          ? { ...phase, tasks: [...(phase.tasks || []), newTask] }
+          : phase
+      ));
+      const all = phases.flatMap(ph => ph.tasks || []);
+      const done = all.filter(t => t.status === "Concluída").length;
+      return { ...project, phases, progress: all.length ? Math.round(done / all.length * 100) : 0 };
+    }));
+
+    return { task: newTask, projectId: project.id, phaseId: resolvedPhaseId };
+  }, [projects]);
 
   const updTask = useCallback((t) => {
     let oldLinkedObjs = [];
@@ -1103,7 +1212,7 @@ export default function App({ user, onSignOut }) {
         {tab === "activities" && view === "edit" && sel && selType === "routine" && <RoutineForm presets={profile.difficultyPresets} item={sel} onSave={(r) => { updRoutine(r); nav("activities", "routines", "detail", r.id, "routine"); }} onCancel={() => nav("activities", "routines", "detail", sel.id, "routine")} objectives={objectives} />}
         {tab === "activities" && view === "edit" && sel && selType === "task" && <TaskForm presets={profile.difficultyPresets} item={sel} onSave={(t) => { updTask(t); nav("activities", "tasks", "detail", t.id, "task"); }} onCancel={() => nav("activities", "tasks", "detail", sel.id, "task")} objectives={objectives} />}
         {tab === "activities" && view === "edit" && sel && selType === "objective" && <ObjectiveForm item={sel} onSave={(o) => { updObjective(o); nav("activities", "objectives", "detail", o.id, "objective"); }} onCancel={() => nav("activities", "objectives", "detail", sel.id, "objective")} objectives={objectives} />}
-        {tab === "reports" && <ReportsTab notes={reportNotes} folders={reportFolders} onUpdateNotes={setReportNotes} onUpdateFolders={setReportFolders} />}
+        {tab === "reports" && <ReportsTab notes={reportNotes} folders={reportFolders} onUpdateNotes={setReportNotes} onUpdateFolders={setReportFolders} groqApiKey={profile.groqApiKey || ""} projects={projects} routines={routines} tasks={tasks} objectives={objectives} profile={profile} onCreateTask={createPlannedTask} onCreateProjectTask={createPlannedProjectTask} onCreateRoutine={createPlannedRoutine} onCreateProject={createPlannedProject} />}
         {tab === "history" && <HistoryTab profile={profile} projects={projects} routines={routines} tasks={tasks} recoverStreak={recoverStreak} openChestAction={openChestAction} claimAchievement={claimAchievement} />}
         {tab === "shop" && <ShopTab profile={profile} buyItem={buyItem} equipItem={equipItem} buyConsumable={buyConsumable} upgradeItem={upgradeItem} setProfile={setProfile} />}
         {tab === "config" && <ConfigTab profile={profile} setProfile={setProfile} trash={trash} setTrash={setTrash} restoreItem={restoreItem} projects={projects} routines={routines} tasks={tasks} objectives={objectives} reportNotes={reportNotes} reportFolders={reportFolders} atributos={atributos} setProjects={setProjects} setRoutines={setRoutines} setTasks={setTasks} setObjectives={setObjectives} setReportNotes={setReportNotes} setReportFolders={setReportFolders} setAtributos={setAtributos} levelInfo={levelInfo} poderInfo={poderInfo} rankInfo={rankInfo} onSignOut={!isDesktop ? onSignOut : null} user={user} />}

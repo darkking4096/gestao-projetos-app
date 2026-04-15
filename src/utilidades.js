@@ -1,4 +1,4 @@
-import { ENERGIA_TABLE, COINS_TABLE, RANKS, MASTERY_LEVELS, STREAK_MULT, CHEST_TYPES, DIFF_MIGRATION_MAP, WEEK_DAYS } from './constantes.js';
+import { ENERGIA_TABLE, COINS_TABLE, RANKS, MASTERY_LEVELS, STREAK_MULT, CHEST_TYPES, DIFF_MIGRATION_MAP, WEEK_DAYS, PRI_ORDER } from './constantes.js';
 
 /* ── Recompensas de missão por rank principal ── */
 export const MISSION_REWARDS = {
@@ -119,6 +119,153 @@ export function isRoutineDueOn(routine, dateStr) {
 
 export function isRoutineDueToday(routine) {
   return isRoutineDueOn(routine, td());
+}
+
+function agendaStatus(status) {
+  return (status || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+function isDoneStatus(status) {
+  return agendaStatus(status) === "concluida";
+}
+
+function agendaDateValue(date) {
+  return date || "9999-12-31";
+}
+
+function agendaTimeValue(time) {
+  return time || "99:99";
+}
+
+function agendaTypeOrder(type) {
+  return { task: 0, projectTask: 1, routine: 2 }[type] ?? 9;
+}
+
+function sortAgendaItems(a, b) {
+  return agendaTimeValue(a.time).localeCompare(agendaTimeValue(b.time))
+    || agendaDateValue(a.deadline).localeCompare(agendaDateValue(b.deadline))
+    || ((PRI_ORDER[a.priority] ?? 4) - (PRI_ORDER[b.priority] ?? 4))
+    || ((b.difficulty || 0) - (a.difficulty || 0))
+    || (agendaTypeOrder(a.type) - agendaTypeOrder(b.type))
+    || (a.name || "").localeCompare(b.name || "");
+}
+
+export function getTodayAgendaItems({ tasks = [], projects = [], routines = [], date = td() } = {}) {
+  const pending = [];
+  const completedToday = [];
+
+  (tasks || []).forEach(task => {
+    const isDone = isDoneStatus(task.status);
+    if (isDone && task.completedAt === date) {
+      completedToday.push({
+        id: task.id,
+        type: "task",
+        name: task.name || "",
+        deadline: task.deadline || "",
+        time: task.deadlineTime || "",
+        priority: task.priority || "",
+        difficulty: task.difficulty || 1,
+        category: task.category || "",
+        completedAt: task.completedAt,
+        source: task,
+      });
+      return;
+    }
+    if (isDone || !task.deadline || task.deadline > date) return;
+    pending.push({
+      id: task.id,
+      type: "task",
+      name: task.name || "",
+      deadline: task.deadline,
+      time: task.deadlineTime || "",
+      priority: task.priority || "",
+      difficulty: task.difficulty || 1,
+      category: task.category || "",
+      overdue: task.deadline < date,
+      source: task,
+    });
+  });
+
+  (projects || []).forEach(project => {
+    if (project.status && project.status !== "Ativo") return;
+    (project.phases || []).forEach(phase => {
+      (phase.tasks || []).forEach(task => {
+        const isDone = isDoneStatus(task.status);
+        if (isDone && task.completedAt === date) {
+          completedToday.push({
+            id: task.id,
+            type: "projectTask",
+            name: task.name || "",
+            deadline: task.deadline || "",
+            time: task.deadlineTime || "",
+            priority: task.priority || "",
+            difficulty: task.difficulty || 1,
+            category: task.category || project.category || "",
+            projectId: project.id,
+            projectName: project.name || "",
+            phaseId: phase.id,
+            phaseName: phase.name || "",
+            completedAt: task.completedAt,
+            source: task,
+          });
+          return;
+        }
+        if (isDone || !task.deadline || task.deadline > date) return;
+        pending.push({
+          id: task.id,
+          type: "projectTask",
+          name: task.name || "",
+          deadline: task.deadline,
+          time: task.deadlineTime || "",
+          priority: task.priority || "",
+          difficulty: task.difficulty || 1,
+          category: task.category || project.category || "",
+          projectId: project.id,
+          projectName: project.name || "",
+          phaseId: phase.id,
+          phaseName: phase.name || "",
+          overdue: task.deadline < date,
+          source: task,
+        });
+      });
+    });
+  });
+
+  (routines || []).forEach(routine => {
+    if (routine.status !== "Ativa") return;
+    const doneToday = (routine.completionLog || []).some(log => log.date === date);
+    if (doneToday) {
+      completedToday.push({
+        id: routine.id,
+        type: "routine",
+        name: routine.name || "",
+        time: routine.notificationTime || "",
+        priority: routine.priority || "",
+        difficulty: routine.difficulty || 1,
+        category: routine.category || "",
+        completedAt: date,
+        source: routine,
+      });
+      return;
+    }
+    if (!isRoutineDueOn(routine, date)) return;
+    pending.push({
+      id: routine.id,
+      type: "routine",
+      name: routine.name || "",
+      time: routine.notificationTime || "",
+      priority: routine.priority || "",
+      difficulty: routine.difficulty || 1,
+      category: routine.category || "",
+      source: routine,
+    });
+  });
+
+  return {
+    date,
+    pending: pending.sort(sortAgendaItems),
+    completedToday: completedToday.sort(sortAgendaItems),
+  };
 }
 
 export function getRoutineNotificationDays(routine) {

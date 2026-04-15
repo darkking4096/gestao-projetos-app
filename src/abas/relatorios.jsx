@@ -1,7 +1,9 @@
 import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { C } from '../temas.js';
+import { COLORS, FREQUENCIES } from '../constantes.js';
 import { uid, td, fmtD } from '../utilidades.js';
 import { Modal, Btn } from '../componentes-base.jsx';
+import { requestDailyPlan } from '../planejamento-ia.js';
 
 /*
   RELATÓRIOS — Sistema de Notas
@@ -11,7 +13,22 @@ import { Modal, Btn } from '../componentes-base.jsx';
   o que causava perda de foco.
 */
 
-export default function ReportsTab({ notes, folders, onUpdateNotes, onUpdateFolders }) {
+export default function ReportsTab({
+  notes,
+  folders,
+  onUpdateNotes,
+  onUpdateFolders,
+  groqApiKey = "",
+  projects = [],
+  routines = [],
+  tasks = [],
+  objectives = [],
+  profile = {},
+  onCreateTask,
+  onCreateProjectTask,
+  onCreateRoutine,
+  onCreateProject,
+}) {
   /* ── Estado ── */
   const [selNoteId, setSelNoteId]         = useState(null);
   const [selFolderId, setSelFolderId]     = useState(null);
@@ -25,6 +42,11 @@ export default function ReportsTab({ notes, folders, onUpdateNotes, onUpdateFold
   const [renamingFolder, setRenamingFolder]   = useState(null); // { id, name }
   const [showMoveModal, setShowMoveModal]     = useState(null); // noteId
   const [confirmDelete, setConfirmDelete]     = useState(null); // { type, id, name }
+  const [plannerInput, setPlannerInput]       = useState("");
+  const [plannerLoading, setPlannerLoading]   = useState(false);
+  const [plannerError, setPlannerError]       = useState("");
+  const [editingCardId, setEditingCardId]     = useState(null);
+  const [editingCard, setEditingCard]         = useState(null);
 
   /* ── Drag Desktop (mouse / HTML5) ── */
   const [deskDrag, setDeskDrag]   = useState(null);  // { id, type: "note"|"folder" }
@@ -32,14 +54,17 @@ export default function ReportsTab({ notes, folders, onUpdateNotes, onUpdateFold
 
   /* ── Drag Mobile (touch) ── */
   const touchRef     = useRef(null); // { id, type, label, startX, startY, active }
+  const acceptingCardsRef = useRef(new Set());
   const [dragPos, setDragPos] = useState(null); // { x, y }
   const sidebarRef   = useRef(null); // para registrar listener não-passivo
 
   const isDesktop = window.innerWidth >= 768;
   const allNotes   = notes   || [];
   const allFolders = folders || [];
+  const today = td();
 
   const selNote     = useMemo(() => allNotes.find(n => n.id === selNoteId) || null, [allNotes, selNoteId]);
+  const todayPlan   = useMemo(() => allNotes.find(n => n.kind === "daily-plan" && n.planDate === today) || null, [allNotes, today]);
   const rootFolders = useMemo(() => allFolders.filter(f => !f.parentId),            [allFolders]);
   const looseNotes  = useMemo(() => allNotes.filter(n => !n.folderId),              [allNotes]);
 
@@ -53,11 +78,493 @@ export default function ReportsTab({ notes, folders, onUpdateNotes, onUpdateFold
     if (!isDesktop) setMobileView("editor");
   }, [onUpdateNotes, isDesktop]);
 
+  const openTodayPlan = useCallback(() => {
+    const existing = allNotes.find(n => n.kind === "daily-plan" && n.planDate === today);
+    if (existing) {
+      setSelNoteId(existing.id);
+      if (!isDesktop) setMobileView("editor");
+      return;
+    }
+
+    const note = {
+      id: uid(),
+      title: `Plano do dia - ${fmtD(today)}`,
+      content: "",
+      folderId: null,
+      kind: "daily-plan",
+      planDate: today,
+      messages: [],
+      aiRuns: [],
+      actionCards: [],
+      createdItemRefs: [],
+      createdAt: today,
+      updatedAt: today,
+    };
+    onUpdateNotes(prev => {
+      const list = prev || [];
+      if (list.some(n => n.kind === "daily-plan" && n.planDate === today)) return list;
+      return [...list, note];
+    });
+    setSelNoteId(note.id);
+    if (!isDesktop) setMobileView("editor");
+  }, [allNotes, today, onUpdateNotes, isDesktop]);
+
+  useEffect(() => {
+    if (!selNoteId && todayPlan) setSelNoteId(todayPlan.id);
+  }, [selNoteId, todayPlan]);
+
   const updateNoteField = useCallback((id, field, value) => {
     onUpdateNotes(prev => (prev || []).map(n =>
       n.id === id ? { ...n, [field]: value, updatedAt: td() } : n
     ));
   }, [onUpdateNotes]);
+
+  const updateNoteById = useCallback((id, updater) => {
+    onUpdateNotes(prev => (prev || []).map(n =>
+      n.id === id ? { ...updater(n), updatedAt: td() } : n
+    ));
+  }, [onUpdateNotes]);
+
+  const updateActionCard = useCallback((noteId, cardId, updater) => {
+    updateNoteById(noteId, n => ({
+      ...n,
+      actionCards: (n.actionCards || []).map(card =>
+        card.id === cardId ? { ...updater(card), updatedAt: new Date().toISOString() } : card
+      ),
+    }));
+  }, [updateNoteById]);
+
+  const setCardStatus = useCallback((noteId, cardId, status) => {
+    updateActionCard(noteId, cardId, card => ({
+      ...card,
+      status,
+      decidedAt: new Date().toISOString(),
+    }));
+  }, [updateActionCard]);
+
+  const getCreatedRefId = useCallback((card, type) => {
+    if (!card?.createdRef) return "";
+    if (typeof card.createdRef === "string") return card.createdRef;
+    if (type && card.createdRef.type && card.createdRef.type !== type) return "";
+    return card.createdRef.id || "";
+  }, []);
+
+  const getCreatedRefTaskId = useCallback((card) => getCreatedRefId(card, "task"), [getCreatedRefId]);
+  const getCreatedRefRoutineId = useCallback((card) => getCreatedRefId(card, "routine"), [getCreatedRefId]);
+  const getCreatedRefProjectId = useCallback((card) => getCreatedRefId(card, "project"), [getCreatedRefId]);
+
+  const findProjectForCard = useCallback((card) => {
+    if (!card) return null;
+    const byId = card.projectId ? (projects || []).find(project => project.id === card.projectId) : null;
+    if (byId) return byId;
+    const nameKey = String(card.projectName || "").trim().toLowerCase();
+    if (!nameKey) return null;
+    return (projects || []).find(project => String(project.name || "").trim().toLowerCase() === nameKey) || null;
+  }, [projects]);
+
+  const getDefaultPhaseId = useCallback((project, phaseId) => {
+    const phases = project?.phases || [];
+    if (!phases.length) return "";
+    if (phaseId && phases.some(phase => phase.id === phaseId)) return phaseId;
+    return (phases.find(phase => (phase.status || "Ativa") === "Ativa") || phases[0]).id || "";
+  }, []);
+
+  const cardToTask = useCallback((card, planDate) => {
+    const deadline = normalizePlanDate(card.targetDate) || normalizePlanDate(planDate) || today;
+    const hasDescription = !!String(card.description || "").trim();
+    const hasCategory = !!String(card.category || "").trim();
+    const hasPriority = !!String(card.priority || "").trim();
+    return {
+      name: String(card.name || "Tarefa sem nome").trim() || "Tarefa sem nome",
+      description: String(card.description || "").trim(),
+      difficulty: Number(card.difficulty) || 3,
+      color: card.color || COLORS[3],
+      priority: card.priority || "",
+      category: card.category || "",
+      deadline,
+      deadlineTime: card.targetTime || "",
+      notificationEnabled: false,
+      notificationDate: "",
+      notificationTime: "",
+      notes: [],
+      modulars: {
+        description: hasDescription,
+        category: hasCategory,
+        priority: hasPriority,
+        deadline: true,
+        notes: false,
+      },
+      linkedObjectives: [],
+      createdFromPlan: {
+        planId: "",
+        cardId: card.id,
+        action: card.action || "create_task",
+      },
+    };
+  }, [today]);
+
+  const cardToProjectTask = useCallback((card, planDate) => {
+    const task = cardToTask(card, planDate);
+    return {
+      ...task,
+      color: task.color || findProjectForCard(card)?.color || COLORS[3],
+      createdFromPlan: {
+        ...task.createdFromPlan,
+        action: card.action || "create_project_task",
+      },
+    };
+  }, [cardToTask, findProjectForCard]);
+
+  const cardToRoutine = useCallback((card) => {
+    const hasDescription = !!String(card.description || "").trim();
+    const hasCategory = !!String(card.category || "").trim();
+    const hasPriority = !!String(card.priority || "").trim();
+    const frequency = FREQUENCIES.includes(card.frequency) ? card.frequency : "Livre";
+    const frequencyDays = Array.isArray(card.frequencyDays) ? card.frequencyDays : [];
+    return {
+      name: String(card.name || "Rotina sem nome").trim() || "Rotina sem nome",
+      description: String(card.description || "").trim(),
+      difficulty: Number(card.difficulty) || 3,
+      color: card.color || COLORS[2],
+      priority: card.priority || "",
+      category: card.category || "",
+      frequency,
+      frequencyDays,
+      notificationEnabled: !!card.targetTime,
+      notificationTime: card.targetTime || "",
+      notes: [],
+      modulars: {
+        description: hasDescription,
+        category: hasCategory,
+        priority: hasPriority,
+        notes: false,
+      },
+      linkedObjectives: [],
+      createdFromPlan: {
+        planId: "",
+        cardId: card.id,
+        action: card.action || "suggest_routine",
+      },
+    };
+  }, []);
+
+  const cardToProject = useCallback((card, planDate) => {
+    const deadline = normalizePlanDate(card.targetDate) || normalizePlanDate(planDate) || "";
+    const hasDescription = !!String(card.description || "").trim();
+    const hasCategory = !!String(card.category || "").trim();
+    const hasPriority = !!String(card.priority || "").trim();
+    return {
+      name: String(card.name || "Projeto sem nome").trim() || "Projeto sem nome",
+      objective: String(card.description || "").trim(),
+      description: String(card.description || "").trim(),
+      difficulty: Number(card.difficulty) || 3,
+      color: card.color || COLORS[0],
+      priority: card.priority || "",
+      category: card.category || "",
+      deadline,
+      notes: [],
+      phases: [],
+      modulars: {
+        description: hasDescription,
+        category: hasCategory,
+        priority: hasPriority,
+        deadline: !!deadline,
+        color: true,
+        notes: false,
+      },
+      linkedObjectives: [],
+      createdFromPlan: {
+        planId: "",
+        cardId: card.id,
+        action: card.action || "suggest_project",
+      },
+    };
+  }, []);
+
+  const acceptActionCard = useCallback((note, card) => {
+    if (!note || !card || (card.status || "pending") === "accepted" || (card.status || "pending") === "rejected") return;
+    if (acceptingCardsRef.current.has(card.id)) return;
+
+    const creatableActions = new Set(["create_task", "create_project_task", "create_routine", "suggest_routine", "create_project", "suggest_project"]);
+    if (!creatableActions.has(card.action)) {
+      setCardStatus(note.id, card.id, "accepted");
+      return;
+    }
+
+    const refTypeByAction = {
+      create_task: "task",
+      create_project_task: "projectTask",
+      create_routine: "routine",
+      suggest_routine: "routine",
+      create_project: "project",
+      suggest_project: "project",
+    };
+    const existingTaskId = getCreatedRefId(card, refTypeByAction[card.action]);
+    const existingTask = existingTaskId && card.action === "create_task"
+      ? (tasks || []).find(t => t.id === existingTaskId)
+      : null;
+    const existingProjectTask = existingTaskId && card.action === "create_project_task"
+      ? (projects || []).flatMap(project =>
+          (project.phases || []).flatMap(phase =>
+            (phase.tasks || []).map(task => ({ task, projectId: project.id, phaseId: phase.id }))
+          )
+        ).find(item => item.task.id === existingTaskId)
+      : null;
+    const existingRoutine = existingTaskId && (card.action === "create_routine" || card.action === "suggest_routine")
+      ? (routines || []).find(r => r.id === existingTaskId)
+      : null;
+    const existingProject = existingTaskId && (card.action === "create_project" || card.action === "suggest_project")
+      ? (projects || []).find(p => p.id === existingTaskId)
+      : null;
+    if (existingTask || existingProjectTask || existingRoutine || existingProject) {
+      setCardStatus(note.id, card.id, "accepted");
+      return;
+    }
+
+    if (card.action === "create_task" && !onCreateTask) {
+      setPlannerError("Nao foi possivel criar a tarefa agora. Tente novamente depois.");
+      return;
+    }
+
+    if (card.action === "create_project_task" && !onCreateProjectTask) {
+      setPlannerError("Nao foi possivel criar a tarefa de projeto agora. Tente novamente depois.");
+      return;
+    }
+
+    if ((card.action === "create_routine" || card.action === "suggest_routine") && !onCreateRoutine) {
+      setPlannerError("Nao foi possivel criar a rotina agora. Tente novamente depois.");
+      return;
+    }
+
+    if ((card.action === "create_project" || card.action === "suggest_project") && !onCreateProject) {
+      setPlannerError("Nao foi possivel criar o projeto agora. Tente novamente depois.");
+      return;
+    }
+
+    const project = card.action === "create_project_task" ? findProjectForCard(card) : null;
+    if (card.action === "create_project_task" && !project) {
+      setPlannerError("Escolha um projeto valido antes de aceitar a tarefa.");
+      return;
+    }
+
+    acceptingCardsRef.current.add(card.id);
+    const now = new Date().toISOString();
+    try {
+      let createdRef;
+      if (card.action === "create_project_task") {
+        const taskInput = cardToProjectTask(card, note.planDate);
+        const created = onCreateProjectTask({
+          projectId: project.id,
+          phaseId: getDefaultPhaseId(project, card.phaseId),
+          task: {
+            ...taskInput,
+            createdFromPlan: {
+              ...taskInput.createdFromPlan,
+              planId: note.id,
+            },
+          },
+        });
+        createdRef = {
+          type: "projectTask",
+          id: created.task.id,
+          projectId: created.projectId,
+          phaseId: created.phaseId,
+          createdAt: now,
+        };
+      } else if (card.action === "create_routine" || card.action === "suggest_routine") {
+        const routineInput = cardToRoutine(card);
+        const created = onCreateRoutine({
+          ...routineInput,
+          createdFromPlan: {
+            ...routineInput.createdFromPlan,
+            planId: note.id,
+          },
+        });
+        createdRef = { type: "routine", id: created.item.id, existing: !!created.existing, createdAt: now };
+      } else if (card.action === "create_project" || card.action === "suggest_project") {
+        const projectInput = cardToProject(card, note.planDate);
+        const created = onCreateProject({
+          ...projectInput,
+          createdFromPlan: {
+            ...projectInput.createdFromPlan,
+            planId: note.id,
+          },
+        });
+        createdRef = { type: "project", id: created.item.id, existing: !!created.existing, createdAt: now };
+      } else {
+        const taskInput = cardToTask(card, note.planDate);
+        const createdTask = onCreateTask({
+          ...taskInput,
+          createdFromPlan: {
+            ...taskInput.createdFromPlan,
+            planId: note.id,
+          },
+        });
+        createdRef = { type: "task", id: createdTask.id, createdAt: now };
+      }
+
+      updateNoteById(note.id, n => {
+        const alreadyRegistered = (n.createdItemRefs || []).some(ref => ref && ref.type === createdRef.type && ref.id === createdRef.id);
+        return {
+          ...n,
+          actionCards: (n.actionCards || []).map(item =>
+            item.id === card.id
+              ? { ...item, status: "accepted", decidedAt: now, createdRef, updatedAt: now }
+              : item
+          ),
+          createdItemRefs: alreadyRegistered
+            ? (n.createdItemRefs || [])
+            : [...(n.createdItemRefs || []), { ...createdRef, cardId: card.id, action: card.action || "create_task" }],
+        };
+      });
+    } catch (e) {
+      acceptingCardsRef.current.delete(card.id);
+      setPlannerError("Nao foi possivel criar este item agora. Tente novamente depois.");
+    }
+  }, [cardToProject, cardToProjectTask, cardToRoutine, cardToTask, findProjectForCard, getCreatedRefId, getDefaultPhaseId, onCreateProject, onCreateProjectTask, onCreateRoutine, onCreateTask, projects, routines, setCardStatus, tasks, updateNoteById]);
+
+  const startEditCard = useCallback((card) => {
+    setEditingCardId(card.id);
+    setEditingCard({
+      name: card.name || "",
+      description: card.description || "",
+      targetDate: card.targetDate || "",
+      targetTime: card.targetTime || "",
+      category: card.category || "",
+      priority: card.priority || "",
+      difficulty: card.difficulty || 3,
+      projectId: card.projectId || "",
+      projectName: card.projectName || "",
+      phaseId: card.phaseId || "",
+      phaseName: card.phaseName || "",
+      frequency: card.frequency || "Livre",
+      frequencyDays: Array.isArray(card.frequencyDays) ? card.frequencyDays : [],
+      existingId: card.existingId || "",
+      existingType: card.existingType || "",
+      confidence: card.confidence || "media",
+      reason: card.reason || "",
+      originText: card.originText || "",
+    });
+  }, []);
+
+  const saveEditCard = useCallback((noteId, cardId) => {
+    if (!editingCard) return;
+    updateActionCard(noteId, cardId, card => ({
+      ...card,
+      ...editingCard,
+      difficulty: Number(editingCard.difficulty) || 3,
+      status: (card.status || "pending") === "accepted" ? "accepted" : "edited",
+      editedAt: new Date().toISOString(),
+    }));
+    setEditingCardId(null);
+    setEditingCard(null);
+  }, [editingCard, updateActionCard]);
+
+  const cancelEditCard = useCallback(() => {
+    setEditingCardId(null);
+    setEditingCard(null);
+  }, []);
+
+  const handlePlannerText = useCallback(async (text) => {
+    const clean = (text || "").trim();
+    const plan = allNotes.find(n => n.id === selNoteId);
+    if (!clean || !plan || plan.kind !== "daily-plan") return;
+
+    if (!groqApiKey) {
+      setPlannerError("Configure sua chave Groq em Perfil > Configuracoes para usar o planejamento com IA.");
+      return;
+    }
+
+    const createdAt = new Date().toISOString();
+    const userMessage = { id: uid(), role: "user", content: clean, createdAt };
+    const planSnapshot = {
+      messages: [...(plan.messages || []), userMessage],
+      actionCards: plan.actionCards || [],
+    };
+
+    setPlannerInput("");
+    setPlannerError("");
+    setPlannerLoading(true);
+    updateNoteById(plan.id, n => ({ ...n, messages: [...(n.messages || []), userMessage] }));
+
+    try {
+      const parsed = await requestDailyPlan(groqApiKey, {
+        text: clean,
+        planDate: plan.planDate || today,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Sao_Paulo",
+        recentMessages: planSnapshot.messages,
+        actionCards: planSnapshot.actionCards,
+        currentPlan: plan,
+        projects,
+        routines,
+        tasks,
+        objectives,
+        profile,
+      });
+
+      const assistantText = parsed.ok
+        ? parsed.data.resumo
+        : "Nao consegui interpretar a resposta da IA. O texto original foi salvo para revisao.";
+      const assistantMessage = {
+        id: uid(),
+        role: "assistant",
+        content: assistantText,
+        createdAt: new Date().toISOString(),
+        parsed: parsed.ok ? parsed.data : null,
+        parseError: parsed.ok ? "" : parsed.error,
+      };
+      const aiRun = {
+        id: uid(),
+        createdAt: assistantMessage.createdAt,
+        ok: parsed.ok,
+        input: clean,
+        raw: parsed.raw || "",
+        parsed: parsed.ok ? parsed.data : null,
+        error: parsed.ok ? "" : parsed.error,
+      };
+      const newCards = parsed.ok
+        ? parsed.data.acoes.map(action => ({
+            id: uid(),
+            status: "pending",
+            createdAt: assistantMessage.createdAt,
+            ...action,
+          }))
+        : [];
+
+      updateNoteById(plan.id, n => ({
+        ...n,
+        messages: [...(n.messages || []), assistantMessage],
+        aiRuns: [...(n.aiRuns || []), aiRun],
+        actionCards: [...(n.actionCards || []), ...newCards],
+      }));
+      if (!parsed.ok) setPlannerError("A IA respondeu em um formato invalido. A conversa foi salva e voce pode tentar de novo.");
+    } catch (e) {
+      const msg = "Erro ao conectar com a IA. Verifique sua chave Groq em Perfil > Configuracoes.";
+      const assistantMessage = {
+        id: uid(),
+        role: "assistant",
+        content: msg,
+        createdAt: new Date().toISOString(),
+        error: e?.message || "",
+      };
+      updateNoteById(plan.id, n => ({
+        ...n,
+        messages: [...(n.messages || []), assistantMessage],
+        aiRuns: [...(n.aiRuns || []), {
+          id: uid(),
+          createdAt: assistantMessage.createdAt,
+          ok: false,
+          input: clean,
+          raw: "",
+          parsed: null,
+          error: e?.message || msg,
+        }],
+      }));
+      setPlannerError(`${msg}${e?.message ? " " + e.message : ""}`);
+    } finally {
+      setPlannerLoading(false);
+    }
+  }, [allNotes, selNoteId, groqApiKey, today, updateNoteById, projects, routines, tasks, objectives, profile]);
 
   const deleteNote = useCallback((id) => {
     onUpdateNotes(prev => (prev || []).filter(n => n.id !== id));
@@ -231,6 +738,7 @@ export default function ReportsTab({ notes, folders, onUpdateNotes, onUpdateFold
 
   const renderNoteRow = (note, depth) => {
     const isSel = selNoteId === note.id;
+    const isDailyPlan = note.kind === "daily-plan";
     const isDraggingThis = (touchRef.current?.active && touchRef.current?.id === note.id)
                         || (deskDrag?.id === note.id);
     return (
@@ -261,13 +769,25 @@ export default function ReportsTab({ notes, folders, onUpdateNotes, onUpdateFold
           transition: "background .1s, opacity .1s",
         }}
       >
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, pointerEvents: "none" }}>
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <polyline points="14 2 14 8 20 8"/>
-        </svg>
+        {isDailyPlan ? (
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, pointerEvents: "none" }}>
+            <rect x="3" y="4" width="18" height="18" rx="2"/>
+            <path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="M8 15h4"/>
+          </svg>
+        ) : (
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, pointerEvents: "none" }}>
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+        )}
         <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", pointerEvents: "none" }}>
           {note.title || "Sem título"}
         </span>
+        {isDailyPlan && (
+          <span style={{ fontSize: 9, color: C.gold, border: "1px solid " + C.goldBrd, borderRadius: 4, padding: "1px 4px", pointerEvents: "none", flexShrink: 0 }}>
+            plano
+          </span>
+        )}
       </div>
     );
   };
@@ -384,6 +904,340 @@ export default function ReportsTab({ notes, folders, onUpdateNotes, onUpdateFold
   };
 
   /* ── SIDEBAR (função, não componente) ── */
+  const actionLabels = {
+    create_task: "Tarefa avulsa",
+    create_project_task: "Tarefa de projeto",
+    create_routine: "Rotina",
+    create_project: "Projeto",
+    already_exists: "Ja existe",
+    suggest_routine: "Sugestao de rotina",
+    suggest_project: "Sugestao de projeto",
+  };
+
+  const statusLabels = {
+    pending: "Pendente",
+    edited: "Editado",
+    accepted: "Aceito",
+    rejected: "Recusado",
+  };
+
+  const statusColors = {
+    pending: C.tx4,
+    edited: C.blue,
+    accepted: C.green,
+    rejected: C.red,
+  };
+
+  const inputStyle = {
+    width: "100%",
+    boxSizing: "border-box",
+    background: C.bg,
+    border: "1px solid " + C.brd2,
+    borderRadius: 6,
+    color: C.tx,
+    fontSize: 11,
+    padding: "7px 8px",
+    outline: "none",
+    fontFamily: "'Segoe UI', 'Helvetica Neue', system-ui, sans-serif",
+  };
+
+  const sectionTitleStyle = {
+    fontSize: 10,
+    color: C.tx4,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    fontWeight: 600,
+    margin: "10px 0 6px",
+  };
+
+  const normalizePlanDate = (value) => String(value || "").slice(0, 10);
+  const isOptionalAction = (action) => action === "suggest_routine" || action === "suggest_project";
+  const isFutureCard = (card, planDate) => {
+    const targetDate = normalizePlanDate(card.targetDate);
+    const baseDate = normalizePlanDate(planDate);
+    return targetDate && baseDate && targetDate > baseDate;
+  };
+
+  const getCardDestination = (card) => {
+    if (card.action === "create_project_task") return card.projectName || card.projectId || "Projeto a confirmar";
+    if (card.action === "already_exists") return [card.existingType, card.existingId].filter(Boolean).join(" ") || "Item existente";
+    if (card.action === "create_routine" || card.action === "suggest_routine") return "Rotinas";
+    if (card.action === "create_project" || card.action === "suggest_project") return "Projetos";
+    return card.category || "Tarefas avulsas";
+  };
+
+  const groupActionCards = (cards, planDate) => {
+    const groups = {
+      today: [],
+      future: [],
+      existing: [],
+      optional: [],
+    };
+    (cards || []).forEach(card => {
+      if (card.action === "already_exists") groups.existing.push(card);
+      else if (isOptionalAction(card.action)) groups.optional.push(card);
+      else if (isFutureCard(card, planDate)) groups.future.push(card);
+      else groups.today.push(card);
+    });
+    return groups;
+  };
+
+  const renderPlannerField = (label, children) => (
+    <label style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+      <span style={{ fontSize: 9, color: C.tx4, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</span>
+      {children}
+    </label>
+  );
+
+  const CardMeta = ({ label, value, color }) => {
+    if (!value) return null;
+    return (
+      <span style={{
+        display: "inline-flex",
+        alignItems: "center",
+        minHeight: 22,
+        padding: "3px 7px",
+        borderRadius: 5,
+        border: "1px solid " + (color || C.brd2),
+        color: color || C.tx3,
+        background: (color || C.brd2) + "12",
+        fontSize: 10,
+        lineHeight: 1.2,
+      }}>
+        {label ? label + ": " : ""}{value}
+      </span>
+    );
+  };
+
+  const renderActionCard = (note, card) => {
+    const status = card.status || "pending";
+    const isEditing = editingCardId === card.id && editingCard;
+    const confidence = String(card.confidence || "media").toLowerCase();
+    const confidenceColor = confidence === "alta" ? C.green : confidence === "baixa" ? C.orange : C.blue;
+    const canDecide = status !== "accepted" && status !== "rejected";
+    const selectedProject = isEditing
+      ? ((projects || []).find(project => project.id === editingCard.projectId) || findProjectForCard(editingCard))
+      : findProjectForCard(card);
+    const projectPhases = selectedProject?.phases || [];
+    const createdLabel = getCreatedRefId(card, "projectTask")
+      ? "Tarefa de projeto"
+      : getCreatedRefTaskId(card)
+        ? "Tarefa"
+        : getCreatedRefRoutineId(card)
+          ? (card.createdRef?.existing ? "Rotina existente" : "Rotina")
+          : getCreatedRefProjectId(card)
+            ? (card.createdRef?.existing ? "Projeto existente" : "Projeto")
+            : "";
+    const isRoutineCard = card.action === "create_routine" || card.action === "suggest_routine";
+
+    return (
+      <div key={card.id} style={{ border: "1px solid " + C.brd2, background: C.card, borderRadius: 8, padding: 10 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 5 }}>
+              <CardMeta value={actionLabels[card.action] || card.action || "Acao"} color={C.gold} />
+              <CardMeta value={statusLabels[status] || status} color={statusColors[status] || C.tx4} />
+              {(confidence === "media" || confidence === "baixa") && <CardMeta label="Confianca" value={confidence} color={confidenceColor} />}
+            </div>
+            <div style={{ color: C.tx, fontSize: 12, fontWeight: 600, lineHeight: 1.35, overflowWrap: "anywhere" }}>
+              {card.name || "Acao sem nome"}
+            </div>
+          </div>
+          {!isEditing && canDecide && (
+            <button onClick={() => startEditCard(card)} style={{ border: "1px solid " + C.brd2, background: C.bg, color: C.tx3, borderRadius: 6, padding: "5px 7px", fontSize: 10, cursor: "pointer", flexShrink: 0 }}>
+              Editar
+            </button>
+          )}
+        </div>
+
+        {isEditing ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {renderPlannerField("Nome",
+              <input value={editingCard.name} onChange={e => setEditingCard(v => ({ ...v, name: e.target.value }))} style={inputStyle} />
+            )}
+            {renderPlannerField("Descricao",
+              <textarea value={editingCard.description} onChange={e => setEditingCard(v => ({ ...v, description: e.target.value }))} rows={2} style={{ ...inputStyle, resize: "vertical", minHeight: 54 }} />
+            )}
+            <div style={{ display: "grid", gridTemplateColumns: isDesktop ? "1fr 1fr 1fr" : "1fr", gap: 8 }}>
+              {renderPlannerField("Data",
+                <input type="date" value={editingCard.targetDate} onChange={e => setEditingCard(v => ({ ...v, targetDate: e.target.value }))} style={inputStyle} />
+              )}
+              {renderPlannerField("Horario",
+                <input type="time" value={editingCard.targetTime} onChange={e => setEditingCard(v => ({ ...v, targetTime: e.target.value }))} style={inputStyle} />
+              )}
+              {renderPlannerField("Dificuldade",
+                <input type="number" min="1" max="20" value={editingCard.difficulty} onChange={e => setEditingCard(v => ({ ...v, difficulty: e.target.value }))} style={inputStyle} />
+              )}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: isDesktop ? "1fr 1fr" : "1fr", gap: 8 }}>
+              {renderPlannerField("Prioridade",
+                <select value={editingCard.priority} onChange={e => setEditingCard(v => ({ ...v, priority: e.target.value }))} style={inputStyle}>
+                  <option value="">Sem prioridade</option>
+                  <option value="Baixa">Baixa</option>
+                  <option value="Media">Media</option>
+                  <option value="Alta">Alta</option>
+                  <option value="Urgente">Urgente</option>
+                </select>
+              )}
+              {renderPlannerField("Categoria",
+                <input value={editingCard.category} onChange={e => setEditingCard(v => ({ ...v, category: e.target.value }))} style={inputStyle} />
+              )}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: isDesktop ? "1fr 1fr" : "1fr", gap: 8 }}>
+              {card.action === "create_project_task" ? renderPlannerField("Projeto",
+                <select
+                  value={selectedProject?.id || ""}
+                  onChange={e => {
+                    const project = (projects || []).find(item => item.id === e.target.value);
+                    const phases = project?.phases || [];
+                    const phase = phases.find(item => (item.status || "Ativa") === "Ativa") || phases[0] || null;
+                    setEditingCard(v => ({
+                      ...v,
+                      projectId: project?.id || "",
+                      projectName: project?.name || "",
+                      phaseId: phase?.id || "",
+                      phaseName: phase?.name || "",
+                    }));
+                  }}
+                  style={inputStyle}
+                >
+                  <option value="">Escolha um projeto</option>
+                  {(projects || []).filter(project => !project.status || project.status === "Ativo").map(project => (
+                    <option key={project.id} value={project.id}>{project.name || "Projeto sem nome"}</option>
+                  ))}
+                </select>
+              ) : renderPlannerField("Projeto",
+                <input value={editingCard.projectName} onChange={e => setEditingCard(v => ({ ...v, projectName: e.target.value }))} style={inputStyle} />
+              )}
+              {renderPlannerField("Confianca",
+                <select value={editingCard.confidence} onChange={e => setEditingCard(v => ({ ...v, confidence: e.target.value }))} style={inputStyle}>
+                  <option value="alta">alta</option>
+                  <option value="media">media</option>
+                  <option value="baixa">baixa</option>
+                </select>
+              )}
+            </div>
+            {isRoutineCard && (
+              <div style={{ display: "grid", gridTemplateColumns: isDesktop ? "1fr 1fr" : "1fr", gap: 8 }}>
+                {renderPlannerField("Frequencia",
+                  <select value={editingCard.frequency || "Livre"} onChange={e => setEditingCard(v => ({ ...v, frequency: e.target.value }))} style={inputStyle}>
+                    {FREQUENCIES.map(freq => <option key={freq} value={freq}>{freq}</option>)}
+                  </select>
+                )}
+                {renderPlannerField("Acao",
+                  <input value={editingCard.action || card.action || ""} disabled style={{ ...inputStyle, color: C.tx4 }} />
+                )}
+              </div>
+            )}
+            {card.action === "create_project_task" && (
+              <div style={{ display: "grid", gridTemplateColumns: isDesktop ? "1fr 1fr" : "1fr", gap: 8 }}>
+                {renderPlannerField("Fase",
+                  <select
+                    value={getDefaultPhaseId(selectedProject, editingCard.phaseId)}
+                    onChange={e => {
+                      const phase = projectPhases.find(item => item.id === e.target.value);
+                      setEditingCard(v => ({ ...v, phaseId: phase?.id || "", phaseName: phase?.name || "" }));
+                    }}
+                    disabled={!selectedProject || projectPhases.length === 0}
+                    style={inputStyle}
+                  >
+                    {projectPhases.length === 0 ? (
+                      <option value="">Fase Planejamento sera criada</option>
+                    ) : projectPhases.map(phase => (
+                      <option key={phase.id} value={phase.id}>{phase.name || "Fase sem nome"}</option>
+                    ))}
+                  </select>
+                )}
+                {renderPlannerField("Acao",
+                  <input value={editingCard.action || ""} disabled style={{ ...inputStyle, color: C.tx4 }} />
+                )}
+              </div>
+            )}
+            {renderPlannerField("Motivo",
+              <textarea value={editingCard.reason} onChange={e => setEditingCard(v => ({ ...v, reason: e.target.value }))} rows={2} style={{ ...inputStyle, resize: "vertical", minHeight: 54 }} />
+            )}
+            {renderPlannerField("Trecho original",
+              <textarea value={editingCard.originText} onChange={e => setEditingCard(v => ({ ...v, originText: e.target.value }))} rows={2} style={{ ...inputStyle, resize: "vertical", minHeight: 54 }} />
+            )}
+            <div style={{ display: "flex", gap: 7, justifyContent: "flex-end", flexWrap: "wrap" }}>
+              <button onClick={cancelEditCard} style={{ border: "1px solid " + C.brd2, background: C.bg, color: C.tx3, borderRadius: 6, padding: "7px 10px", fontSize: 11, cursor: "pointer" }}>
+                Cancelar
+              </button>
+              <button onClick={() => saveEditCard(note.id, card.id)} style={{ border: "1px solid " + C.goldBrd, background: C.gold + "18", color: C.gold, borderRadius: 6, padding: "7px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                Salvar edicao
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {card.description && (
+              <div style={{ color: C.tx2, fontSize: 11, lineHeight: 1.45, marginBottom: 8, overflowWrap: "anywhere" }}>
+                {card.description}
+              </div>
+            )}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 8 }}>
+              <CardMeta label="Data" value={card.targetDate ? fmtD(card.targetDate) : "Sem data"} />
+              <CardMeta label="Horario" value={card.targetTime} />
+              <CardMeta label="Destino" value={getCardDestination(card)} />
+              {card.action === "create_project_task" && <CardMeta label="Fase" value={(selectedProject?.phases || []).find(phase => phase.id === card.phaseId)?.name || card.phaseName || (selectedProject?.phases || []).find(phase => (phase.status || "Ativa") === "Ativa")?.name || ""} />}
+              {isRoutineCard && <CardMeta label="Frequencia" value={card.frequency || "Livre"} />}
+              <CardMeta label="Prioridade" value={card.priority} />
+              <CardMeta label="Dif." value={card.difficulty} />
+              <CardMeta label="Criado" value={createdLabel} color={C.green} />
+              {confidence === "alta" && <CardMeta label="Confianca" value={confidence} color={confidenceColor} />}
+            </div>
+            {card.reason && (
+              <div style={{ color: C.tx3, fontSize: 10, lineHeight: 1.45, marginBottom: 6, overflowWrap: "anywhere" }}>
+                {card.reason}
+              </div>
+            )}
+            {card.originText && (
+              <div style={{ color: C.tx4, fontSize: 10, lineHeight: 1.45, borderLeft: "2px solid " + C.brd2, paddingLeft: 7, marginBottom: 8, overflowWrap: "anywhere" }}>
+                "{card.originText}"
+              </div>
+            )}
+            {canDecide && (
+              <div style={{ display: "flex", gap: 7, justifyContent: "flex-end", flexWrap: "wrap" }}>
+                <button onClick={() => setCardStatus(note.id, card.id, "rejected")} style={{ border: "1px solid " + C.red + "55", background: C.red + "10", color: C.red, borderRadius: 6, padding: "7px 10px", fontSize: 11, cursor: "pointer" }}>
+                  Recusar
+                </button>
+                <button onClick={() => acceptActionCard(note, card)} style={{ border: "1px solid " + C.green + "55", background: C.green + "12", color: C.green, borderRadius: 6, padding: "7px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                  Aceitar
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  };
+
+  const renderActionCardSection = (title, cards, note) => {
+    if (!cards.length) return null;
+    return (
+      <div>
+        <div style={sectionTitleStyle}>{title}</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {cards.map(card => renderActionCard(note, card))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderActionCards = (note) => {
+    const actionCards = note.actionCards || [];
+    if (!actionCards.length) return null;
+    const groups = groupActionCards(actionCards, note.planDate || today);
+    return (
+      <div style={{ padding: "0 14px 10px", maxHeight: 320, overflowY: "auto" }}>
+        {renderActionCardSection("Para hoje", groups.today, note)}
+        {renderActionCardSection("Para o futuro", groups.future, note)}
+        {renderActionCardSection("Ja existe", groups.existing, note)}
+        {renderActionCardSection("Sugestoes opcionais", groups.optional, note)}
+      </div>
+    );
+  };
+
   const renderSidebar = () => (
     <div
       ref={sidebarRef}
@@ -451,6 +1305,27 @@ export default function ReportsTab({ notes, folders, onUpdateNotes, onUpdateFold
         </div>
       </div>
 
+      <div style={{ padding: "8px 10px", borderBottom: "0.5px solid " + C.brd, flexShrink: 0 }}>
+        <button
+          onClick={openTodayPlan}
+          style={{
+            width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+            padding: "8px 10px", borderRadius: 6, border: "1px solid " + (todayPlan ? C.goldBrd : C.brd2),
+            background: todayPlan ? C.gold + "10" : C.card, color: todayPlan ? C.gold : C.tx2,
+            fontSize: 12, cursor: "pointer",
+          }}
+        >
+          <span style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+              <rect x="3" y="4" width="18" height="18" rx="2"/>
+              <path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="M8 15h4"/>
+            </svg>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Plano de hoje</span>
+          </span>
+          <span style={{ fontSize: 10, color: todayPlan ? C.gold : C.tx4, flexShrink: 0 }}>{fmtD(today)}</span>
+        </button>
+      </div>
+
       {/* Campo de busca */}
       {showSearch && (
         <div style={{ padding: "8px 10px", borderBottom: "0.5px solid " + C.brd, flexShrink: 0 }}>
@@ -513,6 +1388,125 @@ export default function ReportsTab({ notes, folders, onUpdateNotes, onUpdateFold
   );
 
   /* ── EDITOR (função, não componente) ── */
+  const renderPlannerChat = (note) => {
+    const messages = note.messages || [];
+    const actionCards = note.actionCards || [];
+    const pendingCount = actionCards.filter(c => (c.status || "pending") === "pending").length;
+
+    return (
+      <div style={{ borderBottom: "0.5px solid " + C.brd + "40", flexShrink: 0, background: C.bg }}>
+        <div style={{ padding: "10px 14px 8px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 12, color: C.tx, fontWeight: 600 }}>Chat de planejamento</div>
+            <div style={{ fontSize: 10, color: C.tx4, marginTop: 2 }}>Escreva o que pretende fazer. Nada sera criado sem aprovacao.</div>
+          </div>
+          {actionCards.length > 0 && (
+            <div style={{ fontSize: 10, color: C.gold, border: "1px solid " + C.goldBrd, borderRadius: 6, padding: "4px 7px", flexShrink: 0 }}>
+              {pendingCount} pendentes
+            </div>
+          )}
+        </div>
+
+        {messages.length > 0 && (
+          <div style={{ maxHeight: 180, overflowY: "auto", padding: "0 14px 8px", display: "flex", flexDirection: "column", gap: 7 }}>
+            {messages.map(msg => (
+              <div key={msg.id || msg.createdAt} style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
+                <div style={{
+                  maxWidth: "82%",
+                  padding: "7px 9px",
+                  borderRadius: 8,
+                  border: "1px solid " + (msg.role === "user" ? C.goldBrd : C.brd2),
+                  background: msg.role === "user" ? C.gold + "10" : C.card,
+                  color: C.tx2,
+                  fontSize: 11,
+                  lineHeight: 1.45,
+                  whiteSpace: "pre-wrap",
+                  overflowWrap: "anywhere",
+                }}>
+                  <div style={{ color: msg.role === "user" ? C.gold : C.tx4, fontSize: 9, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>
+                    {msg.role === "user" ? "Voce" : "IA"}
+                  </div>
+                  {msg.content}
+                  {msg.parsed?.acoes?.length > 0 && (
+                    <div style={{ marginTop: 5, color: C.tx4, fontSize: 10 }}>
+                      {msg.parsed.acoes.length} acao{msg.parsed.acoes.length === 1 ? "" : "es"} interpretada{msg.parsed.acoes.length === 1 ? "" : "s"}.
+                    </div>
+                  )}
+                  {msg.parseError && (
+                    <div style={{ marginTop: 5, color: C.orange, fontSize: 10 }}>Resposta fora do formato esperado.</div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {plannerError && (
+          <div style={{ margin: "0 14px 8px", padding: "7px 9px", borderRadius: 6, border: "1px solid " + C.orange + "55", background: C.orange + "12", color: C.orange, fontSize: 11, lineHeight: 1.4 }}>
+            {plannerError}
+          </div>
+        )}
+
+        {!groqApiKey && (
+          <div style={{ margin: "0 14px 8px", padding: "7px 9px", borderRadius: 6, border: "1px solid " + C.brd2, background: C.card, color: C.tx3, fontSize: 11, lineHeight: 1.4 }}>
+            Configure sua chave da API Groq em Perfil &gt; Configuracoes para usar o planejador.
+          </div>
+        )}
+
+        {renderActionCards(note)}
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handlePlannerText(plannerInput);
+          }}
+          style={{ padding: "0 14px 10px", display: "flex", gap: 8, alignItems: "flex-end" }}
+        >
+          <textarea
+            value={plannerInput}
+            onChange={(e) => setPlannerInput(e.target.value)}
+            disabled={plannerLoading}
+            placeholder="Ex.: hoje preciso revisar o contrato as 14h e amanha ligar para o cliente"
+            rows={2}
+            style={{
+              flex: 1,
+              minHeight: 46,
+              maxHeight: 96,
+              resize: "vertical",
+              background: C.card,
+              border: "1px solid " + C.brd2,
+              borderRadius: 8,
+              color: C.tx,
+              fontSize: 12,
+              lineHeight: 1.45,
+              outline: "none",
+              padding: "8px 10px",
+              fontFamily: "'Segoe UI', 'Helvetica Neue', system-ui, sans-serif",
+            }}
+          />
+          <button
+            type="submit"
+            disabled={plannerLoading || !plannerInput.trim()}
+            style={{
+              minHeight: 38,
+              padding: "0 12px",
+              borderRadius: 8,
+              border: "1px solid " + C.goldBrd,
+              background: plannerLoading || !plannerInput.trim() ? C.card : C.gold + "18",
+              color: plannerLoading || !plannerInput.trim() ? C.tx4 : C.gold,
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: plannerLoading || !plannerInput.trim() ? "default" : "pointer",
+              flexShrink: 0,
+            }}
+          >
+            {plannerLoading ? "Enviando" : "Enviar"}
+          </button>
+        </form>
+      </div>
+    );
+  };
+
   const renderEditor = () => {
     if (!selNote) return (
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8, color: C.tx4 }}>
@@ -521,10 +1515,12 @@ export default function ReportsTab({ notes, folders, onUpdateNotes, onUpdateFold
           <polyline points="14 2 14 8 20 8"/>
         </svg>
         <span style={{ fontSize: 12 }}>Selecione ou crie uma nota</span>
+        <Btn onClick={openTodayPlan} primary>Plano de hoje</Btn>
       </div>
     );
 
     const folder = selNote.folderId ? allFolders.find(f => f.id === selNote.folderId) : null;
+    const isDailyPlan = selNote.kind === "daily-plan";
 
     return (
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
@@ -578,6 +1574,15 @@ export default function ReportsTab({ notes, folders, onUpdateNotes, onUpdateFold
         )}
 
         {/* Textarea — defaultValue + onBlur para não perder foco */}
+        {isDailyPlan && (
+          <div style={{ padding: "8px 14px", borderBottom: "0.5px solid " + C.brd + "40", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, color: C.tx3, fontSize: 11 }}>
+            <span style={{ color: C.gold, fontWeight: 600 }}>Plano diario</span>
+            <span style={{ color: C.tx4 }}>{selNote.planDate ? fmtD(selNote.planDate) : ""}</span>
+          </div>
+        )}
+
+        {isDailyPlan && renderPlannerChat(selNote)}
+
         <textarea
           key={selNote.id + "_content"}
           defaultValue={selNote.content || ""}
