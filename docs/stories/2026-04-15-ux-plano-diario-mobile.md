@@ -207,6 +207,12 @@ Impedir perda de texto em andamento por navegacao, gesto acidental, voltar do An
 - `App.jsx`: a troca lateral entre abas voltou com limite de distancia, cancelamento abaixo do limite, preview acompanhando o dedo e bloqueio em inputs, textareas, botoes, chat e bordas do Android.
 - Validacao: `npm run build` passou em 2026-04-15 apos esta correcao.
 
+## Implementacao 2026-04-15 - Hotfix de Runtime
+
+- `App.jsx`: `isDesktop`, `isNarrowMobile`, `SIDEBAR_W` e `popupLeft` foram movidos para antes dos hooks que dependem deles, corrigindo a tela preta com `Cannot access ... before initialization` no bundle publicado.
+- Validacao: `npm run build` e `npm run mobile:android:sync` passaram.
+- Android: `gradlew.bat assembleDebug --no-daemon` gerou APK debug e `adb install -r` instalou a versao atualizada no aparelho conectado.
+
 ## Validacao Recomendada
 
 - `npm run build`

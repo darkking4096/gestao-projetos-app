@@ -73,6 +73,11 @@ export default function App({ user, onSignOut }) {
   const [winW, setWinW] = useState(() => window.innerWidth);
   const [winH, setWinH] = useState(() => window.innerHeight);
   const [tabSwipeOffset, setTabSwipeOffset] = useState(0);
+  const isDesktop = winW >= 768 && winH >= 560;
+  const isNarrowMobile = !isDesktop && winW < 600;
+  const SIDEBAR_W = 220;
+  const popupLeft = isDesktop ? `calc(50% + ${SIDEBAR_W / 2}px)` : "50%";
+  // Centro dos popups fixos: metade da area de conteudo (direita da sidebar em desktop)
   useEffect(() => {
     const handler = () => setStorageError(true);
     window.addEventListener("app:storageError", handler);
@@ -1228,11 +1233,7 @@ export default function App({ user, onSignOut }) {
     </div>
   );
 
-  const isDesktop = winW >= 768 && winH >= 560;
-  const isNarrowMobile = !isDesktop && winW < 600;
-  const SIDEBAR_W = 220;
   // Centro dos popups fixos: metade da área de conteúdo (direita da sidebar em desktop)
-  const popupLeft = isDesktop ? `calc(50% + ${SIDEBAR_W / 2}px)` : "50%";
 
   return (
     <div style={{ background: C.bg, minHeight: "100dvh", fontFamily: "'Segoe UI','Helvetica Neue',system-ui,sans-serif", color: C.tx, position: "relative", ...(isDesktop ? {} : { maxWidth: isNarrowMobile ? 430 : "none", margin: "0 auto", paddingBottom: "calc(64px + env(safe-area-inset-bottom, 0px))" }) }}>
