@@ -92,8 +92,8 @@ Entregar uma pipeline de planejamento diario que permita:
 11. Implementar tarefas dentro de projeto existente.
 12. Implementar rotina/projeto novo com aprovacao. `[feito]`
 13. Registrar decisoes no plano diario.
-14. Ajustar UX mobile.
-15. Rodar build e atualizar esta story.
+14. Ajustar UX mobile. `[em andamento na story dedicada]`
+15. Rodar build e atualizar esta story. `[feito em 2026-04-15 para a primeira rodada de UX mobile]`
 
 ## Modelo Conceitual
 
@@ -663,3 +663,4 @@ Ao final de cada story implementada:
 - Definir se tarefas futuras recebem notificacao automaticamente ou apenas prazo.
 - Definir estrategia de transcricao por audio depois da primeira versao de texto.
 - Avaliar se `reportNotes` continua suficiente ou se planos diarios merecem chave propria no `app_data`.
+- UX mobile, chat recolhivel, paineis colapsaveis, voltar do Android e gestos seguros foram separados na story `docs/stories/2026-04-15-ux-plano-diario-mobile.md`.

@@ -69,6 +69,7 @@ export default function App({ user, onSignOut }) {
   // Ref para estado de navegação — permite nav() com dep [] sem stale closure
   const navStateRef = useRef({ view, tab, subTab, selId, selType });
   const [winW, setWinW] = useState(() => window.innerWidth);
+  const [winH, setWinH] = useState(() => window.innerHeight);
   useEffect(() => {
     const handler = () => setStorageError(true);
     window.addEventListener("app:storageError", handler);
@@ -103,7 +104,10 @@ export default function App({ user, onSignOut }) {
   }, [profile.tasksCompleted, profile.bestStreak, profile.totalXp, profile.projectsCompleted]);
 
   useEffect(() => {
-    const resizeHandler = () => setWinW(window.innerWidth);
+    const resizeHandler = () => {
+      setWinW(window.innerWidth);
+      setWinH(window.innerHeight);
+    };
     window.addEventListener("resize", resizeHandler);
     return () => window.removeEventListener("resize", resizeHandler);
   }, []);
@@ -407,6 +411,12 @@ export default function App({ user, onSignOut }) {
     navBackRef.current = navBack;
     const onPop = (e) => {
       e.preventDefault();
+      const internalBack = new CustomEvent("app:internalBack", { detail: { handled: false } });
+      window.dispatchEvent(internalBack);
+      if (internalBack.detail.handled) {
+        history.pushState(null, "", window.location.href);
+        return;
+      }
       navBackRef.current();
       history.pushState(null, "", window.location.href);
     };
@@ -1153,13 +1163,14 @@ export default function App({ user, onSignOut }) {
     </div>
   );
 
-  const isDesktop = winW >= 768;
+  const isDesktop = winW >= 768 && winH >= 560;
+  const isNarrowMobile = !isDesktop && winW < 600;
   const SIDEBAR_W = 220;
   // Centro dos popups fixos: metade da área de conteúdo (direita da sidebar em desktop)
   const popupLeft = isDesktop ? `calc(50% + ${SIDEBAR_W / 2}px)` : "50%";
 
   return (
-    <div style={{ background: C.bg, minHeight: "100dvh", fontFamily: "'Segoe UI','Helvetica Neue',system-ui,sans-serif", color: C.tx, position: "relative", ...(isDesktop ? {} : { maxWidth: 430, margin: "0 auto", paddingBottom: "calc(64px + env(safe-area-inset-bottom, 0px))" }) }}>
+    <div style={{ background: C.bg, minHeight: "100dvh", fontFamily: "'Segoe UI','Helvetica Neue',system-ui,sans-serif", color: C.tx, position: "relative", ...(isDesktop ? {} : { maxWidth: isNarrowMobile ? 430 : "none", margin: "0 auto", paddingBottom: "calc(64px + env(safe-area-inset-bottom, 0px))" }) }}>
       <style>{`@keyframes popupSlideIn{from{opacity:0;transform:translateX(-50%) translateY(-12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}@keyframes bannerSlideUp{from{opacity:0;transform:translateX(-50%) translateY(12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}@keyframes errFadeOut{0%{opacity:1}70%{opacity:1}100%{opacity:0}}@keyframes tabFadeIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}.rl-item{transition:filter .12s,opacity .12s}.rl-item:hover{filter:brightness(1.1)}.rl-item:active{opacity:.7!important}`}</style>
       {/* Sidebar — desktop */}
       {isDesktop && (
@@ -1220,7 +1231,7 @@ export default function App({ user, onSignOut }) {
         </Suspense>
       </div>
       {/* Bottom tabs — mobile only */}
-      {!isDesktop && <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, display: "flex", background: C.bg, borderTop: "0.5px solid " + C.brd, zIndex: 100, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+      {!isDesktop && <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: isNarrowMobile ? 430 : "none", display: "flex", background: C.bg, borderTop: "0.5px solid " + C.brd, zIndex: 100, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
         {NAV_TABS.map(([k, l, icon]) => (
           <div key={k} onClick={() => { setTab(k); setView("list"); }} style={{ flex: 1, minHeight: 56, padding: "8px 2px 6px", textAlign: "center", fontSize: 11, color: tab === k ? C.gold : C.tx3, borderTop: tab === k ? "2px solid " + C.gold : "2px solid transparent", cursor: "pointer", letterSpacing: 0.2, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, transition: "color .12s, border-color .12s" }}>
             <span style={{ lineHeight: 1 }}>{icon}</span>
@@ -1228,7 +1239,7 @@ export default function App({ user, onSignOut }) {
         ))}
       </div>}
       {/* Storage error banner */}
-      {storageError && <div style={{ position: "fixed", top: 0, left: isDesktop ? SIDEBAR_W : "50%", transform: isDesktop ? "none" : "translateX(-50%)", right: isDesktop ? 0 : "auto", width: isDesktop ? "auto" : "100%", maxWidth: isDesktop ? "none" : 430, background: C.red + "dd", zIndex: 400, padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, backdropFilter: "blur(4px)", animation: "errFadeOut 3s ease forwards" }}>
+      {storageError && <div style={{ position: "fixed", top: 0, left: isDesktop ? SIDEBAR_W : "50%", transform: isDesktop ? "none" : "translateX(-50%)", right: isDesktop ? 0 : "auto", width: isDesktop ? "auto" : "100%", maxWidth: isDesktop || !isNarrowMobile ? "none" : 430, background: C.red + "dd", zIndex: 400, padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, backdropFilter: "blur(4px)", animation: "errFadeOut 3s ease forwards" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.tx} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           <span style={{ fontSize: 11, color: "#fff" }}>Erro ao sincronizar com o servidor. Verifique sua conexão com a internet.</span>

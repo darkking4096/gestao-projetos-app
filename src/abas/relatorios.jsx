@@ -6,6 +6,15 @@ import { Modal, Btn } from '../componentes-base.jsx';
 import { requestDailyPlan } from '../planejamento-ia.js';
 
 const pad2 = (value) => String(value).padStart(2, "0");
+const PLANNER_DRAFTS_KEY = "coofe:dailyPlanDrafts";
+
+function readPlannerDrafts() {
+  try {
+    return JSON.parse(window.localStorage.getItem(PLANNER_DRAFTS_KEY) || "{}") || {};
+  } catch {
+    return {};
+  }
+}
 
 function getPlannerNow() {
   const now = new Date();
@@ -99,11 +108,14 @@ export default function ReportsTab({
   const [renamingFolder, setRenamingFolder]   = useState(null); // { id, name }
   const [showMoveModal, setShowMoveModal]     = useState(null); // noteId
   const [confirmDelete, setConfirmDelete]     = useState(null); // { type, id, name }
-  const [plannerInput, setPlannerInput]       = useState("");
+  const [plannerDrafts, setPlannerDrafts]     = useState(readPlannerDrafts);
   const [plannerLoading, setPlannerLoading]   = useState(false);
   const [plannerError, setPlannerError]       = useState("");
   const [editingCardId, setEditingCardId]     = useState(null);
   const [editingCard, setEditingCard]         = useState(null);
+  const [viewport, setViewport]               = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
+  const [reportListCollapsed, setReportListCollapsed] = useState(null);
+  const [plannerChatOpen, setPlannerChatOpen] = useState(false);
 
   /* ── Drag Desktop (mouse / HTML5) ── */
   const [deskDrag, setDeskDrag]   = useState(null);  // { id, type: "note"|"folder" }
@@ -115,15 +127,54 @@ export default function ReportsTab({
   const [dragPos, setDragPos] = useState(null); // { x, y }
   const sidebarRef   = useRef(null); // para registrar listener não-passivo
 
-  const isDesktop = window.innerWidth >= 768;
+  const isDesktop = viewport.width >= 768 && viewport.height >= 560;
+  const isCompactReports = viewport.width < 1020 || viewport.height < 650;
   const allNotes   = notes   || [];
   const allFolders = folders || [];
   const today = td();
 
   const selNote     = useMemo(() => allNotes.find(n => n.id === selNoteId) || null, [allNotes, selNoteId]);
   const todayPlan   = useMemo(() => allNotes.find(n => n.kind === "daily-plan" && n.planDate === today) || null, [allNotes, today]);
+  const isDailyPlanSelected = selNote?.kind === "daily-plan";
+  const isReportListCollapsed = isDesktop && (reportListCollapsed ?? (isDailyPlanSelected && isCompactReports));
+  const plannerInput = selNoteId ? (plannerDrafts[selNoteId] || "") : "";
   const rootFolders = useMemo(() => allFolders.filter(f => !f.parentId),            [allFolders]);
   const looseNotes  = useMemo(() => allNotes.filter(n => !n.folderId),              [allNotes]);
+
+  useEffect(() => {
+    const onResize = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(PLANNER_DRAFTS_KEY, JSON.stringify(plannerDrafts));
+    } catch {
+      // Rascunho local e melhor esforco; persistencia principal continua em reportNotes.
+    }
+  }, [plannerDrafts]);
+
+  useEffect(() => {
+    const onInternalBack = (event) => {
+      if (plannerChatOpen) {
+        setPlannerChatOpen(false);
+        event.detail.handled = true;
+        return;
+      }
+      if (isDesktop && isDailyPlanSelected && isCompactReports && !isReportListCollapsed) {
+        setReportListCollapsed(true);
+        event.detail.handled = true;
+        return;
+      }
+      if (!isDesktop && mobileView === "editor") {
+        setMobileView("sidebar");
+        event.detail.handled = true;
+      }
+    };
+    window.addEventListener("app:internalBack", onInternalBack);
+    return () => window.removeEventListener("app:internalBack", onInternalBack);
+  }, [plannerChatOpen, isDesktop, isDailyPlanSelected, isCompactReports, isReportListCollapsed, mobileView]);
 
   /* ══════════════════════════════════════════
      CRUD
@@ -181,6 +232,21 @@ export default function ReportsTab({
       n.id === id ? { ...updater(n), updatedAt: td() } : n
     ));
   }, [onUpdateNotes]);
+
+  const updatePlannerDraft = useCallback((noteId, value) => {
+    if (!noteId) return;
+    setPlannerDrafts(prev => ({ ...prev, [noteId]: value }));
+  }, []);
+
+  const clearPlannerDraft = useCallback((noteId) => {
+    if (!noteId) return;
+    setPlannerDrafts(prev => {
+      if (!prev[noteId]) return prev;
+      const next = { ...prev };
+      delete next[noteId];
+      return next;
+    });
+  }, []);
 
   const updateActionCard = useCallback((noteId, cardId, updater) => {
     updateNoteById(noteId, n => ({
@@ -540,7 +606,7 @@ export default function ReportsTab({
       actionCards: plan.actionCards || [],
     };
 
-    setPlannerInput("");
+    clearPlannerDraft(plan.id);
     setPlannerError("");
     setPlannerLoading(true);
     updateNoteById(plan.id, n => ({ ...n, messages: [...(n.messages || []), userMessage] }));
@@ -625,7 +691,7 @@ export default function ReportsTab({
     } finally {
       setPlannerLoading(false);
     }
-  }, [allNotes, selNoteId, groqApiKey, today, updateNoteById, projects, routines, tasks, objectives, profile]);
+  }, [allNotes, selNoteId, groqApiKey, today, updateNoteById, clearPlannerDraft, projects, routines, tasks, objectives, profile]);
 
   const deleteNote = useCallback((id) => {
     onUpdateNotes(prev => (prev || []).filter(n => n.id !== id));
@@ -1314,6 +1380,13 @@ export default function ReportsTab({
       <div style={{ padding: "6px 8px 6px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, borderBottom: "0.5px solid " + C.brd }}>
         <span style={{ fontSize: 13, fontWeight: 600, color: C.tx, letterSpacing: 0.3 }}>Relatórios</span>
         <div style={{ display: "flex", alignItems: "center" }}>
+          {isDesktop && iconBtn(
+            () => setReportListCollapsed(true), "Recolher lista",
+            C.tx3,
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+          )}
 
           {iconBtn(
             () => setShowSearch(s => !s), "Buscar",
@@ -1449,124 +1522,220 @@ export default function ReportsTab({
   );
 
   /* ── EDITOR (função, não componente) ── */
+  const renderReportListRail = () => (
+    <div
+      style={{
+        width: 44,
+        flexShrink: 0,
+        height: "100%",
+        borderRight: "0.5px solid " + C.brd,
+        background: C.bg,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        paddingTop: 8,
+        gap: 8,
+      }}
+    >
+      <button
+        onClick={() => setReportListCollapsed(false)}
+        title="Abrir lista de relatorios"
+        style={{
+          width: 34,
+          height: 34,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: 6,
+          border: "1px solid " + C.brd2,
+          background: C.card,
+          color: C.tx3,
+          cursor: "pointer",
+        }}
+      >
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </button>
+      <button
+        onClick={openTodayPlan}
+        title="Plano de hoje"
+        style={{
+          width: 34,
+          height: 34,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: 6,
+          border: "1px solid " + (todayPlan ? C.goldBrd : C.brd2),
+          background: todayPlan ? C.gold + "10" : C.card,
+          color: todayPlan ? C.gold : C.tx3,
+          cursor: "pointer",
+        }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2"/>
+          <path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="M8 15h4"/>
+        </svg>
+      </button>
+    </div>
+  );
+
   const renderPlannerChat = (note) => {
     const messages = note.messages || [];
     const actionCards = note.actionCards || [];
     const pendingCount = actionCards.filter(c => (c.status || "pending") === "pending").length;
+    const draftOpenLabel = plannerInput.trim() ? "Continuar conversa" : "Abrir chat";
 
     return (
-      <div style={{ borderBottom: "0.5px solid " + C.brd + "40", flexShrink: 0, background: C.bg, maxHeight: isDesktop ? "66vh" : "calc(100dvh - 170px)", overflowY: "auto", overscrollBehavior: "contain" }}>
+      <div style={{ borderBottom: "0.5px solid " + C.brd + "40", flexShrink: 0, background: C.bg }}>
         <div style={{ padding: "10px 14px 8px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 12, color: C.tx, fontWeight: 600 }}>Chat de planejamento</div>
-            <div style={{ fontSize: 10, color: C.tx4, marginTop: 2 }}>Escreva o que pretende fazer. Nada sera criado sem aprovacao.</div>
-          </div>
-          {actionCards.length > 0 && (
-            <div style={{ fontSize: 10, color: C.gold, border: "1px solid " + C.goldBrd, borderRadius: 6, padding: "4px 7px", flexShrink: 0 }}>
-              {pendingCount} pendentes
+            <div style={{ fontSize: 10, color: C.tx4, marginTop: 2 }}>
+              {plannerChatOpen ? "Escreva o que pretende fazer. Nada sera criado sem aprovacao." : "Converse quando precisar ajustar o plano. O documento fica abaixo."}
             </div>
-          )}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+            {actionCards.length > 0 && (
+              <div style={{ fontSize: 10, color: C.gold, border: "1px solid " + C.goldBrd, borderRadius: 6, padding: "4px 7px", flexShrink: 0 }}>
+                {pendingCount} pendentes
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => setPlannerChatOpen(open => !open)}
+              style={{
+                minHeight: 34,
+                padding: "0 10px",
+                borderRadius: 8,
+                border: "1px solid " + (plannerChatOpen ? C.brd2 : C.goldBrd),
+                background: plannerChatOpen ? C.card : C.gold + "14",
+                color: plannerChatOpen ? C.tx3 : C.gold,
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {plannerChatOpen ? "Fechar" : draftOpenLabel}
+            </button>
+          </div>
         </div>
 
-        {messages.length > 0 && (
-          <div style={{ maxHeight: 180, overflowY: "auto", padding: "0 14px 8px", display: "flex", flexDirection: "column", gap: 7 }}>
-            {messages.map(msg => (
-              <div key={msg.id || msg.createdAt} style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
-                <div style={{
-                  maxWidth: "82%",
-                  padding: "7px 9px",
-                  borderRadius: 8,
-                  border: "1px solid " + (msg.role === "user" ? C.goldBrd : C.brd2),
-                  background: msg.role === "user" ? C.gold + "10" : C.card,
-                  color: C.tx2,
-                  fontSize: 11,
-                  lineHeight: 1.45,
-                  whiteSpace: "pre-wrap",
-                  overflowWrap: "anywhere",
-                }}>
-                  <div style={{ color: msg.role === "user" ? C.gold : C.tx4, fontSize: 9, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>
-                    {msg.role === "user" ? "Voce" : "IA"}
-                  </div>
-                  {msg.content}
-                  {msg.parsed?.acoes?.length > 0 && (
-                    <div style={{ marginTop: 5, color: C.tx4, fontSize: 10 }}>
-                      {msg.parsed.acoes.length} acao{msg.parsed.acoes.length === 1 ? "" : "es"} interpretada{msg.parsed.acoes.length === 1 ? "" : "s"}.
+        {!plannerChatOpen && plannerInput.trim() && (
+          <div style={{ margin: "0 14px 8px", padding: "7px 9px", borderRadius: 8, border: "1px solid " + C.goldBrd, background: C.gold + "10", color: C.tx2, fontSize: 11, lineHeight: 1.4, overflowWrap: "anywhere" }}>
+            Rascunho salvo: {plannerInput.trim().slice(0, 120)}{plannerInput.trim().length > 120 ? "..." : ""}
+          </div>
+        )}
+
+        {plannerChatOpen && (
+          <div style={{ maxHeight: isDesktop ? "58vh" : "calc(100dvh - 220px)", overflowY: "auto", overscrollBehavior: "contain" }}>
+            {messages.length > 0 ? (
+              <div style={{ padding: "0 14px 8px", display: "flex", flexDirection: "column", gap: 7 }}>
+                {messages.map(msg => (
+                  <div key={msg.id || msg.createdAt} style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
+                    <div style={{
+                      maxWidth: "82%",
+                      padding: "7px 9px",
+                      borderRadius: 8,
+                      border: "1px solid " + (msg.role === "user" ? C.goldBrd : C.brd2),
+                      background: msg.role === "user" ? C.gold + "10" : C.card,
+                      color: C.tx2,
+                      fontSize: 11,
+                      lineHeight: 1.45,
+                      whiteSpace: "pre-wrap",
+                      overflowWrap: "anywhere",
+                    }}>
+                      <div style={{ color: msg.role === "user" ? C.gold : C.tx4, fontSize: 9, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>
+                        {msg.role === "user" ? "Voce" : "IA"}
+                      </div>
+                      {msg.content}
+                      {msg.parsed?.acoes?.length > 0 && (
+                        <div style={{ marginTop: 5, color: C.tx4, fontSize: 10 }}>
+                          {msg.parsed.acoes.length} acao{msg.parsed.acoes.length === 1 ? "" : "es"} interpretada{msg.parsed.acoes.length === 1 ? "" : "s"}.
+                        </div>
+                      )}
+                      {msg.parseError && (
+                        <div style={{ marginTop: 5, color: C.orange, fontSize: 10 }}>Resposta fora do formato esperado.</div>
+                      )}
                     </div>
-                  )}
-                  {msg.parseError && (
-                    <div style={{ marginTop: 5, color: C.orange, fontSize: 10 }}>Resposta fora do formato esperado.</div>
-                  )}
-                </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
+            ) : (
+              <div style={{ padding: "0 14px 8px", color: C.tx4, fontSize: 11, lineHeight: 1.4 }}>
+                Conte o que precisa organizar hoje. A IA devolve cards para voce aprovar.
+              </div>
+            )}
 
-        {plannerError && (
-          <div style={{ margin: "0 14px 8px", padding: "7px 9px", borderRadius: 6, border: "1px solid " + C.orange + "55", background: C.orange + "12", color: C.orange, fontSize: 11, lineHeight: 1.4 }}>
-            {plannerError}
-          </div>
-        )}
+            {plannerError && (
+              <div style={{ margin: "0 14px 8px", padding: "7px 9px", borderRadius: 6, border: "1px solid " + C.orange + "55", background: C.orange + "12", color: C.orange, fontSize: 11, lineHeight: 1.4 }}>
+                {plannerError}
+              </div>
+            )}
 
-        {!groqApiKey && (
-          <div style={{ margin: "0 14px 8px", padding: "7px 9px", borderRadius: 6, border: "1px solid " + C.brd2, background: C.card, color: C.tx3, fontSize: 11, lineHeight: 1.4 }}>
-            Configure sua chave da API Groq em Perfil &gt; Configuracoes para usar o planejador.
+            {!groqApiKey && (
+              <div style={{ margin: "0 14px 8px", padding: "7px 9px", borderRadius: 6, border: "1px solid " + C.brd2, background: C.card, color: C.tx3, fontSize: 11, lineHeight: 1.4 }}>
+                Configure sua chave da API Groq em Perfil &gt; Configuracoes para usar o planejador.
+              </div>
+            )}
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handlePlannerText(plannerInput);
+              }}
+              style={{ padding: "0 14px 10px", display: "flex", flexDirection: isDesktop ? "row" : "column", gap: 8, alignItems: isDesktop ? "flex-end" : "stretch" }}
+            >
+              <textarea
+                value={plannerInput}
+                onChange={(e) => updatePlannerDraft(note.id, e.target.value)}
+                disabled={plannerLoading}
+                placeholder="Ex.: hoje preciso revisar o contrato as 14h e amanha ligar para o cliente"
+                rows={plannerInput.trim() ? 3 : 2}
+                style={{
+                  flex: 1,
+                  width: "100%",
+                  boxSizing: "border-box",
+                  minHeight: plannerInput.trim() ? 72 : 46,
+                  maxHeight: 120,
+                  resize: "vertical",
+                  background: C.card,
+                  border: "1px solid " + C.brd2,
+                  borderRadius: 8,
+                  color: C.tx,
+                  fontSize: 12,
+                  lineHeight: 1.45,
+                  outline: "none",
+                  padding: "8px 10px",
+                  fontFamily: "'Segoe UI', 'Helvetica Neue', system-ui, sans-serif",
+                }}
+              />
+              <button
+                type="submit"
+                disabled={plannerLoading || !plannerInput.trim()}
+                style={{
+                  minHeight: 38,
+                  padding: "0 12px",
+                  width: isDesktop ? "auto" : "100%",
+                  borderRadius: 8,
+                  border: "1px solid " + C.goldBrd,
+                  background: plannerLoading || !plannerInput.trim() ? C.card : C.gold + "18",
+                  color: plannerLoading || !plannerInput.trim() ? C.tx4 : C.gold,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: plannerLoading || !plannerInput.trim() ? "default" : "pointer",
+                  flexShrink: 0,
+                }}
+              >
+                {plannerLoading ? "Enviando" : "Enviar"}
+              </button>
+            </form>
           </div>
         )}
 
         {renderActionCards(note)}
-
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            handlePlannerText(plannerInput);
-          }}
-          style={{ padding: "0 14px 10px", display: "flex", flexDirection: isDesktop ? "row" : "column", gap: 8, alignItems: isDesktop ? "flex-end" : "stretch" }}
-        >
-          <textarea
-            value={plannerInput}
-            onChange={(e) => setPlannerInput(e.target.value)}
-            disabled={plannerLoading}
-            placeholder="Ex.: hoje preciso revisar o contrato as 14h e amanha ligar para o cliente"
-            rows={2}
-            style={{
-              flex: 1,
-              width: "100%",
-              boxSizing: "border-box",
-              minHeight: 46,
-              maxHeight: 96,
-              resize: "vertical",
-              background: C.card,
-              border: "1px solid " + C.brd2,
-              borderRadius: 8,
-              color: C.tx,
-              fontSize: 12,
-              lineHeight: 1.45,
-              outline: "none",
-              padding: "8px 10px",
-              fontFamily: "'Segoe UI', 'Helvetica Neue', system-ui, sans-serif",
-            }}
-          />
-          <button
-            type="submit"
-            disabled={plannerLoading || !plannerInput.trim()}
-            style={{
-              minHeight: 38,
-              padding: "0 12px",
-              width: isDesktop ? "auto" : "100%",
-              borderRadius: 8,
-              border: "1px solid " + C.goldBrd,
-              background: plannerLoading || !plannerInput.trim() ? C.card : C.gold + "18",
-              color: plannerLoading || !plannerInput.trim() ? C.tx4 : C.gold,
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: plannerLoading || !plannerInput.trim() ? "default" : "pointer",
-              flexShrink: 0,
-            }}
-          >
-            {plannerLoading ? "Enviando" : "Enviar"}
-          </button>
-        </form>
       </div>
     );
   };
@@ -1594,6 +1763,13 @@ export default function ReportsTab({
             <span onClick={() => setMobileView("sidebar")} style={{ cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0, minWidth: 36, minHeight: 36, justifyContent: "center" }}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.tx2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="15 18 9 12 15 6"/>
+              </svg>
+            </span>
+          )}
+          {isReportListCollapsed && (
+            <span onClick={() => setReportListCollapsed(false)} title="Abrir lista de relatorios" style={{ cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0, minWidth: 36, minHeight: 36, justifyContent: "center", color: C.tx3 }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h10"/>
               </svg>
             </span>
           )}
@@ -1682,7 +1858,7 @@ export default function ReportsTab({
     >
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
         {isDesktop ? (
-          <>{renderSidebar()}{renderEditor()}</>
+          <>{isReportListCollapsed ? renderReportListRail() : renderSidebar()}{renderEditor()}</>
         ) : (
           mobileView === "sidebar" ? renderSidebar() : renderEditor()
         )}
