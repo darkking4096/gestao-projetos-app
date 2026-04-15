@@ -21,6 +21,7 @@ node_modules
 build/
 *.log
 logs/
+commandlinetools-*_latest.zip
 
 # IDE & OS (AIOX)
 Thumbs.db

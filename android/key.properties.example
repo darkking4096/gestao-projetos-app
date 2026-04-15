@@ -1,0 +1,4 @@
+storeFile=../coofe-upload-key.jks
+storePassword=SUA_SENHA_DO_KEYSTORE
+keyAlias=coofe
+keyPassword=SUA_SENHA_DA_CHAVE

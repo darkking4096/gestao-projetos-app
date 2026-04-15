@@ -2,7 +2,7 @@
 
 ## Status
 
-Source Complete - Device Validation Pending
+Android Ready for Play Internal Test
 
 ## Contexto
 
@@ -213,7 +213,7 @@ Fazer os lembretes configurados chegarem como notificacoes reais no celular.
 - [x] Fechamento do dia e agendado no horario configurado quando ha pendencias.
 - [x] Edicao de item atualiza notificacoes futuras.
 - [x] Exclusao ou conclusao cancela notificacoes pendentes quando aplicavel.
-- [ ] Fluxo funciona em dispositivo Android real.
+- [x] Fluxo funciona em dispositivo Android real.
 
 ### Arquivos Provaveis
 
@@ -245,11 +245,13 @@ Preparar o app para instalacao e publicacao na Google Play.
 - [x] Icones e splash screen gerados.
 - [x] Plugin de notificacoes locais sincronizado.
 - [x] Permissao Android 13+ declarada.
-- [ ] App instala em Android como aplicativo.
-- [ ] App abre corretamente.
-- [ ] Login e persistencia funcionam.
-- [ ] Notificacoes funcionam no dispositivo.
-- [ ] Build Android de teste e gerado.
+- [x] App instala em Android como aplicativo.
+- [x] App abre corretamente.
+- [x] Login e persistencia funcionam.
+- [x] Notificacoes funcionam no dispositivo.
+- [x] Build Android de teste e gerado.
+- [x] Configuracao Gradle para assinatura release via arquivo local preparada.
+- [x] AAB release assinado com chave de upload.
 - [x] Checklist Google Play criado.
 
 ### Arquivos Provaveis
@@ -264,7 +266,25 @@ Preparar o app para instalacao e publicacao na Google Play.
 
 ### Observacao de Ambiente
 
-`gradlew.bat assembleDebug` foi tentado nesta maquina, mas falhou porque o Java ativo e 1.8. O Android Gradle Plugin exige Java 11+. Tambem nao ha `JAVA_HOME`, `ANDROID_HOME` ou `ANDROID_SDK_ROOT` configurados.
+`gradlew.bat assembleDebug --no-daemon` foi executado com sucesso nesta maquina em 2026-04-15 usando o JDK 21 embutido no Android Studio. O APK debug foi gerado em `android/app/build/outputs/apk/debug/app-debug.apk`.
+
+`gradlew.bat bundleRelease --no-daemon` tambem foi executado com sucesso e gerou `android/app/build/outputs/bundle/release/app-release.aab`. A verificacao com `jarsigner` mostrou que o AAB ainda esta sem assinatura enquanto `android/key.properties` nao existir.
+
+Em 2026-04-15, a configuracao Gradle foi ajustada para bloquear builds release sem `android/key.properties` completo. Assim, a proxima tentativa de `bundleRelease` sem chave falha explicitamente em vez de produzir um AAB que parece pronto mas nao pode ser enviado para a Play Store.
+
+Em 2026-04-15, a chave local `android/coofe-upload-key.jks` foi criada fora do Git, `android/key.properties` foi preenchido localmente e `gradlew.bat bundleRelease --no-daemon` gerou o AAB assinado em `android/app/build/outputs/bundle/release/app-release.aab`. A verificacao com `jarsigner -verify` retornou `jar verified`.
+
+Em 2026-04-15, o APK debug foi instalado em Android real via ADB. O app abriu, o usuario validou login, criacao de tarefa e recebimento de notificacao local.
+
+Correcoes de ambiente aplicadas:
+
+- `android.overridePathCheck=true` em `android/gradle.properties`, porque o caminho local contem caractere nao ASCII em `Gestao`.
+- `android/local.properties` local aponta para `C:\Users\HomePC\AppData\Local\Android\Sdk`.
+- Android SDK Platform 35 e Build Tools 35 foram instalados no SDK local.
+- `android/app/build.gradle` agora le `android/key.properties` para assinar release quando a chave local existir.
+- `android/app/build.gradle` usa `versionCode 2` e `versionName 1.1` para o proximo envio Android.
+- Depois do versionamento 1.1, `npm run mobile:android:sync`, `gradlew.bat bundleRelease --no-daemon` e `gradlew.bat assembleDebug --no-daemon` passaram. O APK atualizado nao foi instalado nesta rodada porque nenhum dispositivo apareceu em `adb devices -l`.
+- Testes Android de exemplo gerados pelo template Capacitor foram removidos porque usavam pacotes placeholders e nao cobriam comportamento real do Coofe.
 
 ## Story 8: Preparacao iOS e App Store
 
@@ -308,6 +328,11 @@ Nesta maquina Windows, `npx cap sync ios` foi executado, mas CocoaPods e Xcode n
 - `assets/`
 - `public/privacy.html`
 - `android/`
+- `android/app/build.gradle`
+- `android/app/src/test/java/`
+- `android/app/src/androidTest/java/`
+- `android/key.properties.example`
+- `android/gradle.properties`
 - `ios/`
 - `App.jsx`
 - `src/constantes.js`

@@ -7,6 +7,7 @@ Data: 2026-04-14
 - Capacitor configurado em `capacitor.config.json`.
 - App id definido como `app.coofe.mobile`.
 - Nome do app definido como `Coofe`.
+- Versao Android preparada para proximo envio: `versionCode 2`, `versionName 1.1`.
 - Plataforma Android gerada em `android/`.
 - Plataforma iOS gerada em `ios/`.
 - Plugin `@capacitor/local-notifications` instalado e sincronizado.
@@ -38,14 +39,14 @@ npm run mobile:ios:add
 ### Requisitos Locais
 
 - Node 20 funciona com Capacitor 7.
-- JDK 11 ou superior. Recomendado: JDK 17.
+- JDK 21 para o Capacitor Android atual.
 - Android Studio instalado.
 - Android SDK configurado.
 - `ANDROID_HOME` ou `ANDROID_SDK_ROOT` apontando para o SDK.
 
 ### Build de Teste
 
-Depois de instalar JDK 17 e Android Studio:
+Depois de instalar Android Studio e Android SDK Platform 35:
 
 ```bash
 cd android
@@ -69,6 +70,33 @@ O AAB esperado fica em:
 
 ```text
 android/app/build/outputs/bundle/release/app-release.aab
+```
+
+Para a Play Console, o AAB precisa estar assinado. A configuracao Gradle ja le
+`android/key.properties` quando esse arquivo local existir. Use
+`android/key.properties.example` como modelo e mantenha a chave/senhas fora do
+Git.
+
+Exemplo de geracao da chave de upload:
+
+```bash
+cd android
+keytool -genkeypair -v -keystore coofe-upload-key.jks -keyalg RSA -keysize 2048 -validity 10000 -alias coofe
+```
+
+Depois crie `android/key.properties`:
+
+```properties
+storeFile=../coofe-upload-key.jks
+storePassword=SUA_SENHA_DO_KEYSTORE
+keyAlias=coofe
+keyPassword=SUA_SENHA_DA_CHAVE
+```
+
+Verificacao rapida da assinatura:
+
+```bash
+"C:\Program Files\Android\Android Studio\jbr\bin\jarsigner.exe" -verify -verbose -certs android\app\build\outputs\bundle\release\app-release.aab
 ```
 
 ### Google Play
@@ -116,15 +144,53 @@ No Xcode:
 - gerar Archive;
 - enviar para TestFlight.
 
-## Pendencias de Ambiente Nesta Maquina
+## Estado de Ambiente Nesta Maquina
 
-A tentativa de `gradlew.bat assembleDebug` falhou porque o Java ativo e:
+Em 2026-04-15, `gradlew.bat assembleDebug --no-daemon` foi executado com sucesso usando o JDK 21 embutido no Android Studio:
 
 ```text
-java version "1.8.0_401"
+C:\Program Files\Android\Android Studio\jbr
 ```
 
-O Android Gradle Plugin gerado pelo Capacitor exige Java 11 ou superior. Tambem nao foram encontrados `JAVA_HOME`, `ANDROID_HOME` ou `ANDROID_SDK_ROOT` configurados.
+O APK debug foi gerado em:
+
+```text
+android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+Em 2026-04-15, `gradlew.bat bundleRelease --no-daemon` tambem foi executado com sucesso. O AAB foi gerado em:
+
+```text
+android/app/build/outputs/bundle/release/app-release.aab
+```
+
+Sem `android/key.properties`, esse AAB e apenas um artefato de validacao local e fica sem assinatura. Antes do upload na Play Console, gere a chave de upload, crie `android/key.properties`, rode `bundleRelease` novamente e confirme a assinatura com `jarsigner`.
+
+Em 2026-04-15, `android/app/build.gradle` passou a bloquear `bundleRelease` quando `android/key.properties` nao existe ou esta incompleto. Esse erro e esperado enquanto a chave de upload ainda nao tiver sido criada nesta maquina.
+
+Em 2026-04-15, a chave de upload local foi criada em `android/coofe-upload-key.jks`, `android/key.properties` foi preenchido localmente e `gradlew.bat bundleRelease --no-daemon` gerou um AAB assinado em:
+
+```text
+android/app/build/outputs/bundle/release/app-release.aab
+```
+
+`jarsigner -verify` retornou `jar verified`. Os avisos de certificado autoassinado sao esperados para uma chave de upload local.
+
+Tambem em 2026-04-15, o APK debug foi instalado em Android real via ADB e o fluxo basico foi validado pelo usuario:
+
+- app instala e abre;
+- login funciona;
+- tarefa pode ser criada;
+- notificacao local de tarefa chega no dispositivo.
+
+Notas locais:
+
+- `android.overridePathCheck=true` foi adicionado porque o caminho local do projeto contem caractere nao ASCII.
+- `android/local.properties` aponta para `C:\Users\HomePC\AppData\Local\Android\Sdk`.
+- Android SDK Platform 35 e Build Tools 35 foram instalados.
+- `android/app/build.gradle` foi preparado para assinar release quando `android/key.properties` existir.
+- `android/app/build.gradle` foi atualizado para `versionCode 2` e `versionName 1.1`, evitando conflito com um envio anterior que tenha usado `versionCode 1`.
+- Apos essa atualizacao, `npm run mobile:android:sync`, `gradlew.bat bundleRelease --no-daemon` e `gradlew.bat assembleDebug --no-daemon` passaram. O AAB assinado e o APK debug foram regerados com a versao Android 1.1. Nesta rodada, o APK atualizado nao foi instalado porque nenhum dispositivo apareceu em `adb devices -l`.
 
 ## Pendencias Antes de Loja
 
@@ -132,5 +198,5 @@ O Android Gradle Plugin gerado pelo Capacitor exige Java 11 ou superior. Tambem 
 - Testar notificacoes locais em Android real.
 - Testar notificacoes locais em iPhone real.
 - Revisar textos legais e politica de privacidade.
-- Configurar assinatura release Android.
+- Enviar AAB assinado para teste interno na Play Console.
 - Configurar certificados e provisioning profiles iOS.
