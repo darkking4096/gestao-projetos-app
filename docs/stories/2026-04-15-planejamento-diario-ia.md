@@ -52,6 +52,7 @@ Entregar uma pipeline de planejamento diario que permita:
 - [x] Reabrir o app no mesmo dia abre o plano existente, sem duplicar.
 - [x] O usuario consegue enviar texto livre para interpretacao.
 - [x] A IA recebe contexto dos ultimos 7 dias e dados ativos atuais.
+- [x] A IA recebe a hora local atual para nao sugerir horarios passados no plano de hoje.
 - [x] A IA retorna JSON estruturado com acoes aprovaveis.
 - [x] O app reconhece e exibe itens para hoje.
 - [x] O app reconhece e exibe itens futuros.
@@ -538,6 +539,8 @@ Permitir que o planejador sugira rotina ou projeto quando o texto e o historico 
 - Se ja existir rotina ou projeto com nome semelhante, o app registra a referencia existente no card em vez de criar duplicata.
 - O card aceito registra `createdRef` e o plano registra em `createdItemRefs`, incluindo quando a referencia aponta para item existente.
 - O prompt/parser do planejador aceita `frequency` e `frequencyDays` para sugestoes de rotina, mantendo compatibilidade quando esses campos nao vierem.
+- O planejador agora recebe data/hora local atual e aplica uma trava local para ajustar ou remover horarios de hoje que ja passaram.
+- O painel do plano recebeu limite de altura, rolagem interna e cards com enquadramento mais claro para evitar sensacao de sobreposicao.
 - Validacao executada: `npm run build` passou apos a Story 8.
 
 ## Story 9: Reconhecimento de Itens Existentes
@@ -650,6 +653,7 @@ Ao final de cada story implementada:
 - 2026-04-15: `npm run build` passou apos a Story 4.
 - 2026-04-15: `npm run build` passou apos a Story 5.
 - 2026-04-15: `npm run build` passou apos a Story 6.
+- 2026-04-15: `npm run build` passou apos ajuste de hora local e UX do plano diario.
 
 ## Riscos e Decisoes Pendentes
 

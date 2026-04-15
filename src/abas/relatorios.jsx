@@ -5,6 +5,63 @@ import { uid, td, fmtD } from '../utilidades.js';
 import { Modal, Btn } from '../componentes-base.jsx';
 import { requestDailyPlan } from '../planejamento-ia.js';
 
+const pad2 = (value) => String(value).padStart(2, "0");
+
+function getPlannerNow() {
+  const now = new Date();
+  const date = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+  const time = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+  return {
+    date,
+    time,
+    dateTime: `${date}T${time}`,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Sao_Paulo",
+  };
+}
+
+function timeToMinutes(value) {
+  const match = String(value || "").match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+function minutesToTime(value) {
+  const hours = Math.floor(value / 60);
+  const minutes = value % 60;
+  return `${pad2(hours)}:${pad2(minutes)}`;
+}
+
+function avoidPastPlannerTime(action, planDate, plannerNow) {
+  const targetDate = String(action.targetDate || planDate || "").slice(0, 10);
+  const targetMinutes = timeToMinutes(action.targetTime);
+  const currentMinutes = timeToMinutes(plannerNow.time);
+  if (!targetDate || targetDate !== plannerNow.date || targetMinutes === null || currentMinutes === null || targetMinutes > currentMinutes) {
+    return { ...action, targetDate: action.targetDate || targetDate };
+  }
+
+  const shiftedMinutes = targetMinutes + 12 * 60;
+  if (shiftedMinutes > currentMinutes && shiftedMinutes < 24 * 60) {
+    const shiftedTime = minutesToTime(shiftedMinutes);
+    return {
+      ...action,
+      targetDate,
+      targetTime: shiftedTime,
+      reason: [action.reason, `Horario ajustado para ${shiftedTime} porque ${action.targetTime} ja passou hoje.`].filter(Boolean).join(" "),
+    };
+  }
+
+  return {
+    ...action,
+    targetDate,
+    targetTime: "",
+    confidence: action.confidence === "alta" ? "media" : action.confidence,
+    reason: [action.reason, `Horario removido porque ${action.targetTime} ja passou hoje.`].filter(Boolean).join(" "),
+  };
+}
+
 /*
   RELATÓRIOS — Sistema de Notas
   ─────────────────────────────
@@ -476,6 +533,7 @@ export default function ReportsTab({
     }
 
     const createdAt = new Date().toISOString();
+    const plannerNow = getPlannerNow();
     const userMessage = { id: uid(), role: "user", content: clean, createdAt };
     const planSnapshot = {
       messages: [...(plan.messages || []), userMessage],
@@ -491,7 +549,10 @@ export default function ReportsTab({
       const parsed = await requestDailyPlan(groqApiKey, {
         text: clean,
         planDate: plan.planDate || today,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Sao_Paulo",
+        timezone: plannerNow.timezone,
+        currentLocalDate: plannerNow.date,
+        currentLocalTime: plannerNow.time,
+        currentLocalDateTime: plannerNow.dateTime,
         recentMessages: planSnapshot.messages,
         actionCards: planSnapshot.actionCards,
         currentPlan: plan,
@@ -523,7 +584,7 @@ export default function ReportsTab({
         error: parsed.ok ? "" : parsed.error,
       };
       const newCards = parsed.ok
-        ? parsed.data.acoes.map(action => ({
+        ? parsed.data.acoes.map(action => avoidPastPlannerTime(action, plan.planDate || today, plannerNow)).map(action => ({
             id: uid(),
             status: "pending",
             createdAt: assistantMessage.createdAt,
@@ -1031,7 +1092,7 @@ export default function ReportsTab({
     const isRoutineCard = card.action === "create_routine" || card.action === "suggest_routine";
 
     return (
-      <div key={card.id} style={{ border: "1px solid " + C.brd2, background: C.card, borderRadius: 8, padding: 10 }}>
+      <div key={card.id} style={{ border: "1px solid " + C.brd2, borderLeft: "3px solid " + (statusColors[status] || C.gold), background: C.card, borderRadius: 8, padding: 10, boxShadow: "0 6px 18px #0002" }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 5 }}>
@@ -1229,7 +1290,7 @@ export default function ReportsTab({
     if (!actionCards.length) return null;
     const groups = groupActionCards(actionCards, note.planDate || today);
     return (
-      <div style={{ padding: "0 14px 10px", maxHeight: 320, overflowY: "auto" }}>
+      <div style={{ padding: "0 14px 12px", maxHeight: isDesktop ? 420 : 260, overflowY: "auto", overscrollBehavior: "contain" }}>
         {renderActionCardSection("Para hoje", groups.today, note)}
         {renderActionCardSection("Para o futuro", groups.future, note)}
         {renderActionCardSection("Ja existe", groups.existing, note)}
@@ -1394,7 +1455,7 @@ export default function ReportsTab({
     const pendingCount = actionCards.filter(c => (c.status || "pending") === "pending").length;
 
     return (
-      <div style={{ borderBottom: "0.5px solid " + C.brd + "40", flexShrink: 0, background: C.bg }}>
+      <div style={{ borderBottom: "0.5px solid " + C.brd + "40", flexShrink: 0, background: C.bg, maxHeight: isDesktop ? "66vh" : "calc(100dvh - 170px)", overflowY: "auto", overscrollBehavior: "contain" }}>
         <div style={{ padding: "10px 14px 8px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 12, color: C.tx, fontWeight: 600 }}>Chat de planejamento</div>
@@ -1460,7 +1521,7 @@ export default function ReportsTab({
             e.preventDefault();
             handlePlannerText(plannerInput);
           }}
-          style={{ padding: "0 14px 10px", display: "flex", gap: 8, alignItems: "flex-end" }}
+          style={{ padding: "0 14px 10px", display: "flex", flexDirection: isDesktop ? "row" : "column", gap: 8, alignItems: isDesktop ? "flex-end" : "stretch" }}
         >
           <textarea
             value={plannerInput}
@@ -1470,6 +1531,8 @@ export default function ReportsTab({
             rows={2}
             style={{
               flex: 1,
+              width: "100%",
+              boxSizing: "border-box",
               minHeight: 46,
               maxHeight: 96,
               resize: "vertical",
@@ -1490,6 +1553,7 @@ export default function ReportsTab({
             style={{
               minHeight: 38,
               padding: "0 12px",
+              width: isDesktop ? "auto" : "100%",
               borderRadius: 8,
               border: "1px solid " + C.goldBrd,
               background: plannerLoading || !plannerInput.trim() ? C.card : C.gold + "18",

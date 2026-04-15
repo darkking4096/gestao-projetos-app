@@ -12,7 +12,11 @@ Regras:
 - Nao invente atividades fora do que foi dito.
 - Pode sugerir rotina/projeto quando houver indicio claro no texto ou padrao no historico, mas marque como sugestao opcional.
 - Se a atividade ja existe, retorne already_exists.
+- Use data, hora local atual e timezone informados como referencia obrigatoria.
 - Se o usuario mencionar data relativa, converta para data absoluta considerando a data atual e timezone informados.
+- Para atividades de hoje, nunca sugira targetTime anterior a hora local atual.
+- Se o usuario disser um horario sem AM/PM que ja passou hoje, interprete como o proximo horario plausivel do dia. Ex.: as 14:40, "8h30" deve virar 20:30, nao 08:30.
+- Se um horario de hoje continuar ambiguo, use confidence baixa e explique no reason.
 - Se o usuario mencionar projeto existente, prefira create_project_task.
 - Para create_project_task, preencha projectId e phaseId quando conseguir identificar no contexto.
 - Para suggest_routine, use frequency quando conseguir inferir uma frequencia clara.
@@ -215,6 +219,10 @@ export function buildDailyPlannerContext({
   profile = {},
   currentPlan = {},
   planDate = td(),
+  currentLocalDate = td(),
+  currentLocalTime = "",
+  currentLocalDateTime = "",
+  timezone = "",
 } = {}) {
   const sinceDate = addDays(planDate, -6);
   const activeProjects = (projects || []).filter(isActiveProject);
@@ -260,6 +268,10 @@ export function buildDailyPlannerContext({
   return {
     periodo: {
       dataAtual: planDate,
+      dataLocalAtual: currentLocalDate,
+      horaLocalAtual: currentLocalTime,
+      dataHoraLocalAtual: currentLocalDateTime,
+      timezone,
       inicioHistorico: sinceDate,
       dias: 7,
     },
@@ -397,6 +409,9 @@ export function buildPlannerMessages({
   text,
   planDate,
   timezone,
+  currentLocalDate,
+  currentLocalTime,
+  currentLocalDateTime,
   recentMessages = [],
   actionCards = [],
   projects = [],
@@ -422,6 +437,10 @@ export function buildPlannerMessages({
       actionCards: currentPlan.actionCards || actionCards,
     },
     planDate,
+    currentLocalDate,
+    currentLocalTime,
+    currentLocalDateTime,
+    timezone,
   });
 
   return [
@@ -430,6 +449,9 @@ export function buildPlannerMessages({
       role: "user",
       content: JSON.stringify({
         dataAtual: planDate,
+        dataLocalAtual: currentLocalDate,
+        horaLocalAtual: currentLocalTime,
+        dataHoraLocalAtual: currentLocalDateTime,
         timezone,
         textoOriginal: text,
         historicoRecenteDoPlano: compactHistory,
