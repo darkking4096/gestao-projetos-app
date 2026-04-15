@@ -198,6 +198,15 @@ Impedir perda de texto em andamento por navegacao, gesto acidental, voltar do An
 - `App.jsx`: o shell mobile continua com `touchAction: "pan-y pinch-zoom"` e sem swipe horizontal global; a decisao atual e manter a troca por gesto desativada ate existir preview/cancelamento completo.
 - Validacao: `npm run build` passou em 2026-04-15 apos esta continuidade.
 
+## Implementacao 2026-04-15 - Correcao de UX Mobile
+
+- `src/abas/relatorios.jsx`: no mobile, o Plano Diario agora separa a area em tres modos: `Plano`, `Acoes` e `Chat`, evitando documento, cards e conversa empilhados na mesma tela.
+- `src/abas/relatorios.jsx`: ao abrir `Chat` no mobile, o chat ocupa a area util inteira da tela de Relatorios; documento e cards ficam escondidos ate o usuario trocar de modo.
+- `src/abas/relatorios.jsx`: os cards aprovaveis ficam no modo `Acoes`, com rolagem propria e mensagem vazia quando nao houver nada pendente.
+- `App.jsx`: o `navBack()` agora retorna se tratou uma navegacao interna; em estado raiz, o `popstate` nao empurra historico de novo, permitindo o comportamento normal do Android/browser.
+- `App.jsx`: a troca lateral entre abas voltou com limite de distancia, cancelamento abaixo do limite, preview acompanhando o dedo e bloqueio em inputs, textareas, botoes, chat e bordas do Android.
+- Validacao: `npm run build` passou em 2026-04-15 apos esta correcao.
+
 ## Validacao Recomendada
 
 - `npm run build`
@@ -211,7 +220,7 @@ Impedir perda de texto em andamento por navegacao, gesto acidental, voltar do An
 
 ## Riscos e Decisoes Pendentes
 
-- Confirmar em Android real se o chat aberto deve evoluir para tela inteira ou se a area principal atual ja resolve.
-- Gesto horizontal entre abas ficou desativado por padrao nesta rodada; reavaliar apenas se houver preview com cancelamento completo.
+- Confirmar em Android real se o chat em area util inteira resolve tambem em paisagem.
+- Gesto horizontal entre abas voltou com preview/cancelamento; validar no Android real para ajustar limite de 82px se estiver sensivel ou duro demais.
 - Definir se o estado de painel recolhido deve persistir por usuario ou apenas por sessao.
 - Confirmar em Android real como o WebView do Capacitor esta entregando `popstate` e gesto de borda.

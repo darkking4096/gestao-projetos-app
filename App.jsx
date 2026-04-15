@@ -68,8 +68,11 @@ export default function App({ user, onSignOut }) {
   // Ref para coordenadas do swipe — substitui window._swipeX/Y (namespace global poluído)
   // Ref para estado de navegação — permite nav() com dep [] sem stale closure
   const navStateRef = useRef({ view, tab, subTab, selId, selType });
+  const navHistoryRef = useRef(navHistory);
+  const swipeRef = useRef(null);
   const [winW, setWinW] = useState(() => window.innerWidth);
   const [winH, setWinH] = useState(() => window.innerHeight);
+  const [tabSwipeOffset, setTabSwipeOffset] = useState(0);
   useEffect(() => {
     const handler = () => setStorageError(true);
     window.addEventListener("app:storageError", handler);
@@ -83,6 +86,7 @@ export default function App({ user, onSignOut }) {
   // Mantém refs sempre sincronizados com o estado atual
   useEffect(() => { profileRef.current = profile; }, [profile]);
   useEffect(() => { navStateRef.current = { view, tab, subTab, selId, selType }; }, [view, tab, subTab, selId, selType]);
+  useEffect(() => { navHistoryRef.current = navHistory; }, [navHistory]);
   // Reward popup auto-dismiss — duration scales with reward value
   useEffect(() => {
     if (!rewardPopup) return;
@@ -369,21 +373,29 @@ export default function App({ user, onSignOut }) {
   }, []);
 
   const navBack = useCallback(() => {
-    if (navHistory.length > 0) {
-      const prev = navHistory[navHistory.length - 1];
+    const historyStack = navHistoryRef.current;
+    if (historyStack.length > 0) {
+      const prev = historyStack[historyStack.length - 1];
       setNavHistory(h => h.slice(0, -1));
       setTab(prev.tab);
       setSubTab(prev.subTab);
       setView(prev.view);
       setSelId(prev.selId);
       setSelType(prev.selType);
-    } else {
+      return true;
+    }
+
+    const current = navStateRef.current;
+    if (current.view !== "list" || current.selId || current.selType) {
       // Fallback: go to the list of the current subTab
       setView("list");
       setSelId(null);
       setSelType(null);
+      return true;
     }
-  }, [navHistory]);
+
+    return false;
+  }, []);
 
   const openNotificationTarget = useCallback((target) => {
     if (!target) return;
@@ -404,6 +416,59 @@ export default function App({ user, onSignOut }) {
     }
   }, [nav]);
 
+  const isSwipeBlockedTarget = useCallback((target) => {
+    return !!target?.closest?.("input, textarea, select, button, [contenteditable='true'], [data-no-tab-swipe='true']");
+  }, []);
+
+  const switchTabBySwipe = useCallback((direction) => {
+    const currentIndex = NAV_TABS.findIndex(([key]) => key === navStateRef.current.tab);
+    if (currentIndex < 0) return;
+    const nextIndex = currentIndex + direction;
+    if (nextIndex < 0 || nextIndex >= NAV_TABS.length) return;
+    setTab(NAV_TABS[nextIndex][0]);
+    setView("list");
+    setSelId(null);
+    setSelType(null);
+    setNavHistory([]);
+  }, []);
+
+  const handleTabTouchStart = useCallback((event) => {
+    if (isDesktop) return;
+    if (isSwipeBlockedTarget(event.target)) return;
+    const touch = event.touches?.[0];
+    if (!touch) return;
+    if (touch.clientX < 24 || touch.clientX > winW - 24) return;
+    swipeRef.current = { x: touch.clientX, y: touch.clientY, active: false, blocked: false };
+  }, [isDesktop, isSwipeBlockedTarget, winW]);
+
+  const handleTabTouchMove = useCallback((event) => {
+    if (!swipeRef.current || isDesktop) return;
+    const touch = event.touches?.[0];
+    if (!touch) return;
+    const dx = touch.clientX - swipeRef.current.x;
+    const dy = touch.clientY - swipeRef.current.y;
+
+    if (swipeRef.current.blocked) return;
+    if (!swipeRef.current.active && Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx) * 1.4) {
+      swipeRef.current.blocked = true;
+      setTabSwipeOffset(0);
+      return;
+    }
+    if (Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy) * 1.25) {
+      swipeRef.current.active = true;
+      setTabSwipeOffset(Math.max(-120, Math.min(120, dx)));
+    }
+  }, [isDesktop]);
+
+  const handleTabTouchEnd = useCallback(() => {
+    if (!swipeRef.current) return;
+    const offset = tabSwipeOffset;
+    const shouldSwitch = swipeRef.current.active && Math.abs(offset) >= 82;
+    swipeRef.current = null;
+    setTabSwipeOffset(0);
+    if (shouldSwitch) switchTabBySwipe(offset < 0 ? 1 : -1);
+  }, [switchTabBySwipe, tabSwipeOffset]);
+
   // Botão voltar do sistema (Android/browser) — navega dentro do app
   // Colocado APÓS navBack ser declarado para evitar TDZ
   useEffect(() => {
@@ -417,8 +482,8 @@ export default function App({ user, onSignOut }) {
         history.pushState(null, "", window.location.href);
         return;
       }
-      navBackRef.current();
-      history.pushState(null, "", window.location.href);
+      const handled = navBackRef.current();
+      if (handled) history.pushState(null, "", window.location.href);
     };
     history.pushState(null, "", window.location.href);
     window.addEventListener("popstate", onPop);
@@ -1196,9 +1261,15 @@ export default function App({ user, onSignOut }) {
           )}
         </div>
       )}
-      <div style={{ minHeight: isDesktop ? "100vh" : "calc(100dvh - 56px)", overflow: "auto", marginLeft: isDesktop ? SIDEBAR_W : 0, background: C.bg, touchAction: isDesktop ? "auto" : "pan-y pinch-zoom", WebkitOverflowScrolling: "touch" }}>
+      <div
+        onTouchStart={handleTabTouchStart}
+        onTouchMove={handleTabTouchMove}
+        onTouchEnd={handleTabTouchEnd}
+        onTouchCancel={handleTabTouchEnd}
+        style={{ minHeight: isDesktop ? "100vh" : "calc(100dvh - 56px)", overflow: "auto", marginLeft: isDesktop ? SIDEBAR_W : 0, background: C.bg, touchAction: isDesktop ? "auto" : "pan-y pinch-zoom", WebkitOverflowScrolling: "touch" }}
+      >
         <Suspense fallback={<TabFallback />}>
-        <div key={tab} style={isDesktop ? { ...(tab !== "reports" ? { maxWidth: 780, margin: "0 auto" } : {}), animation: "tabFadeIn 0.22s ease" } : { animation: "tabFadeIn 0.22s ease" }}>
+        <div key={tab} style={isDesktop ? { ...(tab !== "reports" ? { maxWidth: 780, margin: "0 auto" } : {}), animation: "tabFadeIn 0.22s ease" } : { animation: "tabFadeIn 0.22s ease", transform: tabSwipeOffset ? `translateX(${Math.round(tabSwipeOffset * 0.28)}px)` : "none", transition: tabSwipeOffset ? "none" : "transform .14s ease" }}>
         {tab === "dashboard" && <DashboardTab profile={profile} levelInfo={levelInfo} poderInfo={poderInfo} rankInfo={rankInfo} projects={projects} routines={routines} tasks={tasks} objectives={objectives} nav={nav} completeTask={completeTask} completeRoutine={completeRoutine} earn={earn} setDailyMission={setDailyMission} claimMissionRpg={claimMissionRpg} atributos={atributos} setAtributos={setAtributos} groqApiKey={profile.groqApiKey || ""} />}
         {tab === "activities" && view === "list" && <ActivitiesTab subTab={subTab} setSubTab={setSubTab} projects={projects} routines={routines} tasks={tasks} objectives={objectives} nav={nav} completeTask={completeTask} completeRoutine={completeRoutine} updProject={updProject} setProfile={setProfile} setCompletionConfirm={setCompletionConfirm} addTask={addTask} addRoutine={addRoutine} addProject={addProject} setTasks={setTasks} setRoutines={setRoutines} setProjects={setProjects} groqApiKey={profile.groqApiKey || ""} profile={profile} isDesktop={isDesktop} />}
         {tab === "activities" && view === "detail" && sel && selType === "project" && <ProjectDetail item={sel} onUpdate={updProject} onDelete={(i, p) => { deleteItem(i, "project", p); nav("activities", "projects", "list"); }} onComplete={completeTask} nav={nav} navBack={navBack} objectives={objectives} routines={routines} setCompletionConfirm={setCompletionConfirm} onValueUpdate={() => setProfile(p => ({ ...p, goalUpdatedToday: true }))} />}

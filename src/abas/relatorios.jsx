@@ -116,6 +116,7 @@ export default function ReportsTab({
   const [viewport, setViewport]               = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
   const [reportListCollapsed, setReportListCollapsed] = useState(null);
   const [plannerChatOpen, setPlannerChatOpen] = useState(false);
+  const [plannerMobileMode, setPlannerMobileMode] = useState("document"); // document | actions | chat
 
   /* ── Drag Desktop (mouse / HTML5) ── */
   const [deskDrag, setDeskDrag]   = useState(null);  // { id, type: "note"|"folder" }
@@ -159,6 +160,7 @@ export default function ReportsTab({
     const onInternalBack = (event) => {
       if (plannerChatOpen) {
         setPlannerChatOpen(false);
+        setPlannerMobileMode("document");
         event.detail.handled = true;
         return;
       }
@@ -191,6 +193,7 @@ export default function ReportsTab({
     if (existing) {
       setSelNoteId(existing.id);
       if (!isDesktop) setMobileView("editor");
+      setPlannerMobileMode("document");
       return;
     }
 
@@ -215,6 +218,7 @@ export default function ReportsTab({
     });
     setSelNoteId(note.id);
     if (!isDesktop) setMobileView("editor");
+    setPlannerMobileMode("document");
   }, [allNotes, today, onUpdateNotes, isDesktop]);
 
   useEffect(() => {
@@ -880,7 +884,7 @@ export default function ReportsTab({
         }}
         onDragEnd={() => { setDeskDrag(null); setDragOverId(null); }}
         onTouchStart={(e) => handleTouchStart(e, note.id, "note", note.title || "Sem título")}
-        onClick={() => { setSelNoteId(note.id); if (!isDesktop) setMobileView("editor"); }}
+        onClick={() => { setSelNoteId(note.id); if (!isDesktop) setMobileView("editor"); if (note.kind === "daily-plan") setPlannerMobileMode("document"); }}
         style={{
           display: "flex", alignItems: "center", gap: 6,
           padding: `${isDesktop ? 6 : 11}px 10px ${isDesktop ? 6 : 11}px ${10 + depth * 14 + 16}px`,
@@ -1351,12 +1355,12 @@ export default function ReportsTab({
     );
   };
 
-  const renderActionCards = (note) => {
+  const renderActionCards = (note, options = {}) => {
     const actionCards = note.actionCards || [];
     if (!actionCards.length) return null;
     const groups = groupActionCards(actionCards, note.planDate || today);
     return (
-      <div style={{ padding: "0 14px 12px", maxHeight: isDesktop ? 420 : 260, overflowY: "auto", overscrollBehavior: "contain" }}>
+      <div style={{ padding: options.paddedTop ? "12px 14px" : "0 14px 12px", flex: options.fill ? 1 : "0 0 auto", minHeight: 0, maxHeight: options.fill ? "none" : isDesktop ? 420 : 260, overflowY: "auto", overscrollBehavior: "contain" }}>
         {renderActionCardSection("Para hoje", groups.today, note)}
         {renderActionCardSection("Para o futuro", groups.future, note)}
         {renderActionCardSection("Ja existe", groups.existing, note)}
@@ -1586,9 +1590,18 @@ export default function ReportsTab({
     const actionCards = note.actionCards || [];
     const pendingCount = actionCards.filter(c => (c.status || "pending") === "pending").length;
     const draftOpenLabel = plannerInput.trim() ? "Continuar conversa" : "Abrir chat";
+    const mobileFullChat = !isDesktop && plannerChatOpen;
 
     return (
-      <div style={{ borderBottom: "0.5px solid " + C.brd + "40", flexShrink: 0, background: C.bg }}>
+      <div data-no-tab-swipe={plannerChatOpen ? "true" : undefined} style={{
+        borderBottom: mobileFullChat ? "none" : "0.5px solid " + C.brd + "40",
+        flex: mobileFullChat ? 1 : "0 0 auto",
+        minHeight: mobileFullChat ? 0 : "auto",
+        display: mobileFullChat ? "flex" : "block",
+        flexDirection: mobileFullChat ? "column" : "initial",
+        background: C.bg,
+        overflow: mobileFullChat ? "hidden" : "visible",
+      }}>
         <div style={{ padding: "10px 14px 8px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 12, color: C.tx, fontWeight: 600 }}>Chat de planejamento</div>
@@ -1604,7 +1617,13 @@ export default function ReportsTab({
             )}
             <button
               type="button"
-              onClick={() => setPlannerChatOpen(open => !open)}
+              onClick={() => {
+                setPlannerChatOpen(open => {
+                  const next = !open;
+                  if (!isDesktop) setPlannerMobileMode(next ? "chat" : "document");
+                  return next;
+                });
+              }}
               style={{
                 minHeight: 34,
                 padding: "0 10px",
@@ -1630,9 +1649,17 @@ export default function ReportsTab({
         )}
 
         {plannerChatOpen && (
-          <div style={{ maxHeight: isDesktop ? "58vh" : "calc(100dvh - 220px)", overflowY: "auto", overscrollBehavior: "contain" }}>
+          <div style={{
+            flex: mobileFullChat ? 1 : "0 0 auto",
+            minHeight: 0,
+            maxHeight: isDesktop ? "58vh" : mobileFullChat ? "none" : "calc(100dvh - 220px)",
+            overflowY: "auto",
+            overscrollBehavior: "contain",
+            display: "flex",
+            flexDirection: "column",
+          }}>
             {messages.length > 0 ? (
-              <div style={{ padding: "0 14px 8px", display: "flex", flexDirection: "column", gap: 7 }}>
+              <div style={{ padding: "0 14px 8px", display: "flex", flexDirection: "column", gap: 7, flex: mobileFullChat ? 1 : "0 0 auto" }}>
                 {messages.map(msg => (
                   <div key={msg.id || msg.createdAt} style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
                     <div style={{
@@ -1686,7 +1713,7 @@ export default function ReportsTab({
                 e.preventDefault();
                 handlePlannerText(plannerInput);
               }}
-              style={{ padding: "0 14px 10px", display: "flex", flexDirection: isDesktop ? "row" : "column", gap: 8, alignItems: isDesktop ? "flex-end" : "stretch" }}
+              style={{ padding: "0 14px calc(10px + env(safe-area-inset-bottom, 0px))", display: "flex", flexDirection: isDesktop ? "row" : "column", gap: 8, alignItems: isDesktop ? "flex-end" : "stretch", flexShrink: 0, background: C.bg }}
             >
               <textarea
                 value={plannerInput}
@@ -1735,7 +1762,49 @@ export default function ReportsTab({
           </div>
         )}
 
-        {renderActionCards(note)}
+        {isDesktop && renderActionCards(note)}
+      </div>
+    );
+  };
+
+  const renderPlannerMobileTabs = (note) => {
+    if (isDesktop || note.kind !== "daily-plan") return null;
+    const pendingCount = (note.actionCards || []).filter(c => (c.status || "pending") === "pending").length;
+    const modes = [
+      ["document", "Plano"],
+      ["actions", pendingCount ? `Acoes ${pendingCount}` : "Acoes"],
+      ["chat", plannerInput.trim() ? "Chat *" : "Chat"],
+    ];
+    return (
+      <div style={{ display: "flex", gap: 6, padding: "8px 10px", borderBottom: "0.5px solid " + C.brd + "40", flexShrink: 0, overflowX: "auto" }}>
+        {modes.map(([mode, label]) => {
+          const active = plannerMobileMode === mode;
+          return (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => {
+                setPlannerMobileMode(mode);
+                setPlannerChatOpen(mode === "chat");
+              }}
+              style={{
+                flex: 1,
+                minWidth: 86,
+                minHeight: 34,
+                borderRadius: 8,
+                border: "1px solid " + (active ? C.goldBrd : C.brd2),
+                background: active ? C.gold + "14" : C.card,
+                color: active ? C.gold : C.tx3,
+                fontSize: 11,
+                fontWeight: active ? 700 : 500,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
     );
   };
@@ -1821,27 +1890,43 @@ export default function ReportsTab({
           </div>
         )}
 
-        {isDailyPlan && renderPlannerChat(selNote)}
+        {isDailyPlan && renderPlannerMobileTabs(selNote)}
 
-        <textarea
-          key={selNote.id + "_content"}
-          defaultValue={selNote.content || ""}
-          onBlur={(e) => updateNoteField(selNote.id, "content", e.target.value)}
-          placeholder="Comece a escrever..."
-          style={{
-            flex: 1, padding: "14px 16px",
-            background: "transparent", border: "none",
-            color: C.tx, fontSize: 13,
-            fontFamily: "'Segoe UI', 'Helvetica Neue', system-ui, sans-serif",
-            lineHeight: 1.8, outline: "none", resize: "none", overflow: "auto",
-          }}
-        />
+        {isDailyPlan && !isDesktop && plannerMobileMode === "chat" && renderPlannerChat(selNote)}
+
+        {isDailyPlan && !isDesktop && plannerMobileMode === "actions" && (
+          (selNote.actionCards || []).length > 0 ? renderActionCards(selNote, { fill: true, paddedTop: true }) : (
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, color: C.tx4, fontSize: 12, textAlign: "center", lineHeight: 1.5 }}>
+              Nenhuma acao para aprovar agora.
+            </div>
+          )
+        )}
+
+        {isDailyPlan && (isDesktop || plannerMobileMode === "document") && renderPlannerChat(selNote)}
+
+        {(!isDailyPlan || isDesktop || plannerMobileMode === "document") && (
+          <textarea
+            key={selNote.id + "_content"}
+            defaultValue={selNote.content || ""}
+            onBlur={(e) => updateNoteField(selNote.id, "content", e.target.value)}
+            placeholder="Comece a escrever..."
+            style={{
+              flex: 1, padding: "14px 16px",
+              background: "transparent", border: "none",
+              color: C.tx, fontSize: 13,
+              fontFamily: "'Segoe UI', 'Helvetica Neue', system-ui, sans-serif",
+              lineHeight: 1.8, outline: "none", resize: "none", overflow: "auto",
+            }}
+          />
+        )}
 
         {/* Rodapé */}
-        <div style={{ padding: "5px 14px", borderTop: "0.5px solid " + C.brd, display: "flex", justifyContent: "space-between", fontSize: 10, color: C.tx4, flexShrink: 0 }}>
-          <span>{(selNote.content || "").length} caracteres</span>
-          <span>{selNote.updatedAt ? fmtD(selNote.updatedAt) : ""}</span>
-        </div>
+        {(!isDailyPlan || isDesktop || plannerMobileMode === "document") && (
+          <div style={{ padding: "5px 14px", borderTop: "0.5px solid " + C.brd, display: "flex", justifyContent: "space-between", fontSize: 10, color: C.tx4, flexShrink: 0 }}>
+            <span>{(selNote.content || "").length} caracteres</span>
+            <span>{selNote.updatedAt ? fmtD(selNote.updatedAt) : ""}</span>
+          </div>
+        )}
       </div>
     );
   };
